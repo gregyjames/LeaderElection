@@ -74,6 +74,12 @@ public class RedisLeaderElection : ILeaderElection
                 _logger.LogDebug("Leader loop cancellation was expected");
             }
         }
+        await ReleaseLeadershipAsync();
+        if (_isLeader)
+        {
+            _isLeader = false;
+            LeadershipChanged?.Invoke(this, false);
+        }
     }
 
     public async Task<bool> TryAcquireLeadershipAsync(CancellationToken cancellationToken = default)
@@ -84,7 +90,24 @@ public class RedisLeaderElection : ILeaderElection
         await _leadershipSemaphore.WaitAsync(cancellationToken);
         try
         {
-            return await TryAcquireLeadershipInternalAsync(cancellationToken);
+            var acquired = await TryAcquireLeadershipInternalAsync(cancellationToken);
+            if (acquired)
+            {
+                if (!_isLeader)
+                {
+                    _isLeader = true;
+                    LeadershipChanged?.Invoke(this, true);
+                }
+            }
+            else
+            {
+                if (_isLeader)
+                {
+                    _isLeader = false;
+                    LeadershipChanged?.Invoke(this, false);
+                }
+            }
+            return acquired;
         }
         finally
         {

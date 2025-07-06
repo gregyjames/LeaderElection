@@ -88,6 +88,12 @@ public class BlobStorageLeaderElection : ILeaderElection
                 _logger.LogDebug("Leader loop cancellation was expected");
             }
         }
+        await ReleaseLeadershipAsync();
+        if (_isLeader)
+        {
+            _isLeader = false;
+            LeadershipChanged?.Invoke(this, false);
+        }
     }
 
     public async Task<bool> TryAcquireLeadershipAsync(CancellationToken cancellationToken = default)
@@ -98,7 +104,28 @@ public class BlobStorageLeaderElection : ILeaderElection
         await _leadershipSemaphore.WaitAsync(cancellationToken);
         try
         {
-            return await TryAcquireLeadershipInternalAsync(cancellationToken);
+            if (_options.CreateContainerIfNotExists)
+            {
+                await EnsureBlobExistsAsync(cancellationToken);
+            }
+            var acquired = await TryAcquireLeadershipInternalAsync(cancellationToken);
+            if (acquired)
+            {
+                if (!_isLeader)
+                {
+                    _isLeader = true;
+                    LeadershipChanged?.Invoke(this, true);
+                }
+            }
+            else
+            {
+                if (_isLeader)
+                {
+                    _isLeader = false;
+                    LeadershipChanged?.Invoke(this, false);
+                }
+            }
+            return acquired;
         }
         finally
         {
@@ -209,6 +236,13 @@ public class BlobStorageLeaderElection : ILeaderElection
     {
         try
         {
+            var containerExists = await _containerClient.ExistsAsync(cancellationToken);
+            if (!containerExists.Value && _options.CreateContainerIfNotExists)
+            {
+                _logger.LogDebug("Creating leader election container");
+                await _containerClient.CreateIfNotExistsAsync(cancellationToken: cancellationToken);
+            }
+
             var exists = await _blobClient.ExistsAsync(cancellationToken);
             if (!exists.Value)
             {
@@ -228,6 +262,7 @@ public class BlobStorageLeaderElection : ILeaderElection
         try
         {
             var leaseClient = _blobClient.GetBlobLeaseClient();
+            
             var leaseResponse = await leaseClient.AcquireAsync(_options.LeaseDuration, cancellationToken: cancellationToken);
             
             if (leaseResponse?.Value?.LeaseId != null)
@@ -349,6 +384,13 @@ public class BlobStorageLeaderElection : ILeaderElection
         
         if (_options.LeaseDuration <= TimeSpan.Zero)
             throw new ArgumentException("LeaseDuration must be positive", nameof(_options.LeaseDuration));
+        
+        // Azure Blob Storage lease duration must be between 15 and 60 seconds, or -1 for infinite
+        if (_options.LeaseDuration.TotalSeconds < 15 && _options.LeaseDuration.TotalSeconds != -1)
+            throw new ArgumentException("LeaseDuration must be at least 15 seconds or -1 for infinite", nameof(_options.LeaseDuration));
+        
+        if (_options.LeaseDuration.TotalSeconds > 60 && _options.LeaseDuration.TotalSeconds != -1)
+            throw new ArgumentException("LeaseDuration must be at most 60 seconds or -1 for infinite", nameof(_options.LeaseDuration));
         
         if (_options.RenewInterval <= TimeSpan.Zero)
             throw new ArgumentException("RenewInterval must be positive", nameof(_options.RenewInterval));
