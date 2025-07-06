@@ -1,0 +1,31 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+    <PropertyGroup>
+        <TargetFramework>net8.0</TargetFramework>
+        <ImplicitUsings>enable</ImplicitUsings>
+        <Nullable>enable</Nullable>
+        <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
+        <Title>LeaderElection.BlobStorage</Title>
+        <Authors>Greg James</Authors>
+        <PackageIcon>icon.png</PackageIcon>
+        <PackageReadmeFile>README.md</PackageReadmeFile>
+    </PropertyGroup>
+
+    <ItemGroup>
+        <PackageReference Include="Azure.Identity" Version="1.14.1" />
+        <PackageReference Include="Azure.Storage.Blobs" Version="12.19.1" />
+        <PackageReference Include="Microsoft.Extensions.Hosting.Abstractions" Version="9.0.6" />
+        <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="9.0.6" />
+        <PackageReference Include="Microsoft.Extensions.Options" Version="9.0.6" />
+    </ItemGroup>
+
+    <ItemGroup>
+        <ProjectReference Include="..\LeaderElection\LeaderElection.csproj" />
+    </ItemGroup>
+
+    <ItemGroup>
+        <None Include="README.md" Pack="true" PackagePath="\"/>
+        <None Include="icon.png" Pack="true" PackagePath="\"/>
+    </ItemGroup>
+
+</Project>

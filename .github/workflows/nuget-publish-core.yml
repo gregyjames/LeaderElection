@@ -1,0 +1,46 @@
+name: NuGet Publish - Core
+
+on:
+  push:
+    tags:
+      - 'core/v*.*.*' # Core package tags, e.g., 'core/v1.0.0'
+
+jobs:
+  deploy:
+    name: Deploy Core Package
+    runs-on: windows-latest
+
+    steps:
+    - uses: actions/checkout@v4
+      
+    - name: Setup .NET
+      uses: actions/setup-dotnet@v4
+      with:
+        dotnet-version: '8.0.x'
+        
+    - uses: actions/cache@v3
+      id: cacheStep
+      with:
+        path: ~/.nuget/packages
+        key: ${{ runner.os }}-nuget-${{ hashFiles('**/packages.lock.json') }}
+        restore-keys: |
+          ${{ runner.os }}-nuget-
+          
+    - name: Set VERSION variable from tag
+      run: |
+        $VERSION=$Env:GITHUB_REF_NAME.TrimStart("core/v")
+        echo "VERSION=$VERSION" >> $Env:GITHUB_ENV
+        
+    - name: Restore dependencies
+      run: dotnet restore
+      
+    - name: Build LeaderElection
+      run: dotnet build LeaderElection/LeaderElection.csproj --no-restore --configuration Release /p:Version=$Env:VERSION /p:AssemblyVersion=$Env:VERSION
+      
+    - name: Pack LeaderElection
+      run: dotnet pack LeaderElection/LeaderElection.csproj --no-build --configuration Release /p:Version=$Env:VERSION
+      
+    - name: Publish NuGet package
+      run: dotnet nuget push **/*.nupkg --source https://api.nuget.org/v3/index.json --api-key $Env:NUGET_API_KEY
+      env:
+        NUGET_API_KEY: ${{ secrets.NUGET_API_KEY }} 

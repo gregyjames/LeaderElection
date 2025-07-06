@@ -1,0 +1,34 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "LeaderElection", "LeaderElection\LeaderElection.csproj", "{92BAFFC6-2B41-4DDA-9271-2D3F183CD623}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "LeaderElectionTester", "LeaderElectionTester\LeaderElectionTester.csproj", "{4D077566-BC70-4C46-AEA5-FB01D039C372}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "LeaderElection.Redis", "LeaderElection.Redis\LeaderElection.Redis.csproj", "{EF7E31CA-A292-4411-AF52-3DF5EDF6233B}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "LeaderElection.BlobStorage", "LeaderElection.BlobStorage\LeaderElection.BlobStorage.csproj", "{9316529F-720E-4A71-80A7-8A0BA629A80F}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{92BAFFC6-2B41-4DDA-9271-2D3F183CD623}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{92BAFFC6-2B41-4DDA-9271-2D3F183CD623}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{92BAFFC6-2B41-4DDA-9271-2D3F183CD623}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{92BAFFC6-2B41-4DDA-9271-2D3F183CD623}.Release|Any CPU.Build.0 = Release|Any CPU
+		{4D077566-BC70-4C46-AEA5-FB01D039C372}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{4D077566-BC70-4C46-AEA5-FB01D039C372}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{4D077566-BC70-4C46-AEA5-FB01D039C372}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{4D077566-BC70-4C46-AEA5-FB01D039C372}.Release|Any CPU.Build.0 = Release|Any CPU
+		{EF7E31CA-A292-4411-AF52-3DF5EDF6233B}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{EF7E31CA-A292-4411-AF52-3DF5EDF6233B}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{EF7E31CA-A292-4411-AF52-3DF5EDF6233B}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{EF7E31CA-A292-4411-AF52-3DF5EDF6233B}.Release|Any CPU.Build.0 = Release|Any CPU
+		{9316529F-720E-4A71-80A7-8A0BA629A80F}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{9316529F-720E-4A71-80A7-8A0BA629A80F}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{9316529F-720E-4A71-80A7-8A0BA629A80F}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{9316529F-720E-4A71-80A7-8A0BA629A80F}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+EndGlobal
