@@ -17,6 +17,9 @@ A C# implementaion of the distributed leader election pattern using common parad
 - **Graceful Shutdown**: Proper cleanup and resource disposal
 - **Thread Safety**: Thread-safe operations with proper synchronization
 
+## Currently Supported Stores
+- Redis &rarr; [LeaderElection.Redis](https://www.nuget.org/packages/LeaderElection.Redis)
+- Azure Blob Storage (blob leases) &rarr; [LeaderElection.BlobStorage](https://www.nuget.org/packages/LeaderElection.BlobStorage)
 ## Quick Start
 
 ### 1. Install the Package
@@ -53,7 +56,7 @@ builder.Services.AddRedisLeaderElection(settings =>
 ```
 
 ### 3. Use in Your Service
-
+If you execute this program below, you will notice that leadership is automatically transfered across instances once the current leader is killed!
 ```csharp
 public class MyService : BackgroundService
 {
@@ -85,6 +88,8 @@ public class MyService : BackgroundService
                     _logger.LogInformation("Executing leader task");
                     await DoLeaderWorkAsync();
                 }, stoppingToken);
+
+                _logger.LogInformation("Executing normal task");
 
                 await Task.Delay(TimeSpan.FromSeconds(5), stoppingToken);
             }
