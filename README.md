@@ -5,7 +5,7 @@
 
 # Leader Election
 
-A C# implementaion of the distributed leader election pattern using common paradigms.
+An easy-to-use C# implementation of the distributed leader election pattern, leveraging common infrastructure tools like Azure Blob Storage, Redis, and others.
 
 ## Features
 
