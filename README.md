@@ -1,3 +1,8 @@
+[![.NET](https://github.com/gregyjames/LeaderElection/actions/workflows/dotnet.yml/badge.svg)](https://github.com/gregyjames/LeaderElection/actions/workflows/dotnet.yml)
+![NuGet Version](https://img.shields.io/nuget/v/LeaderElection?style=flat&label=LeaderElection&link=https%3A%2F%2Fwww.nuget.org%2Fpackages%2FLeaderElection)
+![NuGet Version](https://img.shields.io/nuget/v/LeaderElection.BlobStorage?style=flat&label=LeaderElection.BlobStorage&link=https%3A%2F%2Fwww.nuget.org%2Fpackages%2FLeaderElection.BlobStorage)
+![NuGet Version](https://img.shields.io/nuget/v/LeaderElection.Redis?style=flat&label=LeaderElection.Redis&link=https%3A%2F%2Fwww.nuget.org%2Fpackages%2FLeaderElection.Redis)
+
 # Leader Election
 
 A C# implementaion of the distributed leader election pattern using common paradigms.
