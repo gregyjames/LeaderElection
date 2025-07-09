@@ -6,7 +6,7 @@ using Microsoft.Extensions.Options;
 namespace LeaderElection.BlobStorage;
 public class BlobStorageLeaderElection : ILeaderElection
 {
-    private readonly BlobServiceClient _blobServiceClient;
+    private readonly BlobServiceClient? _blobServiceClient;
     private readonly BlobContainerClient _containerClient;
     private readonly BlobClient _blobClient;
     private readonly BlobStorageSettings _options;
