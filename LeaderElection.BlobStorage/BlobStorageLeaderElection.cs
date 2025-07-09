@@ -32,12 +32,23 @@ public class BlobStorageLeaderElection : ILeaderElection
         _options = options?.Value ?? throw new ArgumentNullException(nameof(options));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         
-        ValidateOptions();
+        ValidateOptions(false);
         
         _containerClient = _blobServiceClient.GetBlobContainerClient(_options.ContainerName);
         _blobClient = _containerClient.GetBlobClient(_options.BlobName);
     }
-
+    
+    public BlobStorageLeaderElection(BlobContainerClient client, BlobStorageSettings options, ILogger<BlobStorageLeaderElection> logger)
+    {
+        _containerClient = client ?? throw new ArgumentNullException(nameof(client));
+        _options = options ?? throw new ArgumentNullException(nameof(options));
+        
+        ValidateOptions(true);
+        
+        _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+        _blobClient = _containerClient.GetBlobClient(_options.BlobName);
+    }
+    
     public bool IsLeader => _isLeader && !_isDisposed;
     public DateTime LastLeadershipRenewal => _lastLeadershipRenewal;
     public async Task StartAsync(CancellationToken cancellationToken = default)
@@ -368,14 +379,18 @@ public class BlobStorageLeaderElection : ILeaderElection
         }
     }
 
-    private void ValidateOptions()
+    private void ValidateOptions(bool selfProvidedInstance)
     {
-        if (string.IsNullOrWhiteSpace(_options.ConnectionString))
-            throw new ArgumentException("ConnectionString cannot be null or empty", nameof(_options.ConnectionString));
-        
-        if (string.IsNullOrWhiteSpace(_options.ContainerName))
-            throw new ArgumentException("ContainerName cannot be null or empty", nameof(_options.ContainerName));
-        
+        if (!selfProvidedInstance)
+        {
+            if (string.IsNullOrWhiteSpace(_options.ConnectionString))
+                throw new ArgumentException("ConnectionString cannot be null or empty",
+                    nameof(_options.ConnectionString));
+
+            if (string.IsNullOrWhiteSpace(_options.ContainerName))
+                throw new ArgumentException("ContainerName cannot be null or empty", nameof(_options.ContainerName));
+        }
+
         if (string.IsNullOrWhiteSpace(_options.BlobName))
             throw new ArgumentException("BlobName cannot be null or empty", nameof(_options.BlobName));
         
