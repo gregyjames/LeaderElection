@@ -44,6 +44,6 @@ jobs:
       run: dotnet pack LeaderElection.BlobStorage/LeaderElection.BlobStorage.csproj --no-build --configuration Release /p:Version=$Env:VERSION
       
     - name: Publish NuGet package
-      run: dotnet nuget push **/*.nupkg --source https://api.nuget.org/v3/index.json --api-key $Env:NUGET_API_KEY
+      run: dotnet nuget push LeaderElection.BlobStorage/bin/Release/**/*.nupkg --source https://api.nuget.org/v3/index.json --api-key $Env:NUGET_API_KEY
       env:
         NUGET_API_KEY: ${{ secrets.NUGET_API_KEY }} 
