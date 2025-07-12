@@ -1,4 +1,6 @@
-﻿using LeaderElection.BlobStorage;
+﻿using System.Reflection;
+using LeaderElection.BlobStorage;
+using LeaderElection.DistributedCache;
 using LeaderElection.Redis;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -37,7 +39,6 @@ class Program
                 settings.MaxRetryAttempts = 3;
                 settings.EnableGracefulShutdown = true;
             });
-            */
             collection.AddBlobStorageLeaderElection(settings =>
             {
                 // blob test using azurite
@@ -49,6 +50,18 @@ class Program
                 settings.RetryInterval = TimeSpan.FromSeconds(5);
                 settings.MaxRetryAttempts = 3;
                 settings.EnableGracefulShutdown = true;
+            });
+            */
+            collection.AddStackExchangeRedisCache(options =>
+            {
+                options.Configuration = "192.168.0.117:6379";
+            });
+            collection.AddDistributedCacheLeaderElection(cfg =>
+            {
+                cfg.InstanceId = $"{AppDomain.CurrentDomain.FriendlyName}-{Guid.NewGuid().ToString()}";
+                cfg.RenewInterval = TimeSpan.FromSeconds(10);
+                cfg.MaxRetryAttempts = 3;
+                cfg.EnableGracefulShutdown = true;
             });
             collection.AddHostedService<Service>();
         }).Build().Run();

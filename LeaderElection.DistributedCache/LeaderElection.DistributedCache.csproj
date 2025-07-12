@@ -4,6 +4,16 @@
         <TargetFramework>net8.0</TargetFramework>
         <ImplicitUsings>enable</ImplicitUsings>
         <Nullable>enable</Nullable>
+        <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
+        <Title>LeaderElection.DistributedCache</Title>
+        <Authors>Greg James</Authors>
+        <PackageIcon>icon.png</PackageIcon>
+        <PackageReadmeFile>README.md</PackageReadmeFile>
+        <PackageProjectUrl>https://github.com/gregyjames/LeaderElection</PackageProjectUrl>
+        <RepositoryUrl>https://github.com/gregyjames/LeaderElection</RepositoryUrl>
+        <RepositoryType>git</RepositoryType>
+        <PackageTags>distributed, redis, leaderelection, leadership, coordination, kubernetes, azure, aws</PackageTags>
+        <PackageLicenseFile>LICENSE.md</PackageLicenseFile>
     </PropertyGroup>
 
     <ItemGroup>
@@ -14,6 +24,21 @@
 
     <ItemGroup>
       <ProjectReference Include="..\LeaderElection\LeaderElection.csproj" />
+    </ItemGroup>
+
+    <ItemGroup>
+      <None Update="icon.png">
+        <Pack>true</Pack>
+        <PackagePath>/</PackagePath>
+      </None>
+      <None Update="LICENSE.md">
+        <Pack>true</Pack>
+        <PackagePath>/</PackagePath>
+      </None>
+      <None Update="README.md">
+        <Pack>true</Pack>
+        <PackagePath>/</PackagePath>
+      </None>
     </ItemGroup>
 
 </Project>
