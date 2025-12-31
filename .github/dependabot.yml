@@ -8,7 +8,7 @@ updates:
   - package-ecosystem: "nuget"
     directory: "/LeaderElection"
     schedule:
-      interval: "daily"
+      interval: "monthly"
     open-pull-requests-limit: 10
     reviewers:
       - "gregyjames"
@@ -16,7 +16,7 @@ updates:
   - package-ecosystem: "nuget"
     directory: "/LeaderElection.Redis"
     schedule:
-      interval: "daily"
+      interval: "monthly"
     open-pull-requests-limit: 10
     reviewers:
       - "gregyjames"
@@ -24,7 +24,23 @@ updates:
   - package-ecosystem: "nuget"
     directory: "/LeaderElection.BlobStorage"
     schedule:
-      interval: "daily"
+      interval: "monthly"
+    open-pull-requests-limit: 10
+    reviewers:
+      - "gregyjames"
+
+  - package-ecosystem: "nuget"
+    directory: "/LeaderElection.DistributedCache"
+    schedule:
+      interval: "monthly"
+    open-pull-requests-limit: 10
+    reviewers:
+      - "gregyjames"
+      
+  - package-ecosystem: "nuget"
+    directory: "/LeaderElection.FusionCache"
+    schedule:
+      interval: "monthly"
     open-pull-requests-limit: 10
     reviewers:
       - "gregyjames"
