@@ -14,6 +14,8 @@
         <PackageIcon>icon.png</PackageIcon>
         <Description>An easy-to-use C# implementation of the distributed leader election pattern, leveraging common infrastructure tools like Azure Blob Storage, Redis, and others.</Description>
         <Copyright>Greg James 2025</Copyright>
+        <PackageReadmeFile>README.md</PackageReadmeFile>
+        <PackageLicenseFile>LICENSE.md</PackageLicenseFile>
     </PropertyGroup>
 
     <ItemGroup>
@@ -31,6 +33,14 @@
         <Pack>true</Pack>
         <PackagePath>/</PackagePath>
       </None>
+        <None Update="LICENSE.md">
+            <Pack>true</Pack>
+            <PackagePath>/</PackagePath>
+        </None>
+        <None Update="README.md">
+            <Pack>true</Pack>
+            <PackagePath>/</PackagePath>
+        </None>
     </ItemGroup>
 
 </Project>
