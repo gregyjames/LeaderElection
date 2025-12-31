@@ -4,6 +4,16 @@
         <TargetFramework>net8.0</TargetFramework>
         <ImplicitUsings>enable</ImplicitUsings>
         <Nullable>enable</Nullable>
+        <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
+        <Title>LeaderElection.FusionCache</Title>
+        <Authors>Greg James</Authors>
+        <PackageTags>distributed, redis, leaderelection, leadership, coordination, kubernetes, azure, aws</PackageTags>
+        <PackageProjectUrl>https://github.com/gregyjames/LeaderElection</PackageProjectUrl>
+        <RepositoryUrl>https://github.com/gregyjames/LeaderElection</RepositoryUrl>
+        <RepositoryType>git</RepositoryType>
+        <PackageIcon>icon.png</PackageIcon>
+        <Description>An easy-to-use C# implementation of the distributed leader election pattern, leveraging common infrastructure tools like Azure Blob Storage, Redis, and others.</Description>
+        <Copyright>Greg James 2025</Copyright>
     </PropertyGroup>
 
     <ItemGroup>
@@ -14,6 +24,13 @@
 
     <ItemGroup>
       <ProjectReference Include="..\LeaderElection\LeaderElection.csproj" />
+    </ItemGroup>
+
+    <ItemGroup>
+      <None Update="icon.png">
+        <Pack>true</Pack>
+        <PackagePath>/</PackagePath>
+      </None>
     </ItemGroup>
 
 </Project>
