@@ -20,6 +20,8 @@ An easy-to-use C# implementation of the distributed leader election pattern, lev
 
 ## Currently Supported Stores
 - Redis &rarr; [LeaderElection.Redis](https://www.nuget.org/packages/LeaderElection.Redis)
+- FusionCache &rarr; [LeaderElection.FusionCache](https://www.nuget.org/packages/LeaderElection.FusionCache)
+- DistributedCache &rarr; [LeaderElection.DistributedCache](https://www.nuget.org/packages/LeaderElection.DistributedCache)
 - Azure Blob Storage (blob leases) &rarr; [LeaderElection.BlobStorage](https://www.nuget.org/packages/LeaderElection.BlobStorage)
 ## Quick Start
 
