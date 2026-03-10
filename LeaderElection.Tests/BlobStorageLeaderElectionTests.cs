@@ -52,7 +52,7 @@ public sealed class BlobStorageLeaderElectionTests(AzuriteContainerFixture azuri
         // Arrange
         var options = CreateSettings("test-leader-election");
 
-        var leaderElection = CreateSUT(options);
+        await using var leaderElection = CreateSUT(options);
 
         // Act
         await leaderElection.StartAsync(CancellationToken);
@@ -82,8 +82,8 @@ public sealed class BlobStorageLeaderElectionTests(AzuriteContainerFixture azuri
             renewInterval: TimeSpan.FromSeconds(5)
         );
 
-        var leaderElection1 = CreateSUT(options1);
-        var leaderElection2 = CreateSUT(options2);
+        await using var leaderElection1 = CreateSUT(options1);
+        await using var leaderElection2 = CreateSUT(options2);
 
         // Act
         await leaderElection1.StartAsync(CancellationToken);
@@ -120,9 +120,9 @@ public sealed class BlobStorageLeaderElectionTests(AzuriteContainerFixture azuri
             retryInterval: TimeSpan.FromSeconds(1)
         );
 
-        var leaderElection1 = CreateSUT(options1);
+        await using var leaderElection1 = CreateSUT(options1);
 
-        var leaderElection2 = CreateSUT(options2);
+        await using var leaderElection2 = CreateSUT(options2);
 
         // Act
         await leaderElection1.StartAsync(CancellationToken);
@@ -147,7 +147,7 @@ public sealed class BlobStorageLeaderElectionTests(AzuriteContainerFixture azuri
         // Arrange
         var options = CreateSettings("test-leader-election-task");
 
-        var leaderElection = CreateSUT(options);
+        await using var leaderElection = CreateSUT(options);
 
         var taskExecuted = false;
 
@@ -169,7 +169,7 @@ public sealed class BlobStorageLeaderElectionTests(AzuriteContainerFixture azuri
         // Arrange
         var options = CreateSettings("test-leader-election-no-task");
 
-        var leaderElection = CreateSUT(options);
+        await using var leaderElection = CreateSUT(options);
 
         var taskExecuted = false;
 
@@ -186,7 +186,7 @@ public sealed class BlobStorageLeaderElectionTests(AzuriteContainerFixture azuri
         // Arrange
         var options = CreateSettings("test-leader-election-manual");
 
-        var leaderElection = CreateSUT(options);
+        await using var leaderElection = CreateSUT(options);
 
         // Act
         var result = await leaderElection.TryAcquireLeadershipAsync(CancellationToken);
@@ -206,7 +206,7 @@ public sealed class BlobStorageLeaderElectionTests(AzuriteContainerFixture azuri
             $"test-container-{Guid.NewGuid():N}",
             createContainerIfNotExists: true);
 
-        var leaderElection = CreateSUT(options);
+        await using var leaderElection = CreateSUT(options);
 
         // Act
         await leaderElection.StartAsync(CancellationToken);
