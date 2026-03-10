@@ -10,9 +10,9 @@ using StackExchange.Redis;
 
 var builder = Host.CreateApplicationBuilder(args);
 
-builder.Logging.AddSerilog();
 builder.Services.AddSerilog(configureLogger => configureLogger.WriteTo.Console());
 
+// Get settings from configuration
 var settings = new Settings();
 builder.Configuration.Bind(settings);
 
