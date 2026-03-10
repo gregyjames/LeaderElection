@@ -44,12 +44,12 @@ public sealed class AzuriteContainerFixture : IAsyncLifetime
             image: "mcr.microsoft.com/azure-storage/azurite:latest"
         ).Build();
 
-        await _azuriteContainer.StartAsync();
+        await _azuriteContainer.StartAsync().ConfigureAwait(false);
     }
 
     public async ValueTask DisposeAsync()
     {
         if (_azuriteContainer != null)
-            await _azuriteContainer.DisposeAsync();
+            await _azuriteContainer.DisposeAsync().ConfigureAwait(false);
     }
 }

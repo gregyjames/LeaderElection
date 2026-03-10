@@ -45,19 +45,24 @@ public sealed class RedisContainerFixture : IAsyncLifetime
     public async ValueTask InitializeAsync()
     {
         _redisContainer = new RedisBuilder(image: "redis:7-alpine").Build();
-        await _redisContainer.StartAsync();
+        await _redisContainer.StartAsync().ConfigureAwait(false);
 
         var connectionString = _redisContainer.GetConnectionString();
-        _connectionMultiplexer = await StackExchange.Redis.ConnectionMultiplexer.ConnectAsync(
-            connectionString
-        );
+        _connectionMultiplexer = await StackExchange
+            .Redis.ConnectionMultiplexer.ConnectAsync(connectionString)
+            .ConfigureAwait(false);
     }
 
     public async ValueTask DisposeAsync()
     {
         if (_connectionMultiplexer != null)
-            await _connectionMultiplexer.CloseAsync();
+        {
+            await _connectionMultiplexer.CloseAsync().ConfigureAwait(false);
+            await _connectionMultiplexer.DisposeAsync().ConfigureAwait(false);
+        }
         if (_redisContainer != null)
-            await _redisContainer.DisposeAsync();
+        {
+            await _redisContainer.DisposeAsync().ConfigureAwait(false);
+        }
     }
 }
