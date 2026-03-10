@@ -22,30 +22,37 @@ public abstract class TestBase
             timeout = TimeSpan.FromSeconds(30);
 
         var tcs = new TaskCompletionSource<bool>();
-        var timeoutCts = new CancellationTokenSource(timeout);
 
-        EventHandler<bool>? handler = null;
-        handler = (sender, isLeader) =>
+        EventHandler<bool>? handler = (sender, isLeader) =>
         {
             if (isLeader == expectedLeadership)
             {
                 tcs.TrySetResult(true);
-                leaderElection.LeadershipChanged -= handler;
             }
         };
 
         leaderElection.LeadershipChanged += handler;
-
-        // Check if already in the expected state
-        if (leaderElection.IsLeader == expectedLeadership)
+        try
         {
-            tcs.TrySetResult(true);
+            // Check if already in the expected state
+            if (leaderElection.IsLeader == expectedLeadership)
+            {
+                tcs.TrySetResult(true);
+            }
+
+            using var timeoutCts = new CancellationTokenSource(timeout);
+            using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(
+                timeoutCts.Token,
+                CancellationToken
+            );
+            linkedCts.Token.Register(() => tcs.TrySetCanceled());
+
+            await tcs.Task;
         }
-
-        using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(timeoutCts.Token, CancellationToken);
-        linkedCts.Token.Register(() => tcs.TrySetCanceled());
-
-        await tcs.Task;
+        finally
+        {
+            leaderElection.LeadershipChanged -= handler;
+        }
     }
 
     protected async Task WaitForError(ILeaderElection leaderElection, TimeSpan timeout = default)
@@ -54,20 +61,24 @@ public abstract class TestBase
             timeout = TimeSpan.FromSeconds(30);
 
         var tcs = new TaskCompletionSource<Exception>();
-        var timeoutCts = new CancellationTokenSource(timeout);
 
-        EventHandler<Exception>? handler = null;
-        handler = (sender, exception) =>
-        {
-            tcs.TrySetResult(exception);
-            leaderElection.ErrorOccurred -= handler;
-        };
+        EventHandler<Exception>? handler = (sender, exception) => tcs.TrySetResult(exception);
 
         leaderElection.ErrorOccurred += handler;
+        try
+        {
+            using var timeoutCts = new CancellationTokenSource(timeout);
+            using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(
+                timeoutCts.Token,
+                CancellationToken
+            );
+            linkedCts.Token.Register(() => tcs.TrySetCanceled());
 
-        using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(timeoutCts.Token, CancellationToken);
-        linkedCts.Token.Register(() => tcs.TrySetCanceled());
-
-        await tcs.Task;
+            await tcs.Task;
+        }
+        finally
+        {
+            leaderElection.ErrorOccurred -= handler;
+        }
     }
 }
