@@ -4,7 +4,7 @@ using StackExchange.Redis;
 
 namespace LeaderElection.Redis;
 
-public class RedisLeaderElection : ILeaderElection
+public class RedisLeaderElection : ILeaderElection, IDisposable
 {
     private readonly IDatabase _redis;
     private readonly RedisSettings _options;
@@ -13,7 +13,7 @@ public class RedisLeaderElection : ILeaderElection
     private readonly CancellationTokenSource _cancellationTokenSource = new();
     
     private volatile bool _isLeader;
-    private volatile bool _isDisposed;
+    private int _disposedValue; // 0 = not disposed, 1 = disposed
     private Task? _leaderLoopTask;
     private DateTime _lastLeadershipRenewal = DateTime.MinValue;
 
@@ -33,11 +33,12 @@ public class RedisLeaderElection : ILeaderElection
     }
 
     public DateTime LastLeadershipRenewal => _lastLeadershipRenewal;
-    public bool IsLeader => _isLeader && !_isDisposed;
+    public bool IsLeader => _isLeader && !IsDisposed;
+    private bool IsDisposed => Volatile.Read(ref _disposedValue) == 1;
 
     public async Task StartAsync(CancellationToken cancellationToken = default)
     {
-        if (_isDisposed)
+        if (IsDisposed)
             throw new ObjectDisposedException(nameof(RedisLeaderElection));
 
         if (_leaderLoopTask != null && !_leaderLoopTask.IsCompleted)
@@ -56,7 +57,7 @@ public class RedisLeaderElection : ILeaderElection
 
     public async Task StopAsync(CancellationToken cancellationToken = default)
     {
-        if (_isDisposed)
+        if (IsDisposed)
             return;
 
         _logger.LogInformation("Stopping Redis leader election for instance {InstanceId}", _options.InstanceId);
@@ -84,7 +85,7 @@ public class RedisLeaderElection : ILeaderElection
 
     public async Task<bool> TryAcquireLeadershipAsync(CancellationToken cancellationToken = default)
     {
-        if (_isDisposed)
+        if (IsDisposed)
             return false;
 
         await _leadershipSemaphore.WaitAsync(cancellationToken);
@@ -331,24 +332,50 @@ public class RedisLeaderElection : ILeaderElection
             throw new ArgumentException("MaxRetryAttempts cannot be negative", nameof(_options.MaxRetryAttempts));
     }
 
+    public void Dispose()
+    {
+        Dispose(true);
+        GC.SuppressFinalize(this);
+    }
+
     public async ValueTask DisposeAsync()
     {
-        if (_isDisposed)
+        if (Interlocked.Exchange(ref _disposedValue, 1) == 1)
             return;
-        
+
         try
         {
             await StopAsync();
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error during disposal");
+            _logger.LogError(ex, "Error during async disposal");
         }
         finally
         {
+            _cancellationTokenSource.Cancel();
             _cancellationTokenSource.Dispose();
             _leadershipSemaphore.Dispose();
-            _isDisposed = true;
+        }
+    }
+
+    protected virtual void Dispose(bool disposing)
+    {
+        if (Interlocked.Exchange(ref _disposedValue, 1) == 1)
+            return;
+
+        if (disposing)
+        {
+            try
+            {
+                _cancellationTokenSource.Cancel();
+                _cancellationTokenSource.Dispose();
+                _leadershipSemaphore.Dispose();
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error during synchronous disposal");
+            }
         }
     }
 }
