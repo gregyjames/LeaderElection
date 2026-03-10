@@ -4,7 +4,7 @@ using StackExchange.Redis;
 
 namespace LeaderElection.Redis;
 
-public class RedisLeaderElection : ILeaderElection
+public class RedisLeaderElection : ILeaderElection, IDisposable
 {
     private readonly IDatabase _redis;
     private readonly RedisSettings _options;
@@ -13,7 +13,7 @@ public class RedisLeaderElection : ILeaderElection
     private readonly CancellationTokenSource _cancellationTokenSource = new();
     
     private volatile bool _isLeader;
-    private volatile bool _isDisposed;
+    private int _disposedValue; // 0 = not disposed, 1 = disposed
     private Task? _leaderLoopTask;
     private DateTime _lastLeadershipRenewal = DateTime.MinValue;
 
@@ -33,11 +33,12 @@ public class RedisLeaderElection : ILeaderElection
     }
 
     public DateTime LastLeadershipRenewal => _lastLeadershipRenewal;
-    public bool IsLeader => _isLeader && !_isDisposed;
+    public bool IsLeader => _isLeader && !IsDisposed;
+    private bool IsDisposed => Volatile.Read(ref _disposedValue) == 1;
 
     public async Task StartAsync(CancellationToken cancellationToken = default)
     {
-        if (_isDisposed)
+        if (IsDisposed)
             throw new ObjectDisposedException(nameof(RedisLeaderElection));
 
         if (_leaderLoopTask != null && !_leaderLoopTask.IsCompleted)
@@ -49,14 +50,14 @@ public class RedisLeaderElection : ILeaderElection
         _logger.LogInformation("Starting Redis leader election for instance {InstanceId}", _options.InstanceId);
         
         var combinedCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, _cancellationTokenSource.Token);
-        _leaderLoopTask = RunLeaderLoopAsync(combinedCts.Token);
+        _leaderLoopTask = RunLeaderLoopAsync(combinedCts);
         
         await Task.CompletedTask; // Return immediately, let the loop run in background
     }
 
     public async Task StopAsync(CancellationToken cancellationToken = default)
     {
-        if (_isDisposed)
+        if (IsDisposed)
             return;
 
         _logger.LogInformation("Stopping Redis leader election for instance {InstanceId}", _options.InstanceId);
@@ -84,7 +85,7 @@ public class RedisLeaderElection : ILeaderElection
 
     public async Task<bool> TryAcquireLeadershipAsync(CancellationToken cancellationToken = default)
     {
-        if (_isDisposed)
+        if (IsDisposed)
             return false;
 
         await _leadershipSemaphore.WaitAsync(cancellationToken);
@@ -141,76 +142,84 @@ public class RedisLeaderElection : ILeaderElection
         await RunTaskIfLeaderAsync(() => Task.Run(task, cancellationToken), cancellationToken);
     }
 
-    private async Task RunLeaderLoopAsync(CancellationToken cancellationToken)
+    private async Task RunLeaderLoopAsync(CancellationTokenSource combinedCts)
     {
-        var retryCount = 0;
-        
-        while (!cancellationToken.IsCancellationRequested)
+        try
         {
-            try
+            var cancellationToken = combinedCts.Token;
+            var retryCount = 0;
+            
+            while (!cancellationToken.IsCancellationRequested)
             {
-                if (!_isLeader)
-                {
-                    if (await TryAcquireLeadershipAsync(cancellationToken))
-                    {
-                        _logger.LogInformation("Leadership acquired for instance {InstanceId}", _options.InstanceId);
-                        SetLeadership(true);
-                        retryCount = 0; // Reset retry count on success
-                    }
-                    else
-                    {
-                        _logger.LogDebug("Failed to acquire leadership, will retry");
-                        retryCount++;
-                    }
-                }
-                else
-                {
-                    if (!await RenewLeadershipAsync(cancellationToken))
-                    {
-                        _logger.LogWarning("Lost leadership during renewal for instance {InstanceId}", _options.InstanceId);
-                        SetLeadership(false);
-                        retryCount++;
-                    }
-                    else
-                    {
-                        _logger.LogDebug("Leadership renewed successfully");
-                        retryCount = 0; // Reset retry count on success
-                    }
-                }
-
-                // Exponential backoff for retries
-                var delay = retryCount > 0 
-                    ? TimeSpan.FromSeconds(Math.Min(Math.Pow(2, retryCount), 60)) 
-                    : _options.RenewInterval;
-                
-                await Task.Delay(delay, cancellationToken);
-            }
-            catch (OperationCanceledException)
-            {
-                _logger.LogDebug("Leader loop cancelled");
-                break;
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Unexpected error in leader loop");
-                ErrorOccurred?.Invoke(this, ex);
-                retryCount++;
-                
                 try
                 {
-                    await Task.Delay(_options.RetryInterval, cancellationToken);
+                    if (!_isLeader)
+                    {
+                        if (await TryAcquireLeadershipAsync(cancellationToken))
+                        {
+                            _logger.LogInformation("Leadership acquired for instance {InstanceId}", _options.InstanceId);
+                            SetLeadership(true);
+                            retryCount = 0; // Reset retry count on success
+                        }
+                        else
+                        {
+                            _logger.LogDebug("Failed to acquire leadership, will retry");
+                            retryCount++;
+                        }
+                    }
+                    else
+                    {
+                        if (!await RenewLeadershipAsync(cancellationToken))
+                        {
+                            _logger.LogWarning("Lost leadership during renewal for instance {InstanceId}", _options.InstanceId);
+                            SetLeadership(false);
+                            retryCount++;
+                        }
+                        else
+                        {
+                            _logger.LogDebug("Leadership renewed successfully");
+                            retryCount = 0; // Reset retry count on success
+                        }
+                    }
+
+                    // Exponential backoff for retries
+                    var delay = retryCount > 0 
+                        ? TimeSpan.FromSeconds(Math.Min(Math.Pow(2, retryCount), 60)) 
+                        : _options.RenewInterval;
+                    
+                    await Task.Delay(delay, cancellationToken);
                 }
                 catch (OperationCanceledException)
                 {
+                    _logger.LogDebug("Leader loop cancelled");
                     break;
                 }
+                catch (Exception ex)
+                {
+                    _logger.LogError(ex, "Unexpected error in leader loop");
+                    ErrorOccurred?.Invoke(this, ex);
+                    retryCount++;
+                    
+                    try
+                    {
+                        await Task.Delay(_options.RetryInterval, cancellationToken);
+                    }
+                    catch (OperationCanceledException)
+                    {
+                        break;
+                    }
+                }
+            }
+
+            // Cleanup on shutdown
+            if (_options.EnableGracefulShutdown && _isLeader)
+            {
+                await ReleaseLeadershipAsync();
             }
         }
-
-        // Cleanup on shutdown
-        if (_options.EnableGracefulShutdown && _isLeader)
+        finally
         {
-            await ReleaseLeadershipAsync();
+            combinedCts.Dispose();
         }
     }
 
@@ -331,25 +340,50 @@ public class RedisLeaderElection : ILeaderElection
             throw new ArgumentException("MaxRetryAttempts cannot be negative", nameof(_options.MaxRetryAttempts));
     }
 
+    public void Dispose()
+    {
+        Dispose(true);
+        GC.SuppressFinalize(this);
+    }
+
     public async ValueTask DisposeAsync()
     {
-        if (_isDisposed)
+        if (Interlocked.Exchange(ref _disposedValue, 1) == 1)
             return;
 
-        _isDisposed = true;
-        
         try
         {
             await StopAsync();
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error during disposal");
+            _logger.LogError(ex, "Error during async disposal");
         }
         finally
         {
+            _cancellationTokenSource.Cancel();
             _cancellationTokenSource.Dispose();
             _leadershipSemaphore.Dispose();
+        }
+    }
+
+    protected virtual void Dispose(bool disposing)
+    {
+        if (Interlocked.Exchange(ref _disposedValue, 1) == 1)
+            return;
+
+        if (disposing)
+        {
+            try
+            {
+                _cancellationTokenSource.Cancel();
+                _cancellationTokenSource.Dispose();
+                _leadershipSemaphore.Dispose();
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error during synchronous disposal");
+            }
         }
     }
 }
