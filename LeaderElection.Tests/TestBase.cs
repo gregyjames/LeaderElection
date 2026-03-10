@@ -1,55 +1,43 @@
-using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Hosting;
-using Microsoft.Extensions.Logging;
 using Xunit;
 
 namespace LeaderElection.Tests;
 
-public abstract class TestBase : IAsyncDisposable
+public abstract class TestBase : IAsyncLifetime
 {
-    protected readonly IServiceProvider ServiceProvider;
-    protected readonly ILoggerFactory LoggerFactory;
-    protected readonly CancellationTokenSource CancellationTokenSource;
+    private readonly CancellationTokenSource _abortTestTokenSource = new();
 
-    protected TestBase()
+    /// <summary>
+    /// The <see cref="CancellationToken"/> used to abort the test.
+    /// Tests should observe this token and gracefully exit when cancellation is requested.
+    /// </summary>
+    /// <remarks>
+    /// In Xunit v3, replace this with `Xunit.TestContext.Current.CancellationToken`.
+    /// </remarks>
+    protected CancellationToken CancellationToken => _abortTestTokenSource.Token;
+
+    protected TestBase() { }
+
+    public virtual Task InitializeAsync() => Task.CompletedTask;
+
+    public virtual async Task DisposeAsync()
     {
-        var services = new ServiceCollection();
-        
-        // Add logging
-        services.AddLogging(builder =>
-        {
-            builder.AddConsole();
-            builder.SetMinimumLevel(LogLevel.Debug);
-        });
-        
-        LoggerFactory = services.BuildServiceProvider().GetRequiredService<ILoggerFactory>();
-        ServiceProvider = services.BuildServiceProvider();
-        CancellationTokenSource = new CancellationTokenSource();
+        if (!_abortTestTokenSource.IsCancellationRequested)
+            await _abortTestTokenSource.CancelAsync();
+        _abortTestTokenSource.Dispose();
     }
 
-    public virtual async ValueTask DisposeAsync()
-    {
-        CancellationTokenSource.Cancel();
-        CancellationTokenSource.Dispose();
-        
-        if (ServiceProvider is IAsyncDisposable asyncDisposable)
-        {
-            await asyncDisposable.DisposeAsync();
-        }
-        else
-        {
-            //ServiceProvider?.Dispose();
-        }
-    }
-
-    protected async Task WaitForLeadershipChange(ILeaderElection leaderElection, bool expectedLeadership, TimeSpan timeout = default)
+    protected async Task WaitForLeadershipChange(
+        ILeaderElection leaderElection,
+        bool expectedLeadership,
+        TimeSpan timeout = default
+    )
     {
         if (timeout == default)
             timeout = TimeSpan.FromSeconds(30);
 
         var tcs = new TaskCompletionSource<bool>();
         var timeoutCts = new CancellationTokenSource(timeout);
-        
+
         EventHandler<bool>? handler = null;
         handler = (sender, isLeader) =>
         {
@@ -59,18 +47,18 @@ public abstract class TestBase : IAsyncDisposable
                 leaderElection.LeadershipChanged -= handler;
             }
         };
-        
+
         leaderElection.LeadershipChanged += handler;
-        
+
         // Check if already in the expected state
         if (leaderElection.IsLeader == expectedLeadership)
         {
             tcs.TrySetResult(true);
         }
-        
-        using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(timeoutCts.Token, CancellationTokenSource.Token);
+
+        using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(timeoutCts.Token, CancellationToken);
         linkedCts.Token.Register(() => tcs.TrySetCanceled());
-        
+
         await tcs.Task;
     }
 
@@ -81,19 +69,19 @@ public abstract class TestBase : IAsyncDisposable
 
         var tcs = new TaskCompletionSource<Exception>();
         var timeoutCts = new CancellationTokenSource(timeout);
-        
+
         EventHandler<Exception>? handler = null;
         handler = (sender, exception) =>
         {
             tcs.TrySetResult(exception);
             leaderElection.ErrorOccurred -= handler;
         };
-        
+
         leaderElection.ErrorOccurred += handler;
-        
-        using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(timeoutCts.Token, CancellationTokenSource.Token);
+
+        using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(timeoutCts.Token, CancellationToken);
         linkedCts.Token.Register(() => tcs.TrySetCanceled());
-        
+
         await tcs.Task;
     }
-} 
+}
