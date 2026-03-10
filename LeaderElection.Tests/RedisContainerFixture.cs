@@ -42,9 +42,9 @@ public sealed class RedisContainerFixture : IAsyncLifetime
             "ConnectionMultiplexer is not initialized. Ensure InitializeAsync has been called."
         );
 
-    public async Task InitializeAsync()
+    public async ValueTask InitializeAsync()
     {
-        _redisContainer = new RedisBuilder().WithImage("redis:7-alpine").Build();
+        _redisContainer = new RedisBuilder(image: "redis:7-alpine").Build();
         await _redisContainer.StartAsync();
 
         var connectionString = _redisContainer.GetConnectionString();
@@ -53,7 +53,7 @@ public sealed class RedisContainerFixture : IAsyncLifetime
         );
     }
 
-    public async Task DisposeAsync()
+    public async ValueTask DisposeAsync()
     {
         if (_connectionMultiplexer != null)
             await _connectionMultiplexer.CloseAsync();

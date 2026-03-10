@@ -2,29 +2,15 @@ using Xunit;
 
 namespace LeaderElection.Tests;
 
-public abstract class TestBase : IAsyncLifetime
+public abstract class TestBase
 {
-    private readonly CancellationTokenSource _abortTestTokenSource = new();
-
     /// <summary>
     /// The <see cref="CancellationToken"/> used to abort the test.
     /// Tests should observe this token and gracefully exit when cancellation is requested.
     /// </summary>
-    /// <remarks>
-    /// In Xunit v3, replace this with `Xunit.TestContext.Current.CancellationToken`.
-    /// </remarks>
-    protected CancellationToken CancellationToken => _abortTestTokenSource.Token;
+    protected CancellationToken CancellationToken => TestContext.Current.CancellationToken;
 
     protected TestBase() { }
-
-    public virtual Task InitializeAsync() => Task.CompletedTask;
-
-    public virtual async Task DisposeAsync()
-    {
-        if (!_abortTestTokenSource.IsCancellationRequested)
-            await _abortTestTokenSource.CancelAsync();
-        _abortTestTokenSource.Dispose();
-    }
 
     protected async Task WaitForLeadershipChange(
         ILeaderElection leaderElection,

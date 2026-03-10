@@ -217,11 +217,11 @@ public sealed class BlobStorageLeaderElectionTests(AzuriteContainerFixture azuri
 
         // Verify container and blob were created
         var containerClient = _blobServiceClient.GetBlobContainerClient(options.ContainerName);
-        var containerExists = await containerClient.ExistsAsync();
+        var containerExists = await containerClient.ExistsAsync(CancellationToken);
         containerExists.Value.Should().BeTrue();
 
         var blobClient = containerClient.GetBlobClient(options.BlobName);
-        var blobExists = await blobClient.ExistsAsync();
+        var blobExists = await blobClient.ExistsAsync(CancellationToken);
         blobExists.Value.Should().BeTrue();
 
         await leaderElection.StopAsync(CancellationToken);

@@ -38,16 +38,16 @@ public sealed class AzuriteContainerFixture : IAsyncLifetime
     /// </summary>
     public BlobServiceClient BlobServiceClient => new(ConnectionString);
 
-    public async Task InitializeAsync()
+    public async ValueTask InitializeAsync()
     {
-        _azuriteContainer = new AzuriteBuilder()
-            .WithImage("mcr.microsoft.com/azure-storage/azurite:latest")
-            .Build();
+        _azuriteContainer = new AzuriteBuilder(
+            image: "mcr.microsoft.com/azure-storage/azurite:latest"
+        ).Build();
 
         await _azuriteContainer.StartAsync();
     }
 
-    public async Task DisposeAsync()
+    public async ValueTask DisposeAsync()
     {
         if (_azuriteContainer != null)
             await _azuriteContainer.DisposeAsync();
