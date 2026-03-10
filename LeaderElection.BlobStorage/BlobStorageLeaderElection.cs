@@ -421,8 +421,6 @@ public class BlobStorageLeaderElection : ILeaderElection
     {
         if (_isDisposed)
             return;
-
-        _isDisposed = true;
         
         try
         {
@@ -436,6 +434,7 @@ public class BlobStorageLeaderElection : ILeaderElection
         {
             _cancellationTokenSource.Dispose();
             _leadershipSemaphore.Dispose();
+            _isDisposed = true;
         }
     }
 }

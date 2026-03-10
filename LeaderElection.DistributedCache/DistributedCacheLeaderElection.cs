@@ -228,10 +228,19 @@ public class DistributedCacheLeaderElection : ILeaderElection
     public async ValueTask DisposeAsync()
     {
         if (_isDisposed) return;
-        _isDisposed = true;
-        
-        try { await StopAsync(); }
-        catch (Exception ex) { _logger.LogError(ex, "Error during disposal"); }
-        finally { _cancellationTokenSource.Dispose(); }
+
+        try
+        {
+            await StopAsync();
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error during disposal");
+        }
+        finally
+        {
+            _cancellationTokenSource.Dispose();
+            _isDisposed = true;
+        }
     }
 }

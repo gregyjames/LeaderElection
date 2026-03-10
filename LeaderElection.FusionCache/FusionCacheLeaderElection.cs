@@ -337,9 +337,7 @@ public class FusionCacheLeaderElection : ILeaderElection
     {
         if (_isDisposed)
             return;
-
-        _isDisposed = true;
-
+        
         try
         {
             await StopAsync();
@@ -352,6 +350,7 @@ public class FusionCacheLeaderElection : ILeaderElection
         {
             _cancellationTokenSource.Dispose();
             _leadershipSemaphore.Dispose();
+            _isDisposed = true;
         }
     }
 }

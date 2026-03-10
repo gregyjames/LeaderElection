@@ -335,8 +335,6 @@ public class RedisLeaderElection : ILeaderElection
     {
         if (_isDisposed)
             return;
-
-        _isDisposed = true;
         
         try
         {
@@ -350,6 +348,7 @@ public class RedisLeaderElection : ILeaderElection
         {
             _cancellationTokenSource.Dispose();
             _leadershipSemaphore.Dispose();
+            _isDisposed = true;
         }
     }
 }
