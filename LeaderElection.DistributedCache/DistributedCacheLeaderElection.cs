@@ -4,7 +4,7 @@ using Microsoft.Extensions.Options;
 
 namespace LeaderElection.DistributedCache;
 
-public class DistributedCacheLeaderElection : ILeaderElection
+public class DistributedCacheLeaderElection : ILeaderElection, IDisposable
 {
     private readonly IDistributedCache _cache;
     private readonly DistributedCacheSettings _options;
@@ -12,7 +12,7 @@ public class DistributedCacheLeaderElection : ILeaderElection
     private readonly CancellationTokenSource _cancellationTokenSource = new();
     
     private volatile bool _isLeader;
-    private volatile bool _isDisposed;
+    private int _disposedValue; // 0 = not disposed, 1 = disposed
     private Task? _leaderLoopTask;
     private DateTime _lastLeadershipRenewal = DateTime.MinValue;
 
@@ -30,21 +30,22 @@ public class DistributedCacheLeaderElection : ILeaderElection
     }
 
     public DateTime LastLeadershipRenewal => _lastLeadershipRenewal;
-    public bool IsLeader => _isLeader && !_isDisposed;
+    public bool IsLeader => _isLeader && !IsDisposed;
+    private bool IsDisposed => Volatile.Read(ref _disposedValue) == 1;
 
     public Task StartAsync(CancellationToken cancellationToken = default)
     {
-        if (_isDisposed) throw new ObjectDisposedException(nameof(DistributedCacheLeaderElection));
+        if (IsDisposed) throw new ObjectDisposedException(nameof(DistributedCacheLeaderElection));
         if (_leaderLoopTask != null && !_leaderLoopTask.IsCompleted) return Task.CompletedTask;
 
         var combinedCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, _cancellationTokenSource.Token);
-        _leaderLoopTask = RunLeaderLoopAsync(combinedCts.Token);
+        _leaderLoopTask = RunLeaderLoopAsync(combinedCts);
         return Task.CompletedTask;
     }
 
     public async Task StopAsync(CancellationToken cancellationToken = default)
     {
-        if (_isDisposed) return;
+        if (IsDisposed) return;
 
         _cancellationTokenSource.Cancel();
         
@@ -64,7 +65,7 @@ public class DistributedCacheLeaderElection : ILeaderElection
 
     public async Task<bool> TryAcquireLeadershipAsync(CancellationToken cancellationToken = default)
     {
-        if (_isDisposed) return false;
+        if (IsDisposed) return false;
 
         var acquired = await TryAcquireLeadershipInternalAsync(cancellationToken);
         if (acquired && !_isLeader)
@@ -98,61 +99,69 @@ public class DistributedCacheLeaderElection : ILeaderElection
         await RunTaskIfLeaderAsync(() => Task.Run(task, cancellationToken), cancellationToken);
     }
 
-    private async Task RunLeaderLoopAsync(CancellationToken cancellationToken)
+    private async Task RunLeaderLoopAsync(CancellationTokenSource combinedCts)
     {
-        var retryCount = 0;
-        
-        while (!cancellationToken.IsCancellationRequested)
+        try
         {
-            try
+            var cancellationToken = combinedCts.Token;
+            var retryCount = 0;
+            
+            while (!cancellationToken.IsCancellationRequested)
             {
-                if (!_isLeader)
+                try
                 {
-                    if (await TryAcquireLeadershipAsync(cancellationToken))
+                    if (!_isLeader)
                     {
-                        _logger.LogInformation("Leadership acquired for instance {InstanceId}", _options.InstanceId);
-                        retryCount = 0; // Reset retry count on success
+                        if (await TryAcquireLeadershipAsync(cancellationToken))
+                        {
+                            _logger.LogInformation("Leadership acquired for instance {InstanceId}", _options.InstanceId);
+                            retryCount = 0; // Reset retry count on success
+                        }
+                        else
+                        {
+                            retryCount++;
+                        }
                     }
                     else
                     {
-                        retryCount++;
+                        if (!await RenewLeadershipAsync(cancellationToken))
+                        {
+                            _logger.LogWarning("Lost leadership for instance {InstanceId}", _options.InstanceId);
+                            _isLeader = false;
+                            LeadershipChanged?.Invoke(this, false);
+                            retryCount++;
+                        }
+                        else
+                        {
+                            retryCount = 0; // Reset retry count on success
+                        }
                     }
-                }
-                else
-                {
-                    if (!await RenewLeadershipAsync(cancellationToken))
-                    {
-                        _logger.LogWarning("Lost leadership for instance {InstanceId}", _options.InstanceId);
-                        _isLeader = false;
-                        LeadershipChanged?.Invoke(this, false);
-                        retryCount++;
-                    }
-                    else
-                    {
-                        retryCount = 0; // Reset retry count on success
-                    }
-                }
 
-                // Exponential backoff for retries
-                var delay = retryCount > 0 
-                    ? TimeSpan.FromSeconds(Math.Min(Math.Pow(2, retryCount), 60)) 
-                    : _options.RenewInterval;
-                
-                await Task.Delay(delay, cancellationToken);
+                    // Exponential backoff for retries
+                    var delay = retryCount > 0 
+                        ? TimeSpan.FromSeconds(Math.Min(Math.Pow(2, retryCount), 60)) 
+                        : _options.RenewInterval;
+                    
+                    await Task.Delay(delay, cancellationToken);
+                }
+                catch (OperationCanceledException) { break; }
+                catch (Exception ex)
+                {
+                    _logger.LogError(ex, "Error in leader loop");
+                    ErrorOccurred?.Invoke(this, ex);
+                    retryCount++;
+                    await Task.Delay(_options.RetryInterval, cancellationToken);
+                }
             }
-            catch (OperationCanceledException) { break; }
-            catch (Exception ex)
+
+            if (_options.EnableGracefulShutdown && _isLeader)
             {
-                _logger.LogError(ex, "Error in leader loop");
-                ErrorOccurred?.Invoke(this, ex);
-                retryCount++;
-                await Task.Delay(_options.RetryInterval, cancellationToken);
+                await ReleaseLeadershipAsync();
             }
         }
-
-        if (_options.EnableGracefulShutdown && _isLeader)
+        finally
         {
-            await ReleaseLeadershipAsync();
+            combinedCts.Dispose();
         }
     }
 
@@ -225,9 +234,16 @@ public class DistributedCacheLeaderElection : ILeaderElection
         }
     }
 
+    public void Dispose()
+    {
+        Dispose(true);
+        GC.SuppressFinalize(this);
+    }
+
     public async ValueTask DisposeAsync()
     {
-        if (_isDisposed) return;
+        if (Interlocked.Exchange(ref _disposedValue, 1) == 1)
+            return;
 
         try
         {
@@ -235,12 +251,31 @@ public class DistributedCacheLeaderElection : ILeaderElection
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error during disposal");
+            _logger.LogError(ex, "Error during async disposal");
         }
         finally
         {
+            _cancellationTokenSource.Cancel();
             _cancellationTokenSource.Dispose();
-            _isDisposed = true;
+        }
+    }
+
+    protected virtual void Dispose(bool disposing)
+    {
+        if (Interlocked.Exchange(ref _disposedValue, 1) == 1)
+            return;
+
+        if (disposing)
+        {
+            try
+            {
+                _cancellationTokenSource.Cancel();
+                _cancellationTokenSource.Dispose();
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error during synchronous disposal");
+            }
         }
     }
 }

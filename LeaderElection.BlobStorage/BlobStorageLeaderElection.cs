@@ -1,10 +1,10 @@
-﻿using Azure.Storage.Blobs;
+using Azure.Storage.Blobs;
 using Azure.Storage.Blobs.Specialized;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 
 namespace LeaderElection.BlobStorage;
-public class BlobStorageLeaderElection : ILeaderElection
+public class BlobStorageLeaderElection : ILeaderElection, IDisposable
 {
     private readonly BlobServiceClient? _blobServiceClient;
     private readonly BlobContainerClient _containerClient;
@@ -15,7 +15,7 @@ public class BlobStorageLeaderElection : ILeaderElection
     private readonly CancellationTokenSource _cancellationTokenSource = new();
     
     private volatile bool _isLeader;
-    private volatile bool _isDisposed;
+    private int _disposedValue; // 0 = not disposed, 1 = disposed
     private Task? _leaderLoopTask;
     private DateTime _lastLeadershipRenewal = DateTime.MinValue;
     private string? _currentLeaseId;
@@ -49,11 +49,12 @@ public class BlobStorageLeaderElection : ILeaderElection
         _blobClient = _containerClient.GetBlobClient(_options.BlobName);
     }
     
-    public bool IsLeader => _isLeader && !_isDisposed;
+    public bool IsLeader => _isLeader && !IsDisposed;
+    private bool IsDisposed => Volatile.Read(ref _disposedValue) == 1;
     public DateTime LastLeadershipRenewal => _lastLeadershipRenewal;
     public async Task StartAsync(CancellationToken cancellationToken = default)
     {
-        if (_isDisposed)
+        if (IsDisposed)
             throw new ObjectDisposedException(nameof(BlobStorageLeaderElection));
 
         if (_leaderLoopTask != null && !_leaderLoopTask.IsCompleted)
@@ -74,14 +75,14 @@ public class BlobStorageLeaderElection : ILeaderElection
         await EnsureBlobExistsAsync(cancellationToken);
         
         var combinedCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, _cancellationTokenSource.Token);
-        _leaderLoopTask = RunLeaderLoopAsync(combinedCts.Token);
+        _leaderLoopTask = RunLeaderLoopAsync(combinedCts);
         
         await Task.CompletedTask; // Return immediately, let the loop run in background
     }
 
     public async Task StopAsync(CancellationToken cancellationToken = default)
     {
-        if (_isDisposed)
+        if (IsDisposed)
             return;
 
         _logger.LogInformation("Stopping Blob Storage leader election for instance {InstanceId}", _options.InstanceId);
@@ -109,7 +110,7 @@ public class BlobStorageLeaderElection : ILeaderElection
 
     public async Task<bool> TryAcquireLeadershipAsync(CancellationToken cancellationToken = default)
     {
-        if (_isDisposed)
+        if (IsDisposed)
             return false;
 
         await _leadershipSemaphore.WaitAsync(cancellationToken);
@@ -170,46 +171,49 @@ public class BlobStorageLeaderElection : ILeaderElection
         await RunTaskIfLeaderAsync(() => Task.Run(task, cancellationToken), cancellationToken);
     }
 
-    private async Task RunLeaderLoopAsync(CancellationToken cancellationToken)
+    private async Task RunLeaderLoopAsync(CancellationTokenSource combinedCts)
     {
-        var retryCount = 0;
-        
-        while (!cancellationToken.IsCancellationRequested)
+        try
         {
-            try
+            var cancellationToken = combinedCts.Token;
+            var retryCount = 0;
+            
+            while (!cancellationToken.IsCancellationRequested)
             {
-                if (!_isLeader)
+                try
                 {
-                    if (await TryAcquireLeadershipAsync(cancellationToken))
+                    if (!_isLeader)
                     {
-                        _logger.LogInformation("Leadership acquired for instance {InstanceId}", _options.InstanceId);
-                        SetLeadership(true);
-                        retryCount = 0; // Reset retry count on success
+                        if (await TryAcquireLeadershipAsync(cancellationToken))
+                        {
+                            _logger.LogInformation("Leadership acquired for instance {InstanceId}", _options.InstanceId);
+                            SetLeadership(true);
+                            retryCount = 0; // Reset retry count on success
+                        }
+                        else
+                        {
+                            _logger.LogDebug("Failed to acquire leadership, will retry");
+                            retryCount++;
+                        }
                     }
                     else
                     {
-                        _logger.LogDebug("Failed to acquire leadership, will retry");
-                        retryCount++;
+                        if (!await RenewLeadershipAsync(cancellationToken))
+                        {
+                            _logger.LogWarning("Lost leadership during renewal for instance {InstanceId}", _options.InstanceId);
+                            SetLeadership(false);
+                            retryCount++;
+                        }
+                        else
+                        {
+                            _logger.LogDebug("Leadership renewed successfully");
+                            retryCount = 0; // Reset retry count on success
+                        }
                     }
-                }
-                else
-                {
-                    if (!await RenewLeadershipAsync(cancellationToken))
-                    {
-                        _logger.LogWarning("Lost leadership during renewal for instance {InstanceId}", _options.InstanceId);
-                        SetLeadership(false);
-                        retryCount++;
-                    }
-                    else
-                    {
-                        _logger.LogDebug("Leadership renewed successfully");
-                        retryCount = 0; // Reset retry count on success
-                    }
-                }
 
-                // Exponential backoff for retries
-                var delay = retryCount > 0 
-                    ? TimeSpan.FromSeconds(Math.Min(Math.Pow(2, retryCount), 60)) 
+                    // Exponential backoff for retries
+                    var delay = retryCount > 0 
+                        ? TimeSpan.FromSeconds(Math.Min(Math.Pow(2, retryCount), 60)) 
                     : _options.RenewInterval;
                 
                 await Task.Delay(delay, cancellationToken);
@@ -240,6 +244,11 @@ public class BlobStorageLeaderElection : ILeaderElection
         if (_options.EnableGracefulShutdown && _isLeader)
         {
             await ReleaseLeadershipAsync();
+        }
+        }
+        finally
+        {
+            combinedCts.Dispose();
         }
     }
 
@@ -417,24 +426,50 @@ public class BlobStorageLeaderElection : ILeaderElection
             throw new ArgumentException("MaxRetryAttempts cannot be negative", nameof(_options.MaxRetryAttempts));
     }
 
+    public void Dispose()
+    {
+        Dispose(true);
+        GC.SuppressFinalize(this);
+    }
+
     public async ValueTask DisposeAsync()
     {
-        if (_isDisposed)
+        if (Interlocked.Exchange(ref _disposedValue, 1) == 1)
             return;
-        
+
         try
         {
             await StopAsync();
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error during disposal");
+            _logger.LogError(ex, "Error during async disposal");
         }
         finally
         {
+            _cancellationTokenSource.Cancel();
             _cancellationTokenSource.Dispose();
             _leadershipSemaphore.Dispose();
-            _isDisposed = true;
+        }
+    }
+
+    protected virtual void Dispose(bool disposing)
+    {
+        if (Interlocked.Exchange(ref _disposedValue, 1) == 1)
+            return;
+
+        if (disposing)
+        {
+            try
+            {
+                _cancellationTokenSource.Cancel();
+                _cancellationTokenSource.Dispose();
+                _leadershipSemaphore.Dispose();
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error during synchronous disposal");
+            }
         }
     }
 }
