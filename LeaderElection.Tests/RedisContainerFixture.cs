@@ -9,7 +9,7 @@ namespace LeaderElection.Tests;
 /// across all tests that require it.
 /// </summary>
 /// <remarks>
-/// Apply the <pre>[Collection("Redis Container")]</pre> attribute to any test class that
+/// Apply the <c>[Collection("Redis Container")]</c> attribute to any test class that
 /// requires access to the singleton <see cref="RedisContainerFixture"/>.
 /// </remarks>
 [CollectionDefinition("Redis Container")]

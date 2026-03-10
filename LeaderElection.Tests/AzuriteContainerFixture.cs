@@ -9,7 +9,7 @@ namespace LeaderElection.Tests;
 /// across all tests that require it.
 /// </summary>
 /// <remarks>
-/// Apply the <pre>[Collection("Azurite Container")]</pre> attribute to any test class that
+/// Apply the <c>[Collection("Azurite Container")]</c> attribute to any test class that
 /// requires access to the singleton <see cref="AzuriteContainerFixture"/>.
 /// </remarks>
 [CollectionDefinition("Azurite Container")]
