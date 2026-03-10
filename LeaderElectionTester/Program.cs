@@ -25,25 +25,25 @@ builder.Services.AddSingleton(_ => lazyConnectionMultiplexer.Value);
 ////////////////////////////////////////////////////
 // Configure RedisLeaderElection
 ////////////////////////////////////////////////////
-builder.Services.AddRedisLeaderElection(settings =>
+builder.Services.AddRedisLeaderElection(options =>
 {
-    settings.LockKey = "leader_election_tester";
-    settings.LockExpiry = TimeSpan.FromSeconds(30);
-    settings.RenewInterval = TimeSpan.FromSeconds(10);
-    settings.RetryInterval = TimeSpan.FromSeconds(5);
-    settings.MaxRetryAttempts = 3;
-    settings.EnableGracefulShutdown = true;
+    options.LockKey = "leader_election_tester";
+    options.LockExpiry = TimeSpan.FromSeconds(30);
+    options.RenewInterval = TimeSpan.FromSeconds(10);
+    options.RetryInterval = TimeSpan.FromSeconds(5);
+    options.MaxRetryAttempts = 3;
+    options.EnableGracefulShutdown = true;
 });
 
 ////////////////////////////////////////////////////
 // Configure DistributedCacheLeaderElection
 ////////////////////////////////////////////////////
-// builder.Services.AddDistributedCacheLeaderElection(cfg =>
+// builder.Services.AddDistributedCacheLeaderElection(options =>
 // {
-//     cfg.InstanceId = $"{AppDomain.CurrentDomain.FriendlyName}-{Guid.NewGuid()}";
-//     cfg.RenewInterval = TimeSpan.FromSeconds(10);
-//     cfg.MaxRetryAttempts = 3;
-//     cfg.EnableGracefulShutdown = true;
+//     options.InstanceId = $"{AppDomain.CurrentDomain.FriendlyName}-{Guid.NewGuid()}";
+//     options.RenewInterval = TimeSpan.FromSeconds(10);
+//     options.MaxRetryAttempts = 3;
+//     options.EnableGracefulShutdown = true;
 // })
 // .AddStackExchangeRedisCache(options =>
 // {
@@ -53,17 +53,17 @@ builder.Services.AddRedisLeaderElection(settings =>
 ////////////////////////////////////////////////////
 // Configure BlobStorageLeaderElection
 ////////////////////////////////////////////////////
-// builder.Services.AddBlobStorageLeaderElection(settings =>
+// builder.Services.AddBlobStorageLeaderElection(options =>
 // {
 //     // blob test using azurite
-//     settings.ConnectionString =
+//     options.ConnectionString =
 //         "DefaultEndpointsProtocol=http;AccountName=devstoreaccount1;AccountKey=Eby8vdM02xNOcqFlqUwJPLlmEtlCDXJ1OUzFT50uSRZ6IFsuFq2UVErCz4I6tq/K1SZFPTOtr/KBHBeksoGMGw==;BlobEndpoint=http://127.0.0.1:10000/devstoreaccount1;QueueEndpoint=http://127.0.0.1:10001/devstoreaccount1;TableEndpoint=http://127.0.0.1:10002/devstoreaccount1;";
-//     settings.BlobName = "leader_election_tester";
-//     settings.LeaseDuration = TimeSpan.FromSeconds(30);
-//     settings.RenewInterval = TimeSpan.FromSeconds(10);
-//     settings.RetryInterval = TimeSpan.FromSeconds(5);
-//     settings.MaxRetryAttempts = 3;
-//     settings.EnableGracefulShutdown = true;
+//     options.BlobName = "leader_election_tester";
+//     options.LeaseDuration = TimeSpan.FromSeconds(30);
+//     options.RenewInterval = TimeSpan.FromSeconds(10);
+//     options.RetryInterval = TimeSpan.FromSeconds(5);
+//     options.MaxRetryAttempts = 3;
+//     options.EnableGracefulShutdown = true;
 // });
 
 builder.Services.AddHostedService<Service>();
