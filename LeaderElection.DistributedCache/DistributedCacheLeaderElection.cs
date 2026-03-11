@@ -4,7 +4,7 @@ using Microsoft.Extensions.Options;
 
 namespace LeaderElection.DistributedCache;
 
-public class DistributedCacheLeaderElection : ILeaderElection, IDisposable
+public class DistributedCacheLeaderElection : ILeaderElection
 {
     private readonly IDistributedCache _cache;
     private readonly DistributedCacheSettings _options;
@@ -43,10 +43,11 @@ public class DistributedCacheLeaderElection : ILeaderElection, IDisposable
         return Task.CompletedTask;
     }
 
-    public async Task StopAsync(CancellationToken cancellationToken = default)
-    {
-        if (IsDisposed) return;
+    public Task StopAsync(CancellationToken cancellationToken = default) =>
+        IsDisposed ? Task.CompletedTask : InternalStopAsync(cancellationToken);
 
+    private async Task InternalStopAsync(CancellationToken cancellationToken = default)
+    {
         _cancellationTokenSource.Cancel();
         
         if (_leaderLoopTask != null)
@@ -234,48 +235,26 @@ public class DistributedCacheLeaderElection : ILeaderElection, IDisposable
         }
     }
 
-    public void Dispose()
-    {
-        Dispose(true);
-        GC.SuppressFinalize(this);
-    }
-
     public async ValueTask DisposeAsync()
     {
         if (Interlocked.Exchange(ref _disposedValue, 1) == 1)
             return;
 
+        await DisposeAsyncCore().ConfigureAwait(false);
+        GC.SuppressFinalize(this);
+    }
+
+    protected virtual async ValueTask DisposeAsyncCore()
+    {
         try
         {
-            await StopAsync();
+            await InternalStopAsync().ConfigureAwait(false);
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error during async disposal");
         }
-        finally
-        {
-            _cancellationTokenSource.Cancel();
-            _cancellationTokenSource.Dispose();
-        }
-    }
 
-    protected virtual void Dispose(bool disposing)
-    {
-        if (Interlocked.Exchange(ref _disposedValue, 1) == 1)
-            return;
-
-        if (disposing)
-        {
-            try
-            {
-                _cancellationTokenSource.Cancel();
-                _cancellationTokenSource.Dispose();
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Error during synchronous disposal");
-            }
-        }
+        _cancellationTokenSource.Dispose();
     }
 }

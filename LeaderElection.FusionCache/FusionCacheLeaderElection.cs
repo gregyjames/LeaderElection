@@ -55,11 +55,11 @@ public class FusionCacheLeaderElection : ILeaderElection
         await Task.CompletedTask; // Return immediately, let the loop run in background
     }
 
-    public async Task StopAsync(CancellationToken cancellationToken = default)
-    {
-        if (IsDisposed)
-            return;
+    public Task StopAsync(CancellationToken cancellationToken = default) =>
+        IsDisposed ? Task.CompletedTask : InternalStopAsync(cancellationToken);
 
+    private async Task InternalStopAsync(CancellationToken cancellationToken = default)
+    {
         _logger.LogInformation("Stopping FusionCache leader election for instance {InstanceId}", _options.InstanceId);
 
         await _cancellationTokenSource.CancelAsync();
@@ -342,50 +342,27 @@ public class FusionCacheLeaderElection : ILeaderElection
             throw new ArgumentException("MaxRetryAttempts cannot be negative", nameof(_options.MaxRetryAttempts));
     }
 
-    public void Dispose()
-    {
-        Dispose(true);
-        GC.SuppressFinalize(this);
-    }
-
     public async ValueTask DisposeAsync()
     {
         if (Interlocked.Exchange(ref _disposedValue, 1) == 1)
             return;
 
+        await DisposeAsyncCore().ConfigureAwait(false);
+        GC.SuppressFinalize(this);
+    }
+
+    protected virtual async ValueTask DisposeAsyncCore()
+    {
         try
         {
-            await StopAsync();
+            await InternalStopAsync().ConfigureAwait(false);
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error during async disposal");
         }
-        finally
-        {
-            _cancellationTokenSource.Cancel();
-            _cancellationTokenSource.Dispose();
-            _leadershipSemaphore.Dispose();
-        }
-    }
 
-    protected virtual void Dispose(bool disposing)
-    {
-        if (Interlocked.Exchange(ref _disposedValue, 1) == 1)
-            return;
-
-        if (disposing)
-        {
-            try
-            {
-                _cancellationTokenSource.Cancel();
-                _cancellationTokenSource.Dispose();
-                _leadershipSemaphore.Dispose();
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Error during synchronous disposal");
-            }
-        }
+        _cancellationTokenSource.Dispose();
+        _leadershipSemaphore.Dispose();
     }
 }
