@@ -8,6 +8,8 @@ using Xunit;
 namespace LeaderElection.Tests;
 
 [Collection("Redis Container")]
+[Trait("Kind", "Integration")]
+[Trait("Category", "Redis")]
 public sealed class RedisLeaderElectionTests(RedisContainerFixture redisFixture) : TestBase
 {
     private static RedisSettings CreateSettings(
@@ -55,7 +57,7 @@ public sealed class RedisLeaderElectionTests(RedisContainerFixture redisFixture)
         await leaderElection.StopAsync(CancellationToken);
     }
 
-    [Fact]
+    [Fact(Timeout = 5500)]
     public async Task Should_Not_Acquire_Leadership_When_Another_Instance_Has_Leadership()
     {
         // Arrange
@@ -89,7 +91,7 @@ public sealed class RedisLeaderElectionTests(RedisContainerFixture redisFixture)
         await leaderElection2.StopAsync(CancellationToken);
     }
 
-    [Fact]
+    [Fact(Timeout = 2500)]
     public async Task Should_Transfer_Leadership_When_Current_Leader_Stops()
     {
         // Arrange
