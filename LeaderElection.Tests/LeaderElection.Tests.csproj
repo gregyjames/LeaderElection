@@ -1,17 +1,9 @@
 <Project Sdk="Microsoft.NET.Sdk">
-
-    <PropertyGroup>
-        <TargetFramework>net8.0</TargetFramework>
-        <ImplicitUsings>enable</ImplicitUsings>
-        <Nullable>enable</Nullable>
-        <IsPackable>false</IsPackable>
-        <IsTestProject>true</IsTestProject>
-    </PropertyGroup>
-
-    <ItemGroup>
-        <PackageReference Include="Microsoft.NET.Test.Sdk" Version="18.3.0" />
-        <PackageReference Include="xunit.v3" Version="3.2.2" />
-        <PackageReference Include="xunit.runner.visualstudio" Version="3.1.5">
+  <!-- Inherits settings from Directory.Build.props -->
+  <ItemGroup>
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="18.3.0" />
+    <PackageReference Include="xunit.v3" Version="3.2.2" />
+    <PackageReference Include="xunit.runner.visualstudio" Version="3.1.5">
             <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
             <PrivateAssets>all</PrivateAssets>
         </PackageReference>
@@ -25,10 +17,9 @@
         <PackageReference Include="FluentAssertions" Version="7.2.1" />
     </ItemGroup>
 
-    <ItemGroup>
-        <ProjectReference Include="..\LeaderElection\LeaderElection.csproj" />
-        <ProjectReference Include="..\LeaderElection.Redis\LeaderElection.Redis.csproj" />
-        <ProjectReference Include="..\LeaderElection.BlobStorage\LeaderElection.BlobStorage.csproj" />
-    </ItemGroup>
-
-</Project> 
+  <ItemGroup>
+    <ProjectReference Include="..\LeaderElection\LeaderElection.csproj" />
+    <ProjectReference Include="..\LeaderElection.Redis\LeaderElection.Redis.csproj" />
+    <ProjectReference Include="..\LeaderElection.BlobStorage\LeaderElection.BlobStorage.csproj" />
+  </ItemGroup>
+</Project>

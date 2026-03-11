@@ -1,37 +1,19 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- Inherits settings from Directory.Build.props -->
+  <PropertyGroup>
+    <IsPackable>true</IsPackable>
+    <PackageTags>Azure;Blobs;Blob;Storage;$(PackageTags)</PackageTags>
+  </PropertyGroup>
 
-    <PropertyGroup>
-        <TargetFramework>net8.0</TargetFramework>
-        <ImplicitUsings>enable</ImplicitUsings>
-        <Nullable>enable</Nullable>
-        <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
-        <Title>LeaderElection.BlobStorage</Title>
-        <Authors>Greg James</Authors>
-        <PackageIcon>icon.png</PackageIcon>
-        <PackageReadmeFile>README.md</PackageReadmeFile>
-        <PackageProjectUrl>https://github.com/gregyjames/LeaderElection</PackageProjectUrl>
-        <RepositoryUrl>https://github.com/gregyjames/LeaderElection</RepositoryUrl>
-        <RepositoryType>git</RepositoryType>
-        <PackageTags>distributed, redis, leaderelection, leadership, coordination, kubernetes, azure, aws</PackageTags>
-        <PackageLicenseFile>LICENSE.md</PackageLicenseFile>
-    </PropertyGroup>
-
-    <ItemGroup>
-        <PackageReference Include="Azure.Identity" Version="1.14.1" />
-        <PackageReference Include="Azure.Storage.Blobs" Version="12.24.1" />
+  <ItemGroup>
+    <PackageReference Include="Azure.Identity" Version="1.14.1" />
+    <PackageReference Include="Azure.Storage.Blobs" Version="12.24.1" />
         <PackageReference Include="Microsoft.Extensions.Hosting.Abstractions" Version="9.0.6" />
-        <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="9.0.6" />
-        <PackageReference Include="Microsoft.Extensions.Options" Version="9.0.6" />
-    </ItemGroup>
+    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="9.0.6" />
+    <PackageReference Include="Microsoft.Extensions.Options" Version="9.0.6" />
+  </ItemGroup>
 
-    <ItemGroup>
-        <ProjectReference Include="..\LeaderElection\LeaderElection.csproj" />
-    </ItemGroup>
-
-    <ItemGroup>
-        <None Include="README.md" Pack="true" PackagePath="\"/>
-        <None Include="icon.png" Pack="true" PackagePath="\"/>
-        <None Include="LICENSE.md" Pack="true" PackagePath="\"/>
-    </ItemGroup>
-
+  <ItemGroup>
+    <ProjectReference Include="..\LeaderElection\LeaderElection.csproj" />
+  </ItemGroup>
 </Project>

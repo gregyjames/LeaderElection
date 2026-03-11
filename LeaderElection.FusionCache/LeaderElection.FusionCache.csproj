@@ -1,46 +1,17 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
+  <!-- Inherits settings from Directory.Build.props -->
+  <PropertyGroup>
+    <IsPackable>true</IsPackable>
+    <PackageTags>FusionCache;Fusion;Cache;Redis;$(PackageTags)</PackageTags>
+  </PropertyGroup>
 
-    <PropertyGroup>
-        <TargetFramework>net8.0</TargetFramework>
-        <ImplicitUsings>enable</ImplicitUsings>
-        <Nullable>enable</Nullable>
-        <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
-        <Title>LeaderElection.FusionCache</Title>
-        <Authors>Greg James</Authors>
-        <PackageTags>distributed, redis, leaderelection, leadership, coordination, kubernetes, azure, aws</PackageTags>
-        <PackageProjectUrl>https://github.com/gregyjames/LeaderElection</PackageProjectUrl>
-        <RepositoryUrl>https://github.com/gregyjames/LeaderElection</RepositoryUrl>
-        <RepositoryType>git</RepositoryType>
-        <PackageIcon>icon.png</PackageIcon>
-        <Description>An easy-to-use C# implementation of the distributed leader election pattern, leveraging common infrastructure tools like Azure Blob Storage, Redis, and others.</Description>
-        <Copyright>Greg James 2025</Copyright>
-        <PackageReadmeFile>README.md</PackageReadmeFile>
-        <PackageLicenseFile>LICENSE.md</PackageLicenseFile>
-    </PropertyGroup>
-
-    <ItemGroup>
-      <PackageReference Include="ZiggyCreatures.FusionCache" Version="2.5.0" />
+  <ItemGroup>
+    <PackageReference Include="ZiggyCreatures.FusionCache" Version="2.5.0" />
     <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="10.0.1" />
     <PackageReference Include="Microsoft.Extensions.Options" Version="10.0.1" />
-    </ItemGroup>
+  </ItemGroup>
 
-    <ItemGroup>
-      <ProjectReference Include="..\LeaderElection\LeaderElection.csproj" />
-    </ItemGroup>
-
-    <ItemGroup>
-      <None Update="icon.png">
-        <Pack>true</Pack>
-        <PackagePath>/</PackagePath>
-      </None>
-        <None Update="LICENSE.md">
-            <Pack>true</Pack>
-            <PackagePath>/</PackagePath>
-        </None>
-        <None Update="README.md">
-            <Pack>true</Pack>
-            <PackagePath>/</PackagePath>
-        </None>
-    </ItemGroup>
-
+  <ItemGroup>
+    <ProjectReference Include="..\LeaderElection\LeaderElection.csproj" />
+  </ItemGroup>
 </Project>
