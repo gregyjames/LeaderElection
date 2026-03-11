@@ -43,6 +43,12 @@ jobs:
     - name: Build LeaderElection.BlobStorage
       run: dotnet build LeaderElection.BlobStorage/LeaderElection.BlobStorage.csproj --no-restore --configuration Release /p:Version=$Env:VERSION /p:AssemblyVersion=$Env:VERSION
       
+    - name: Build LeaderElection.DistributedCache
+      run: dotnet build LeaderElection.DistributedCache/LeaderElection.DistributedCache.csproj --no-restore --configuration Release /p:Version=$Env:VERSION /p:AssemblyVersion=$Env:VERSION
+      
+    - name: Build LeaderElection.FusionCache
+      run: dotnet build LeaderElection.FusionCache/LeaderElection.FusionCache.csproj --no-restore --configuration Release /p:Version=$Env:VERSION /p:AssemblyVersion=$Env:VERSION
+      
     - name: Pack LeaderElection
       run: dotnet pack LeaderElection/LeaderElection.csproj --no-build --configuration Release /p:Version=$Env:VERSION
       
@@ -51,6 +57,12 @@ jobs:
       
     - name: Pack LeaderElection.BlobStorage
       run: dotnet pack LeaderElection.BlobStorage/LeaderElection.BlobStorage.csproj --no-build --configuration Release /p:Version=$Env:VERSION
+      
+    - name: Pack LeaderElection.DistributedCache
+      run: dotnet pack LeaderElection.DistributedCache/LeaderElection.DistributedCache.csproj --no-build --configuration Release /p:Version=$Env:VERSION
+      
+    - name: Pack LeaderElection.FusionCache
+      run: dotnet pack LeaderElection.FusionCache/LeaderElection.FusionCache.csproj --no-build --configuration Release /p:Version=$Env:VERSION
       
     - name: Publish NuGet packages
       run: dotnet nuget push **/*.nupkg --source https://api.nuget.org/v3/index.json --api-key $Env:NUGET_API_KEY
