@@ -2,249 +2,182 @@ using Azure.Storage.Blobs;
 using FluentAssertions;
 using LeaderElection.BlobStorage;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
-using Testcontainers.Azurite;
 using Xunit;
 
 namespace LeaderElection.Tests;
 
-public class BlobStorageLeaderElectionTests : TestBase, IAsyncDisposable
+[Collection("Azurite Container")]
+[Trait("Kind", "Integration")]
+[Trait("Category", "BlobStorage")]
+public sealed class BlobStorageLeaderElectionTests(AzuriteContainerFixture azuriteFixture) : TestBase
 {
-    private readonly AzuriteContainer _azuriteContainer;
-    private readonly BlobServiceClient _blobServiceClient;
+    private BlobServiceClient _blobServiceClient = azuriteFixture.BlobServiceClient;
 
-    public BlobStorageLeaderElectionTests()
-    {
-        _azuriteContainer = new AzuriteBuilder()
-            .WithImage("mcr.microsoft.com/azure-storage/azurite:latest")
-            .Build();
-        
-        _azuriteContainer.StartAsync().Wait();
-        
-        var connectionString = _azuriteContainer.GetConnectionString();
-        _blobServiceClient = new BlobServiceClient(connectionString);
-    }
+    private BlobStorageSettings CreateSettings(
+        string containerName, // should be unique per test to avoid conflicts
+        string blobName = "leader-election-lock",
+        string instanceId = "test-instance-1",
+        TimeSpan? leaseDuration = null,
+        TimeSpan? renewInterval = null,
+        TimeSpan? retryInterval = null,
+        int maxRetryAttempts = 3,
+        bool enableGracefulShutdown = true,
+        bool createContainerIfNotExists = true,
+        string? connectionString = null
+    ) =>
+        new()
+        {
+            ConnectionString = connectionString ?? azuriteFixture.ConnectionString,
+            ContainerName = containerName,
+            BlobName = blobName,
+            InstanceId = instanceId,
+            LeaseDuration = leaseDuration ?? TimeSpan.FromSeconds(15),
+            RenewInterval = renewInterval ?? TimeSpan.FromSeconds(5),
+            RetryInterval = retryInterval ?? TimeSpan.FromSeconds(2),
+            MaxRetryAttempts = maxRetryAttempts,
+            EnableGracefulShutdown = enableGracefulShutdown,
+            CreateContainerIfNotExists = createContainerIfNotExists
+        };
 
-    public override async ValueTask DisposeAsync()
-    {
-        await base.DisposeAsync();
-        await _azuriteContainer.DisposeAsync();
-    }
+    private BlobStorageLeaderElection CreateSUT(BlobStorageSettings options) =>
+        new(
+            _blobServiceClient,
+            Options.Create(options),
+            NullLoggerFactory.Instance.CreateLogger<BlobStorageLeaderElection>()
+        );
 
     [Fact]
     public async Task Should_Acquire_Leadership_When_No_Other_Instance_Exists()
     {
         // Arrange
-        var options = new BlobStorageSettings
-        {
-            ConnectionString = _azuriteContainer.GetConnectionString(),
-            ContainerName = "test-leader-election",
-            BlobName = "leader-election-lock",
-            InstanceId = "test-instance-1",
-            LeaseDuration = TimeSpan.FromSeconds(15),
-            RenewInterval = TimeSpan.FromSeconds(5),
-            RetryInterval = TimeSpan.FromSeconds(2),
-            MaxRetryAttempts = 3,
-            EnableGracefulShutdown = true,
-            CreateContainerIfNotExists = true
-        };
+        var options = CreateSettings("test-leader-election");
 
-        var leaderElection = new BlobStorageLeaderElection(
-            _blobServiceClient,
-            Options.Create(options),
-            LoggerFactory.CreateLogger<BlobStorageLeaderElection>());
+        await using var leaderElection = CreateSUT(options);
 
         // Act
-        await leaderElection.StartAsync(CancellationTokenSource.Token);
-        
+        await leaderElection.StartAsync(CancellationToken);
+
         // Assert
-        await WaitForLeadershipChange(leaderElection, true, TimeSpan.FromSeconds(15));
+        await WaitForLeadershipChange(leaderElection, true, options.LeaseDuration);
         leaderElection.IsLeader.Should().BeTrue();
-        
-        await leaderElection.StopAsync(CancellationTokenSource.Token);
+
+        await leaderElection.StopAsync(CancellationToken);
     }
 
-    [Fact]
+    [Fact(Timeout = 5500)]
     public async Task Should_Not_Acquire_Leadership_When_Another_Instance_Has_Leadership()
     {
         // Arrange
-        var options1 = new BlobStorageSettings
-        {
-            ConnectionString = _azuriteContainer.GetConnectionString(),
-            ContainerName = "test-leader-election-conflict",
-            BlobName = "leader-election-lock",
-            InstanceId = "test-instance-1",
-            LeaseDuration = TimeSpan.FromSeconds(30),
-            RenewInterval = TimeSpan.FromSeconds(5),
-            RetryInterval = TimeSpan.FromSeconds(2),
-            MaxRetryAttempts = 3,
-            EnableGracefulShutdown = true,
-            CreateContainerIfNotExists = true
-        };
+        var options1 = CreateSettings(
+            "test-leader-election-conflict",
+            instanceId: "test-instance-1",
+            leaseDuration: TimeSpan.FromSeconds(30),
+            renewInterval: TimeSpan.FromSeconds(5)
+        );
 
-        var options2 = new BlobStorageSettings
-        {
-            ConnectionString = _azuriteContainer.GetConnectionString(),
-            ContainerName = "test-leader-election-conflict",
-            BlobName = "leader-election-lock",
-            InstanceId = "test-instance-2",
-            LeaseDuration = TimeSpan.FromSeconds(30),
-            RenewInterval = TimeSpan.FromSeconds(5),
-            RetryInterval = TimeSpan.FromSeconds(2),
-            MaxRetryAttempts = 3,
-            EnableGracefulShutdown = true,
-            CreateContainerIfNotExists = true
-        };
+        var options2 = CreateSettings(
+            "test-leader-election-conflict",
+            instanceId: "test-instance-2",
+            leaseDuration: TimeSpan.FromSeconds(30),
+            renewInterval: TimeSpan.FromSeconds(5)
+        );
 
-        var leaderElection1 = new BlobStorageLeaderElection(
-            _blobServiceClient,
-            Options.Create(options1),
-            LoggerFactory.CreateLogger<BlobStorageLeaderElection>());
-
-        var leaderElection2 = new BlobStorageLeaderElection(
-            _blobServiceClient,
-            Options.Create(options2),
-            LoggerFactory.CreateLogger<BlobStorageLeaderElection>());
+        await using var leaderElection1 = CreateSUT(options1);
+        await using var leaderElection2 = CreateSUT(options2);
 
         // Act
-        await leaderElection1.StartAsync(CancellationTokenSource.Token);
+        await leaderElection1.StartAsync(CancellationToken);
         await WaitForLeadershipChange(leaderElection1, true, TimeSpan.FromSeconds(15));
-        
-        await leaderElection2.StartAsync(CancellationTokenSource.Token);
-        await Task.Delay(TimeSpan.FromSeconds(5), CancellationTokenSource.Token); // Give time for second instance to try
+
+        await leaderElection2.StartAsync(CancellationToken);
+        await Task.Delay(TimeSpan.FromSeconds(5), CancellationToken); // Give time for second instance to try
 
         // Assert
         leaderElection1.IsLeader.Should().BeTrue();
         leaderElection2.IsLeader.Should().BeFalse();
-        
-        await leaderElection1.StopAsync(CancellationTokenSource.Token);
-        await leaderElection2.StopAsync(CancellationTokenSource.Token);
+
+        await leaderElection1.StopAsync(CancellationToken);
+        await leaderElection2.StopAsync(CancellationToken);
     }
 
-    [Fact]
+    [Fact(Timeout = 2500)]
     public async Task Should_Transfer_Leadership_When_Current_Leader_Stops()
     {
         // Arrange
-        var options1 = new BlobStorageSettings
-        {
-            ConnectionString = _azuriteContainer.GetConnectionString(),
-            ContainerName = "test-leader-election-transfer",
-            BlobName = "leader-election-lock",
-            InstanceId = "test-instance-1",
-            LeaseDuration = TimeSpan.FromSeconds(15),
-            RenewInterval = TimeSpan.FromSeconds(2),
-            RetryInterval = TimeSpan.FromSeconds(1),
-            MaxRetryAttempts = 3,
-            EnableGracefulShutdown = true,
-            CreateContainerIfNotExists = true
-        };
+        var options1 = CreateSettings(
+            "test-leader-election-transfer",
+            instanceId: "test-instance-1",
+            leaseDuration: TimeSpan.FromSeconds(15),
+            renewInterval: TimeSpan.FromSeconds(2),
+            retryInterval: TimeSpan.FromSeconds(1)
+        );
 
-        var options2 = new BlobStorageSettings
-        {
-            ConnectionString = _azuriteContainer.GetConnectionString(),
-            ContainerName = "test-leader-election-transfer",
-            BlobName = "leader-election-lock",
-            InstanceId = "test-instance-2",
-            LeaseDuration = TimeSpan.FromSeconds(15),
-            RenewInterval = TimeSpan.FromSeconds(2),
-            RetryInterval = TimeSpan.FromSeconds(1),
-            MaxRetryAttempts = 3,
-            EnableGracefulShutdown = true,
-            CreateContainerIfNotExists = true
-        };
+        var options2 = CreateSettings(
+            "test-leader-election-transfer",
+            instanceId: "test-instance-2",
+            leaseDuration: TimeSpan.FromSeconds(15),
+            renewInterval: TimeSpan.FromSeconds(2),
+            retryInterval: TimeSpan.FromSeconds(1)
+        );
 
-        var leaderElection1 = new BlobStorageLeaderElection(
-            _blobServiceClient,
-            Options.Create(options1),
-            LoggerFactory.CreateLogger<BlobStorageLeaderElection>());
+        await using var leaderElection1 = CreateSUT(options1);
 
-        var leaderElection2 = new BlobStorageLeaderElection(
-            _blobServiceClient,
-            Options.Create(options2),
-            LoggerFactory.CreateLogger<BlobStorageLeaderElection>());
+        await using var leaderElection2 = CreateSUT(options2);
 
         // Act
-        await leaderElection1.StartAsync(CancellationTokenSource.Token);
+        await leaderElection1.StartAsync(CancellationToken);
         await WaitForLeadershipChange(leaderElection1, true, TimeSpan.FromSeconds(15));
-        
-        await leaderElection2.StartAsync(CancellationTokenSource.Token);
-        
+
+        await leaderElection2.StartAsync(CancellationToken);
+
         // Stop the first leader
-        await leaderElection1.StopAsync(CancellationTokenSource.Token);
-        
+        await leaderElection1.StopAsync(CancellationToken);
+
         // Assert
         await WaitForLeadershipChange(leaderElection2, true, TimeSpan.FromSeconds(20));
         leaderElection1.IsLeader.Should().BeFalse();
         leaderElection2.IsLeader.Should().BeTrue();
-        
-        await leaderElection2.StopAsync(CancellationTokenSource.Token);
+
+        await leaderElection2.StopAsync(CancellationToken);
     }
 
     [Fact]
     public async Task Should_Run_Task_Only_When_Leader()
     {
         // Arrange
-        var options = new BlobStorageSettings
-        {
-            ConnectionString = _azuriteContainer.GetConnectionString(),
-            ContainerName = "test-leader-election-task",
-            BlobName = "leader-election-lock",
-            InstanceId = "test-instance-1",
-            LeaseDuration = TimeSpan.FromSeconds(15),
-            RenewInterval = TimeSpan.FromSeconds(5),
-            RetryInterval = TimeSpan.FromSeconds(2),
-            MaxRetryAttempts = 3,
-            EnableGracefulShutdown = true,
-            CreateContainerIfNotExists = true
-        };
+        var options = CreateSettings("test-leader-election-task");
 
-        var leaderElection = new BlobStorageLeaderElection(
-            _blobServiceClient,
-            Options.Create(options),
-            LoggerFactory.CreateLogger<BlobStorageLeaderElection>());
+        await using var leaderElection = CreateSUT(options);
 
         var taskExecuted = false;
 
         // Act
-        await leaderElection.StartAsync(CancellationTokenSource.Token);
-        await WaitForLeadershipChange(leaderElection, true, TimeSpan.FromSeconds(15));
-        
-        await leaderElection.RunTaskIfLeaderAsync(() => taskExecuted = true, CancellationTokenSource.Token);
-        
+        await leaderElection.StartAsync(CancellationToken);
+        await WaitForLeadershipChange(leaderElection, true, options.LeaseDuration);
+
+        await leaderElection.RunTaskIfLeaderAsync(() => taskExecuted = true, CancellationToken);
+
         // Assert
         taskExecuted.Should().BeTrue();
-        
-        await leaderElection.StopAsync(CancellationTokenSource.Token);
+
+        await leaderElection.StopAsync(CancellationToken);
     }
 
     [Fact]
     public async Task Should_Not_Run_Task_When_Not_Leader()
     {
         // Arrange
-        var options = new BlobStorageSettings
-        {
-            ConnectionString = _azuriteContainer.GetConnectionString(),
-            ContainerName = "test-leader-election-no-task",
-            BlobName = "leader-election-lock",
-            InstanceId = "test-instance-1",
-            LeaseDuration = TimeSpan.FromSeconds(15),
-            RenewInterval = TimeSpan.FromSeconds(5),
-            RetryInterval = TimeSpan.FromSeconds(2),
-            MaxRetryAttempts = 3,
-            EnableGracefulShutdown = true,
-            CreateContainerIfNotExists = true
-        };
+        var options = CreateSettings("test-leader-election-no-task");
 
-        var leaderElection = new BlobStorageLeaderElection(
-            _blobServiceClient,
-            Options.Create(options),
-            LoggerFactory.CreateLogger<BlobStorageLeaderElection>());
+        await using var leaderElection = CreateSUT(options);
 
         var taskExecuted = false;
 
         // Act - Don't start the leader election, so it won't be leader
-        await leaderElection.RunTaskIfLeaderAsync(() => taskExecuted = true, CancellationTokenSource.Token);
-        
+        await leaderElection.RunTaskIfLeaderAsync(() => taskExecuted = true, CancellationToken);
+
         // Assert
         taskExecuted.Should().BeFalse();
     }
@@ -253,75 +186,46 @@ public class BlobStorageLeaderElectionTests : TestBase, IAsyncDisposable
     public async Task Should_Handle_Manual_Leadership_Acquisition()
     {
         // Arrange
-        var options = new BlobStorageSettings
-        {
-            ConnectionString = _azuriteContainer.GetConnectionString(),
-            ContainerName = "test-leader-election-manual",
-            BlobName = "leader-election-lock",
-            InstanceId = "test-instance-1",
-            LeaseDuration = TimeSpan.FromSeconds(15),
-            RenewInterval = TimeSpan.FromSeconds(5),
-            RetryInterval = TimeSpan.FromSeconds(2),
-            MaxRetryAttempts = 3,
-            EnableGracefulShutdown = true,
-            CreateContainerIfNotExists = true
-        };
+        var options = CreateSettings("test-leader-election-manual");
 
-        var leaderElection = new BlobStorageLeaderElection(
-            _blobServiceClient,
-            Options.Create(options),
-            LoggerFactory.CreateLogger<BlobStorageLeaderElection>());
+        await using var leaderElection = CreateSUT(options);
 
         // Act
-        var result = await leaderElection.TryAcquireLeadershipAsync(CancellationTokenSource.Token);
-        
+        var result = await leaderElection.TryAcquireLeadershipAsync(CancellationToken);
+
         // Assert
         result.Should().BeTrue();
         leaderElection.IsLeader.Should().BeTrue();
-        
-        await leaderElection.StopAsync(CancellationTokenSource.Token);
+
+        await leaderElection.StopAsync(CancellationToken);
     }
 
     [Fact]
     public async Task Should_Create_Container_And_Blob_If_Not_Exists()
     {
         // Arrange
-        var containerName = $"test-container-{Guid.NewGuid():N}";
-        var options = new BlobStorageSettings
-        {
-            ConnectionString = _azuriteContainer.GetConnectionString(),
-            ContainerName = containerName,
-            BlobName = "leader-election-lock",
-            InstanceId = "test-instance-1",
-            LeaseDuration = TimeSpan.FromSeconds(15),
-            RenewInterval = TimeSpan.FromSeconds(5),
-            RetryInterval = TimeSpan.FromSeconds(2),
-            MaxRetryAttempts = 3,
-            EnableGracefulShutdown = true,
-            CreateContainerIfNotExists = true
-        };
+        var options = CreateSettings(
+            $"test-container-{Guid.NewGuid():N}",
+            createContainerIfNotExists: true);
 
-        var leaderElection = new BlobStorageLeaderElection(
-            _blobServiceClient,
-            Options.Create(options),
-            LoggerFactory.CreateLogger<BlobStorageLeaderElection>());
+        await using var leaderElection = CreateSUT(options);
 
         // Act
-        await leaderElection.StartAsync(CancellationTokenSource.Token);
-        await WaitForLeadershipChange(leaderElection, true, TimeSpan.FromSeconds(15));
-        
+        await leaderElection.StartAsync(CancellationToken);
+        await WaitForLeadershipChange(leaderElection, true, options.LeaseDuration);
+
         // Assert
         leaderElection.IsLeader.Should().BeTrue();
-        
+
         // Verify container and blob were created
-        var containerClient = _blobServiceClient.GetBlobContainerClient(containerName);
-        var containerExists = await containerClient.ExistsAsync();
+        var containerClient = _blobServiceClient.GetBlobContainerClient(options.ContainerName);
+        var containerExists = await containerClient.ExistsAsync(CancellationToken);
         containerExists.Value.Should().BeTrue();
-        
-        var blobClient = containerClient.GetBlobClient("leader-election-lock");
-        var blobExists = await blobClient.ExistsAsync();
+
+        var blobClient = containerClient.GetBlobClient(options.BlobName);
+        var blobExists = await blobClient.ExistsAsync(CancellationToken);
         blobExists.Value.Should().BeTrue();
-        
-        await leaderElection.StopAsync(CancellationTokenSource.Token);
+
+        await leaderElection.StopAsync(CancellationToken);
     }
-} 
+}

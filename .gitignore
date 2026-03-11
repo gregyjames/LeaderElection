@@ -1,3 +1,5 @@
 /.DS_Store
 /.idea
 /LeaderElection.sln.DotSettings.user
+bin/
+obj/

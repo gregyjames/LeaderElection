@@ -2,7 +2,7 @@ using LeaderElection.Redis;
 
 namespace LeaderElectionTester;
 
-public class Settings
+internal sealed class Settings
 {
-    public RedisSettings Redis { get; set; } = new();
+    public RedisSettings Redis { get; init; } = new();
 }

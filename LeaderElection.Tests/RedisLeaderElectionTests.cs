@@ -1,230 +1,172 @@
 using FluentAssertions;
 using LeaderElection.Redis;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
-using StackExchange.Redis;
-using Testcontainers.Redis;
 using Xunit;
 
 namespace LeaderElection.Tests;
 
-public class RedisLeaderElectionTests : TestBase, IAsyncDisposable
+[Collection("Redis Container")]
+[Trait("Kind", "Integration")]
+[Trait("Category", "Redis")]
+public sealed class RedisLeaderElectionTests(RedisContainerFixture redisFixture) : TestBase
 {
-    private readonly RedisContainer _redisContainer;
-    private readonly IConnectionMultiplexer _connectionMultiplexer;
+    private static RedisSettings CreateSettings(
+        string lockKey, // should be unique per test to avoid conflicts
+        string instanceId = "test-instance-1",
+        TimeSpan? lockExpiry = null,
+        TimeSpan? renewInterval = null,
+        TimeSpan? retryInterval = null,
+        int maxRetryAttempts = 3,
+        bool enableGracefulShutdown = true
+    ) =>
+        new()
+        {
+            LockKey = lockKey,
+            InstanceId = instanceId,
+            LockExpiry = lockExpiry ?? TimeSpan.FromSeconds(10),
+            RenewInterval = renewInterval ?? TimeSpan.FromSeconds(2),
+            RetryInterval = retryInterval ?? TimeSpan.FromSeconds(1),
+            MaxRetryAttempts = maxRetryAttempts,
+            EnableGracefulShutdown = enableGracefulShutdown,
+        };
 
-    public RedisLeaderElectionTests()
-    {
-        _redisContainer = new RedisBuilder()
-            .WithImage("redis:7-alpine")
-            .Build();
-        
-        _redisContainer.StartAsync().Wait();
-        
-        var connectionString = _redisContainer.GetConnectionString();
-        _connectionMultiplexer = ConnectionMultiplexer.Connect(connectionString);
-    }
-
-    public override async ValueTask DisposeAsync()
-    {
-        await base.DisposeAsync();
-        _connectionMultiplexer?.Dispose();
-        await _redisContainer.DisposeAsync();
-    }
+    private RedisLeaderElection CreateSUT(RedisSettings options) =>
+        new(
+            redisFixture.ConnectionMultiplexer,
+            Options.Create(options),
+            NullLoggerFactory.Instance.CreateLogger<RedisLeaderElection>()
+        );
 
     [Fact]
     public async Task Should_Acquire_Leadership_When_No_Other_Instance_Exists()
     {
         // Arrange
-        var options = new RedisSettings
-        {
-            LockKey = "test-leader-election",
-            InstanceId = "test-instance-1",
-            LockExpiry = TimeSpan.FromSeconds(10),
-            RenewInterval = TimeSpan.FromSeconds(2),
-            RetryInterval = TimeSpan.FromSeconds(1),
-            MaxRetryAttempts = 3,
-            EnableGracefulShutdown = true
-        };
+        var options = CreateSettings("test-leader-election", lockExpiry: TimeSpan.FromSeconds(10));
 
-        var leaderElection = new RedisLeaderElection(
-            _connectionMultiplexer,
-            Options.Create(options),
-            LoggerFactory.CreateLogger<RedisLeaderElection>());
+        await using var leaderElection = CreateSUT(options);
 
         // Act
-        await leaderElection.StartAsync(CancellationTokenSource.Token);
-        
+        await leaderElection.StartAsync(CancellationToken);
+
         // Assert
         await WaitForLeadershipChange(leaderElection, true, TimeSpan.FromSeconds(10));
         leaderElection.IsLeader.Should().BeTrue();
-        
-        await leaderElection.StopAsync(CancellationTokenSource.Token);
+
+        await leaderElection.StopAsync(CancellationToken);
     }
 
-    [Fact]
+    [Fact(Timeout = 5500)]
     public async Task Should_Not_Acquire_Leadership_When_Another_Instance_Has_Leadership()
     {
         // Arrange
-        var options1 = new RedisSettings
-        {
-            LockKey = "test-leader-election-conflict",
-            InstanceId = "test-instance-1",
-            LockExpiry = TimeSpan.FromSeconds(30),
-            RenewInterval = TimeSpan.FromSeconds(2),
-            RetryInterval = TimeSpan.FromSeconds(1),
-            MaxRetryAttempts = 3,
-            EnableGracefulShutdown = true
-        };
+        var options1 = CreateSettings(
+            "test-leader-election-conflict",
+            "test-instance-1",
+            lockExpiry: TimeSpan.FromSeconds(30)
+        );
 
-        var options2 = new RedisSettings
-        {
-            LockKey = "test-leader-election-conflict",
-            InstanceId = "test-instance-2",
-            LockExpiry = TimeSpan.FromSeconds(30),
-            RenewInterval = TimeSpan.FromSeconds(2),
-            RetryInterval = TimeSpan.FromSeconds(1),
-            MaxRetryAttempts = 3,
-            EnableGracefulShutdown = true
-        };
+        var options2 = CreateSettings(
+            "test-leader-election-conflict",
+            "test-instance-2",
+            lockExpiry: TimeSpan.FromSeconds(30)
+        );
 
-        var leaderElection1 = new RedisLeaderElection(
-            _connectionMultiplexer,
-            Options.Create(options1),
-            LoggerFactory.CreateLogger<RedisLeaderElection>());
-
-        var leaderElection2 = new RedisLeaderElection(
-            _connectionMultiplexer,
-            Options.Create(options2),
-            LoggerFactory.CreateLogger<RedisLeaderElection>());
+        await using var leaderElection1 = CreateSUT(options1);
+        await using var leaderElection2 = CreateSUT(options2);
 
         // Act
-        await leaderElection1.StartAsync(CancellationTokenSource.Token);
+        await leaderElection1.StartAsync(CancellationToken);
         await WaitForLeadershipChange(leaderElection1, true, TimeSpan.FromSeconds(10));
-        
-        await leaderElection2.StartAsync(CancellationTokenSource.Token);
-        await Task.Delay(TimeSpan.FromSeconds(5), CancellationTokenSource.Token); // Give time for second instance to try
+
+        await leaderElection2.StartAsync(CancellationToken);
+        await Task.Delay(TimeSpan.FromSeconds(5), CancellationToken); // Give time for second instance to try
 
         // Assert
         leaderElection1.IsLeader.Should().BeTrue();
         leaderElection2.IsLeader.Should().BeFalse();
-        
-        await leaderElection1.StopAsync(CancellationTokenSource.Token);
-        await leaderElection2.StopAsync(CancellationTokenSource.Token);
+
+        await leaderElection1.StopAsync(CancellationToken);
+        await leaderElection2.StopAsync(CancellationToken);
     }
 
-    [Fact]
+    [Fact(Timeout = 2500)]
     public async Task Should_Transfer_Leadership_When_Current_Leader_Stops()
     {
         // Arrange
-        var options1 = new RedisSettings
-        {
-            LockKey = "test-leader-election-transfer",
-            InstanceId = "test-instance-1",
-            LockExpiry = TimeSpan.FromSeconds(5),
-            RenewInterval = TimeSpan.FromSeconds(1),
-            RetryInterval = TimeSpan.FromSeconds(1),
-            MaxRetryAttempts = 3,
-            EnableGracefulShutdown = true
-        };
+        var options1 = CreateSettings(
+            "test-leader-election-transfer",
+            "test-instance-1",
+            lockExpiry: TimeSpan.FromSeconds(5),
+            renewInterval: TimeSpan.FromSeconds(1)
+        );
 
-        var options2 = new RedisSettings
-        {
-            LockKey = "test-leader-election-transfer",
-            InstanceId = "test-instance-2",
-            LockExpiry = TimeSpan.FromSeconds(5),
-            RenewInterval = TimeSpan.FromSeconds(1),
-            RetryInterval = TimeSpan.FromSeconds(1),
-            MaxRetryAttempts = 3,
-            EnableGracefulShutdown = true
-        };
+        var options2 = CreateSettings(
+            "test-leader-election-transfer",
+            "test-instance-2",
+            lockExpiry: TimeSpan.FromSeconds(5),
+            renewInterval: TimeSpan.FromSeconds(1)
+        );
 
-        var leaderElection1 = new RedisLeaderElection(
-            _connectionMultiplexer,
-            Options.Create(options1),
-            LoggerFactory.CreateLogger<RedisLeaderElection>());
-
-        var leaderElection2 = new RedisLeaderElection(
-            _connectionMultiplexer,
-            Options.Create(options2),
-            LoggerFactory.CreateLogger<RedisLeaderElection>());
+        await using var leaderElection1 = CreateSUT(options1);
+        await using var leaderElection2 = CreateSUT(options2);
 
         // Act
-        await leaderElection1.StartAsync(CancellationTokenSource.Token);
+        await leaderElection1.StartAsync(CancellationToken);
         await WaitForLeadershipChange(leaderElection1, true, TimeSpan.FromSeconds(10));
-        
-        await leaderElection2.StartAsync(CancellationTokenSource.Token);
-        
+
+        await leaderElection2.StartAsync(CancellationToken);
+
         // Stop the first leader
-        await leaderElection1.StopAsync(CancellationTokenSource.Token);
-        
+        await leaderElection1.StopAsync(CancellationToken);
+
         // Assert
         await WaitForLeadershipChange(leaderElection2, true, TimeSpan.FromSeconds(15));
         leaderElection1.IsLeader.Should().BeFalse();
         leaderElection2.IsLeader.Should().BeTrue();
-        
-        await leaderElection2.StopAsync(CancellationTokenSource.Token);
+
+        await leaderElection2.StopAsync(CancellationToken);
     }
 
     [Fact]
     public async Task Should_Run_Task_Only_When_Leader()
     {
         // Arrange
-        var options = new RedisSettings
-        {
-            LockKey = "test-leader-election-task",
-            InstanceId = "test-instance-1",
-            LockExpiry = TimeSpan.FromSeconds(10),
-            RenewInterval = TimeSpan.FromSeconds(2),
-            RetryInterval = TimeSpan.FromSeconds(1),
-            MaxRetryAttempts = 3,
-            EnableGracefulShutdown = true
-        };
+        var options = CreateSettings(
+            "test-leader-election-task",
+            lockExpiry: TimeSpan.FromSeconds(10)
+        );
 
-        var leaderElection = new RedisLeaderElection(
-            _connectionMultiplexer,
-            Options.Create(options),
-            LoggerFactory.CreateLogger<RedisLeaderElection>());
+        await using var leaderElection = CreateSUT(options);
 
         var taskExecuted = false;
 
         // Act
-        await leaderElection.StartAsync(CancellationTokenSource.Token);
+        await leaderElection.StartAsync(CancellationToken);
         await WaitForLeadershipChange(leaderElection, true, TimeSpan.FromSeconds(10));
-        
-        await leaderElection.RunTaskIfLeaderAsync(() => taskExecuted = true, CancellationTokenSource.Token);
-        
+
+        await leaderElection.RunTaskIfLeaderAsync(() => taskExecuted = true, CancellationToken);
+
         // Assert
         taskExecuted.Should().BeTrue();
-        
-        await leaderElection.StopAsync(CancellationTokenSource.Token);
+
+        await leaderElection.StopAsync(CancellationToken);
     }
 
     [Fact]
     public async Task Should_Not_Run_Task_When_Not_Leader()
     {
         // Arrange
-        var options = new RedisSettings
-        {
-            LockKey = "test-leader-election-no-task",
-            InstanceId = "test-instance-1",
-            LockExpiry = TimeSpan.FromSeconds(10),
-            RenewInterval = TimeSpan.FromSeconds(2),
-            RetryInterval = TimeSpan.FromSeconds(1),
-            MaxRetryAttempts = 3,
-            EnableGracefulShutdown = true
-        };
+        var options = CreateSettings("test-leader-election-no-task");
 
-        var leaderElection = new RedisLeaderElection(
-            _connectionMultiplexer,
-            Options.Create(options),
-            LoggerFactory.CreateLogger<RedisLeaderElection>());
+        await using var leaderElection = CreateSUT(options);
 
         var taskExecuted = false;
 
         // Act - Don't start the leader election, so it won't be leader
-        await leaderElection.RunTaskIfLeaderAsync(() => taskExecuted = true, CancellationTokenSource.Token);
-        
+        await leaderElection.RunTaskIfLeaderAsync(() => taskExecuted = true, CancellationToken);
+
         // Assert
         taskExecuted.Should().BeFalse();
     }
@@ -233,29 +175,17 @@ public class RedisLeaderElectionTests : TestBase, IAsyncDisposable
     public async Task Should_Handle_Manual_Leadership_Acquisition()
     {
         // Arrange
-        var options = new RedisSettings
-        {
-            LockKey = "test-leader-election-manual",
-            InstanceId = "test-instance-1",
-            LockExpiry = TimeSpan.FromSeconds(10),
-            RenewInterval = TimeSpan.FromSeconds(2),
-            RetryInterval = TimeSpan.FromSeconds(1),
-            MaxRetryAttempts = 3,
-            EnableGracefulShutdown = true
-        };
+        var options = CreateSettings("test-leader-election-manual");
 
-        var leaderElection = new RedisLeaderElection(
-            _connectionMultiplexer,
-            Options.Create(options),
-            LoggerFactory.CreateLogger<RedisLeaderElection>());
+        await using var leaderElection = CreateSUT(options);
 
         // Act
-        var result = await leaderElection.TryAcquireLeadershipAsync(CancellationTokenSource.Token);
-        
+        var result = await leaderElection.TryAcquireLeadershipAsync(CancellationToken);
+
         // Assert
         result.Should().BeTrue();
         leaderElection.IsLeader.Should().BeTrue();
-        
-        await leaderElection.StopAsync(CancellationTokenSource.Token);
+
+        await leaderElection.StopAsync(CancellationToken);
     }
-} 
+}
