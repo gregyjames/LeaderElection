@@ -6,7 +6,7 @@
     <Product>LeaderElection</Product>
     <Description>An easy-to-use C# implementation of the distributed leader election pattern, leveraging common infrastructure tools like Azure Blob Storage, Redis, and others.</Description>
     <Authors>Greg James</Authors>
-    <Copyright>Copyright © Greg James $([System.DateTime]::Now.Year)</Copyright>
+    <Copyright>Copyright 2025 Greg James</Copyright>
     <RepositoryUrl>https://github.com/gregyjames/LeaderElection</RepositoryUrl>
     <RepositoryType>git</RepositoryType>
 
