@@ -13,7 +13,6 @@
         </PackageReference>
         <PackageReference Include="Testcontainers.Redis" Version="4.10.0" />
         <PackageReference Include="Testcontainers.Azurite" Version="4.10.0" />
-        <PackageReference Include="Microsoft.Extensions.Logging" Version="10.0.3" />
         <PackageReference Include="FluentAssertions" Version="7.2.1" />
     </ItemGroup>
 
