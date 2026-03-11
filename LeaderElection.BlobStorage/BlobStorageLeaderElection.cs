@@ -80,11 +80,11 @@ public class BlobStorageLeaderElection : ILeaderElection, IDisposable
         await Task.CompletedTask; // Return immediately, let the loop run in background
     }
 
-    public async Task StopAsync(CancellationToken cancellationToken = default)
-    {
-        if (IsDisposed)
-            return;
+    public Task StopAsync(CancellationToken cancellationToken = default) =>
+        IsDisposed ? Task.CompletedTask : InternalStopAsync(cancellationToken);
 
+    private async Task InternalStopAsync(CancellationToken cancellationToken = default)
+    {
         _logger.LogInformation("Stopping Blob Storage leader election for instance {InstanceId}", _options.InstanceId);
         
         _cancellationTokenSource.Cancel();
@@ -428,7 +428,10 @@ public class BlobStorageLeaderElection : ILeaderElection, IDisposable
 
     public void Dispose()
     {
-        Dispose(true);
+        if (Interlocked.Exchange(ref _disposedValue, 1) == 1)
+            return;
+
+        Dispose(disposing: true);
         GC.SuppressFinalize(this);
     }
 
@@ -437,39 +440,41 @@ public class BlobStorageLeaderElection : ILeaderElection, IDisposable
         if (Interlocked.Exchange(ref _disposedValue, 1) == 1)
             return;
 
+        await DisposeAsyncCore().ConfigureAwait(false);
+        Dispose(disposing: false);
+        GC.SuppressFinalize(this);
+    }
+
+    protected virtual async ValueTask DisposeAsyncCore()
+    {
         try
         {
-            await StopAsync();
+            await InternalStopAsync().ConfigureAwait(false);
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error during async disposal");
         }
-        finally
-        {
-            _cancellationTokenSource.Cancel();
-            _cancellationTokenSource.Dispose();
-            _leadershipSemaphore.Dispose();
-        }
+
+        _cancellationTokenSource.Dispose();
+        _leadershipSemaphore.Dispose();
     }
 
     protected virtual void Dispose(bool disposing)
     {
-        if (Interlocked.Exchange(ref _disposedValue, 1) == 1)
-            return;
-
         if (disposing)
         {
             try
             {
-                _cancellationTokenSource.Cancel();
-                _cancellationTokenSource.Dispose();
-                _leadershipSemaphore.Dispose();
+                InternalStopAsync().GetAwaiter().GetResult();
             }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Error during synchronous disposal");
             }
+
+            _cancellationTokenSource.Dispose();
+            _leadershipSemaphore.Dispose();
         }
     }
 }
