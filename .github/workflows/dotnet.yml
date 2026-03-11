@@ -4,25 +4,57 @@
 name: .NET
 
 on:
+  # Trigger on pushes to main including merge commits from PRs targeting main.
+  # Q: Do we want to run on both the merge commit and the PR branch??
   push:
-    branches: [ "main" ]
+    branches:
+      - main
+  # Also trigger on PR creation or update.
   pull_request:
-    branches: [ "main" ]
+    branches:
+      - "**"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref_name }}
+  cancel-in-progress: true
 
 jobs:
   build:
-
+    # Note: Our tests depend on linux containers, such as Redis, but
+    # Windows runners don't support linux containers and MacOS runners
+    # don't support containers at all. So we're limited to linux runners for now.
     runs-on: ubuntu-latest
 
     steps:
-    - uses: actions/checkout@v4
-    - name: Setup .NET
-      uses: actions/setup-dotnet@v4
-      with:
-        dotnet-version: 8.0.x
-    - name: Restore dependencies
-      run: dotnet restore
-    - name: Build
-      run: dotnet build --no-restore
-    - name: Test
-      run: dotnet test --no-build --verbosity normal
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-dotnet@v5
+        with:
+          global-json-file: global.json
+
+      # Cache NuGet packages to speed up builds
+      - uses: actions/cache@v5
+        with:
+          path: ~/.nuget/packages
+          # key: ${{ runner.os }}-nuget-${{ hashFiles('**/packages.lock.json') }}
+          # We don't use a package lock so we can't key off that, but we can
+          # use the hash of all project files to invalidate the cache when
+          # dependencies change.
+          key: ${{ runner.os }}-nuget-${{ hashFiles('**/*.csproj', '**/Directory.*.props') }}
+          restore-keys: |
+            ${{ runner.os }}-nuget-
+
+      - name: Restore dependencies
+        run: dotnet restore
+
+      - name: Build
+        run: dotnet build --no-restore --configuration Release
+
+      - name: Test
+        run: dotnet test --no-build --configuration Release --verbosity normal
+
+      - name: Package
+        run: dotnet pack --no-build --configuration Release
