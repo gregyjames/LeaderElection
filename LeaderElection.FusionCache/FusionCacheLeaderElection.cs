@@ -342,22 +342,12 @@ public class FusionCacheLeaderElection : ILeaderElection
             throw new ArgumentException("MaxRetryAttempts cannot be negative", nameof(_options.MaxRetryAttempts));
     }
 
-    public void Dispose()
-    {
-        if (Interlocked.Exchange(ref _disposedValue, 1) == 1)
-            return;
-
-        Dispose(disposing: true);
-        GC.SuppressFinalize(this);
-    }
-
     public async ValueTask DisposeAsync()
     {
         if (Interlocked.Exchange(ref _disposedValue, 1) == 1)
             return;
 
         await DisposeAsyncCore().ConfigureAwait(false);
-        Dispose(disposing: false);
         GC.SuppressFinalize(this);
     }
 
@@ -374,23 +364,5 @@ public class FusionCacheLeaderElection : ILeaderElection
 
         _cancellationTokenSource.Dispose();
         _leadershipSemaphore.Dispose();
-    }
-
-    protected virtual void Dispose(bool disposing)
-    {
-        if (disposing)
-        {
-            try
-            {
-                InternalStopAsync().GetAwaiter().GetResult();
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Error during synchronous disposal");
-            }
-
-            _cancellationTokenSource.Dispose();
-            _leadershipSemaphore.Dispose();
-        }
     }
 }

@@ -4,7 +4,7 @@ using StackExchange.Redis;
 
 namespace LeaderElection.Redis;
 
-public class RedisLeaderElection : ILeaderElection, IDisposable
+public class RedisLeaderElection : ILeaderElection
 {
     private readonly IDatabase _redis;
     private readonly RedisSettings _options;
@@ -340,22 +340,12 @@ public class RedisLeaderElection : ILeaderElection, IDisposable
             throw new ArgumentException("MaxRetryAttempts cannot be negative", nameof(_options.MaxRetryAttempts));
     }
 
-    public void Dispose()
-    {
-        if (Interlocked.Exchange(ref _disposedValue, 1) == 1)
-            return;
-
-        Dispose(disposing: true);
-        GC.SuppressFinalize(this);
-    }
-
     public async ValueTask DisposeAsync()
     {
         if (Interlocked.Exchange(ref _disposedValue, 1) == 1)
             return;
 
         await DisposeAsyncCore().ConfigureAwait(false);
-        Dispose(disposing: false);
         GC.SuppressFinalize(this);
     }
 
@@ -372,23 +362,5 @@ public class RedisLeaderElection : ILeaderElection, IDisposable
 
         _cancellationTokenSource.Dispose();
         _leadershipSemaphore.Dispose();
-    }
-
-    protected virtual void Dispose(bool disposing)
-    {
-        if (disposing)
-        {
-            try
-            {
-                InternalStopAsync().GetAwaiter().GetResult();
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Error during synchronous disposal");
-            }
-
-            _cancellationTokenSource.Dispose();
-            _leadershipSemaphore.Dispose();
-        }
     }
 }

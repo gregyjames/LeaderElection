@@ -4,7 +4,7 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 
 namespace LeaderElection.BlobStorage;
-public class BlobStorageLeaderElection : ILeaderElection, IDisposable
+public class BlobStorageLeaderElection : ILeaderElection
 {
     private readonly BlobServiceClient? _blobServiceClient;
     private readonly BlobContainerClient _containerClient;
@@ -426,22 +426,12 @@ public class BlobStorageLeaderElection : ILeaderElection, IDisposable
             throw new ArgumentException("MaxRetryAttempts cannot be negative", nameof(_options.MaxRetryAttempts));
     }
 
-    public void Dispose()
-    {
-        if (Interlocked.Exchange(ref _disposedValue, 1) == 1)
-            return;
-
-        Dispose(disposing: true);
-        GC.SuppressFinalize(this);
-    }
-
     public async ValueTask DisposeAsync()
     {
         if (Interlocked.Exchange(ref _disposedValue, 1) == 1)
             return;
 
         await DisposeAsyncCore().ConfigureAwait(false);
-        Dispose(disposing: false);
         GC.SuppressFinalize(this);
     }
 
@@ -458,23 +448,5 @@ public class BlobStorageLeaderElection : ILeaderElection, IDisposable
 
         _cancellationTokenSource.Dispose();
         _leadershipSemaphore.Dispose();
-    }
-
-    protected virtual void Dispose(bool disposing)
-    {
-        if (disposing)
-        {
-            try
-            {
-                InternalStopAsync().GetAwaiter().GetResult();
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Error during synchronous disposal");
-            }
-
-            _cancellationTokenSource.Dispose();
-            _leadershipSemaphore.Dispose();
-        }
     }
 }

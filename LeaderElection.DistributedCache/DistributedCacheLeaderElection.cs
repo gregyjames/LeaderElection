@@ -4,7 +4,7 @@ using Microsoft.Extensions.Options;
 
 namespace LeaderElection.DistributedCache;
 
-public class DistributedCacheLeaderElection : ILeaderElection, IDisposable
+public class DistributedCacheLeaderElection : ILeaderElection
 {
     private readonly IDistributedCache _cache;
     private readonly DistributedCacheSettings _options;
@@ -235,22 +235,12 @@ public class DistributedCacheLeaderElection : ILeaderElection, IDisposable
         }
     }
 
-    public void Dispose()
-    {
-        if (Interlocked.Exchange(ref _disposedValue, 1) == 1)
-            return;
-
-        Dispose(disposing: true);
-        GC.SuppressFinalize(this);
-    }
-
     public async ValueTask DisposeAsync()
     {
         if (Interlocked.Exchange(ref _disposedValue, 1) == 1)
             return;
 
         await DisposeAsyncCore().ConfigureAwait(false);
-        Dispose(disposing: false);
         GC.SuppressFinalize(this);
     }
 
@@ -266,22 +256,5 @@ public class DistributedCacheLeaderElection : ILeaderElection, IDisposable
         }
 
         _cancellationTokenSource.Dispose();
-    }
-
-    protected virtual void Dispose(bool disposing)
-    {
-        if (disposing)
-        {
-            try
-            {
-                InternalStopAsync().GetAwaiter().GetResult();
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Error during synchronous disposal");
-            }
-
-            _cancellationTokenSource.Dispose();
-        }
     }
 }
