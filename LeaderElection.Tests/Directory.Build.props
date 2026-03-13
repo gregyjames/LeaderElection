@@ -1,0 +1,18 @@
+<Project>
+  <Import Project="$([MSBuild]::GetPathOfFileAbove('Directory.Build.props', '$(MSBuildThisFileDirectory)../'))" />
+
+  <!-- Code coverage settings -->
+  <PropertyGroup Condition="'$(CollectCoverage)' == ''">
+    <!-- Generate lcov data for use with the coverage-gutters VSCode extension.
+         Note: These properties need to be set in Directory.Build.props otherwise
+         the coverlet.msbuild package will default them to other values. -->
+    <CollectCoverage>true</CollectCoverage>
+    <CoverletOutputFormat>lcov</CoverletOutputFormat>
+    <CoverletOutput>lcov.info</CoverletOutput>
+  </PropertyGroup>
+  <PropertyGroup>
+    <!-- See https://github.com/coverlet-coverage/coverlet/blob/master/Documentation/MSBuildIntegration.md#filters
+         Prefer to use the `[ExcludeFromCodeCoverage]` attribute when possible. -->
+    <!-- <Exclude>[Assembly-Filter]Type-Filter,$(Exclude)</Exclude> -->
+  </PropertyGroup>
+</Project>

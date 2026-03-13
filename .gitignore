@@ -3,3 +3,6 @@
 /LeaderElection.sln.DotSettings.user
 bin/
 obj/
+
+coverage.*
+lcov.info

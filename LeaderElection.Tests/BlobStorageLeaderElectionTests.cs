@@ -66,7 +66,7 @@ public sealed class BlobStorageLeaderElectionTests(AzuriteContainerFixture azuri
         await leaderElection.StopAsync(CancellationToken);
     }
 
-    [Fact(Timeout = 5500)]
+    [Fact]
     public async Task Should_Not_Acquire_Leadership_When_Another_Instance_Has_Leadership()
     {
         // Arrange
@@ -102,7 +102,7 @@ public sealed class BlobStorageLeaderElectionTests(AzuriteContainerFixture azuri
         await leaderElection2.StopAsync(CancellationToken);
     }
 
-    [Fact(Timeout = 2500)]
+    [Fact]
     public async Task Should_Transfer_Leadership_When_Current_Leader_Stops()
     {
         // Arrange

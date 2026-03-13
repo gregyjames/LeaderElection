@@ -3,41 +3,89 @@ name: NuGet Publish
 on:
   push:
     tags:
-      - 'v*.*.*' # Specify the tag pattern, e.g., 'v1.0.0'
+      - "v*.*.*" # Product tags, e.g., 'v1.0.0'
+      - "core/v*.*.*" # Core package tags
+      - "redis/v*.*.*" # Redis package tags
+      - "blob/v*.*.*" # Blob Storage package tags
+      - "distributed/v*.*.*" # Distributed Cache package tags
+      - "fusion-cache/v*.*.*" # Fusion cache package tags
+
+permissions:
+  contents: read
+
+concurrency:
+  group: "${{ github.workflow }}-${{ github.ref_name }}"
+  cancel-in-progress: true
 
 jobs:
   deploy:
     name: Deploy
-    runs-on: windows-latest
+    runs-on: ubuntu-latest
+    # Use PowerShell for easier string manipulation
+    defaults:
+      run:
+        shell: pwsh
+
+    env:
+      BUILD_TARGET: "" # set below based on tag prefix, e.g., 'LeaderElection.Redis', or 'LeaderElection.sln' for full product release
+      VERSION: "" # set below from tag version, e.g., '1.0.0'
 
     steps:
-    - uses: actions/checkout@v4
-      
-    - name: Setup .NET
-      uses: actions/setup-dotnet@v4
-      with:
-        dotnet-version: '8.0.x'
-        
-    - uses: actions/cache@v3
-      id: cacheStep
-      with:
-        path: ~/.nuget/packages
-        key: ${{ runner.os }}-nuget-${{ hashFiles('**/packages.lock.json') }}
-        restore-keys: |
-          ${{ runner.os }}-nuget-
-          
-    - name: Set VERSION variable from tag
-      run: |
-        $VERSION=$Env:GITHUB_REF_NAME.TrimStart("v")
-        echo "VERSION=$VERSION" >> $Env:GITHUB_ENV
-        
-    - name: Restore dependencies
-      run: dotnet restore
-      
-    - name: Build and Pack Solution
-      run: dotnet build LeaderElection.sln --no-restore --configuration Release /p:Version=$Env:VERSION
-      
-    - name: Publish NuGet packages
-      run: dotnet nuget push **/*.nupkg --source https://api.nuget.org/v3/index.json --api-key $Env:NUGET_API_KEY
-      env:
-        NUGET_API_KEY: ${{ secrets.NUGET_API_KEY }} 
+      - name: Parse tag
+        env:
+          TAG_NAME: ${{ github.ref_name }}
+        run: |
+          # Depends on a tag formatted like 'v1.0.0' for full product releases, or 'package/v1.0.0' for a specific package.
+          # Semver compatible versions are supported, e.g., 'v1.0.0', 'v1.0.0-beta', 'v1.0.0-alpha.1+metadata'.
+          $package,$version = $env:TAG_NAME.Split('/', 2)
+          if (!$version) {
+            $package,$version = 'all',$package
+          }
+
+          # Remove 'v' prefix and ignore build metadata
+          $version = $version.TrimStart('v').Split('+')[0]
+
+          # Map package prefix to project path
+          $buildTarget = switch ($package) {
+            'all'              { 'LeaderElection.sln' }
+            'core'             { 'LeaderElection' }
+            'redis'            { 'LeaderElection.Redis' }
+            'blob'             { 'LeaderElection.BlobStorage' }
+            'distributed'      { 'LeaderElection.DistributedCache' }
+            'fusion-cache'     { 'LeaderElection.FusionCache' }
+            default { throw "Unexpected package prefix in tag: '$package'" }
+          }
+          echo "BUILD_TARGET=$buildTarget" >> $Env:GITHUB_ENV
+          echo "VERSION=$version" >> $Env:GITHUB_ENV
+
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-dotnet@v5
+        with:
+          global-json-file: global.json
+
+      # Cache NuGet packages to speed up builds
+      - uses: actions/cache@v5
+        with:
+          path: ~/.nuget/packages
+          # key: ${{ runner.os }}-nuget-${{ hashFiles('**/packages.lock.json') }}
+          # We don't use a package lock so we can't key off that, but we can
+          # use the hash of all project files to invalidate the cache when
+          # dependencies change.
+          key: ${{ runner.os }}-nuget-${{ hashFiles('**/*.csproj', '**/Directory.*.props') }}
+          restore-keys: |
+            ${{ runner.os }}-nuget-
+
+      - name: Restore dependencies
+        run: dotnet restore
+
+      - name: Build ${{ env.BUILD_TARGET }}
+        run: dotnet build $Env:BUILD_TARGET --no-restore --configuration Release -p:Version=$Env:VERSION
+
+      - name: Package ${{ env.BUILD_TARGET }}
+        run: dotnet pack $Env:BUILD_TARGET --no-build --configuration Release -p:Version=$Env:VERSION --output artifacts/packages
+
+      - name: Push Nuget packages
+        run: dotnet nuget push artifacts/packages/*.nupkg --source https://api.nuget.org/v3/index.json --api-key $Env:NUGET_API_KEY
+        env:
+          NUGET_API_KEY: ${{ secrets.NUGET_API_KEY }}
