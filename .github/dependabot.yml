@@ -10,8 +10,20 @@ updates:
     schedule:
       interval: "monthly"
     open-pull-requests-limit: 10
+    groups:
+      nuget-dependencies:
+        patterns:
+          - "*"
+    assignees:
+      - gregyjames
 
   - package-ecosystem: "github-actions"
-    directory: "/"
+    directory: "/" # The location of our .github/workflows directory
     schedule:
       interval: "monthly"
+    groups:
+      action-dependencies:
+        patterns:
+          - "*"
+    assignees:
+      - gregyjames
