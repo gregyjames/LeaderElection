@@ -1,0 +1,28 @@
+<Project>
+    <PropertyGroup>
+        <ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally>
+    </PropertyGroup>
+    <ItemGroup>
+        <PackageVersion Include="Azure.Identity" Version="1.14.1" />
+        <PackageVersion Include="Azure.Storage.Blobs" Version="12.24.1" />
+        <PackageVersion Include="coverlet.msbuild" Version="8.0.0" />
+        <PackageVersion Include="FluentAssertions" Version="7.2.1" />
+        <PackageVersion Include="Microsoft.Extensions.Logging.Abstractions" Version="10.0.1" />
+        <PackageVersion Include="Microsoft.Extensions.Caching.Abstractions" Version="10.0.1" />
+        <PackageVersion Include="Microsoft.Extensions.Caching.StackExchangeRedis" Version="10.0.3" />
+        <PackageVersion Include="Microsoft.Extensions.Configuration.Json" Version="10.0.3" />
+        <PackageVersion Include="Microsoft.Extensions.Options" Version="10.0.1" />
+        <PackageVersion Include="Microsoft.Extensions.Hosting" Version="10.0.3" />
+        <PackageVersion Include="Microsoft.Extensions.Logging" Version="10.0.3" />
+        <PackageVersion Include="Microsoft.NET.Test.Sdk" Version="18.3.0" />
+        <PackageVersion Include="Serilog" Version="4.3.1" />
+        <PackageVersion Include="Serilog.Extensions.Hosting" Version="10.0.0" />
+        <PackageVersion Include="Serilog.Sinks.Console" Version="6.1.1" />
+        <PackageVersion Include="StackExchange.Redis" Version="2.8.41" />
+        <PackageVersion Include="Testcontainers.Redis" Version="4.10.0" />
+        <PackageVersion Include="Testcontainers.Azurite" Version="4.10.0" />
+        <PackageVersion Include="xunit.v3" Version="3.2.2" />
+        <PackageVersion Include="xunit.runner.visualstudio" Version="3.1.5" />
+        <PackageVersion Include="ZiggyCreatures.FusionCache" Version="2.5.0" />
+    </ItemGroup>
+</Project>
