@@ -9,7 +9,8 @@
     <Copyright>Copyright 2025 Greg James</Copyright>
     <RepositoryUrl>https://github.com/gregyjames/LeaderElection</RepositoryUrl>
     <RepositoryType>git</RepositoryType>
-
+    <UseArtifactsOutput>true</UseArtifactsOutput>
+    <ArtifactsOutputDirectory>$(RepoRoot)artifacts</ArtifactsOutputDirectory>
     <!-- Folders -->
     <RepoRoot>$([MSBuild]::EnsureTrailingSlash('$(MSBuildThisFileDirectory)'))</RepoRoot>
     <SrcDir>$(RepoRoot)</SrcDir>
