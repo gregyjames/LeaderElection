@@ -1,6 +1,5 @@
 using Azure.Storage.Blobs;
 using Testcontainers.Azurite;
-using Xunit;
 
 namespace LeaderElection.Tests;
 
