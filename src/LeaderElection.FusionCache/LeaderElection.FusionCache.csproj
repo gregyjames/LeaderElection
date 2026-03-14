@@ -1,7 +1,6 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
   <!-- Inherits settings from Directory.Build.props -->
   <PropertyGroup>
-    <IsPackable>true</IsPackable>
     <PackageTags>FusionCache;Fusion;Cache;Redis;$(PackageTags)</PackageTags>
   </PropertyGroup>
 
@@ -12,6 +11,6 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\LeaderElection\LeaderElection.csproj" />
+    <ProjectReference Include="$(SrcDir)LeaderElection\LeaderElection.csproj" />
   </ItemGroup>
 </Project>

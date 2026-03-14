@@ -1,6 +1,3 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
   <!-- Inherits settings from Directory.Build.props -->
-  <PropertyGroup>
-    <IsPackable>true</IsPackable>
-  </PropertyGroup>
 </Project>

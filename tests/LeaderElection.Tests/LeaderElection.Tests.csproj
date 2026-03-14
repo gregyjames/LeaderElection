@@ -17,9 +17,9 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\LeaderElection\LeaderElection.csproj" />
-    <ProjectReference Include="..\LeaderElection.Redis\LeaderElection.Redis.csproj" />
-    <ProjectReference Include="..\LeaderElection.BlobStorage\LeaderElection.BlobStorage.csproj" />
+    <ProjectReference Include="$(SrcDir)LeaderElection\LeaderElection.csproj" />
+    <ProjectReference Include="$(SrcDir)LeaderElection.Redis\LeaderElection.Redis.csproj" />
+    <ProjectReference Include="$(SrcDir)LeaderElection.BlobStorage\LeaderElection.BlobStorage.csproj" />
   </ItemGroup>
 
   <ItemGroup>

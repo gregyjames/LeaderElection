@@ -1,0 +1,41 @@
+<Project>
+  <Import Project="$([MSBuild]::GetPathOfFileAbove('Directory.Build.props', '$(MSBuildThisFileDirectory)../'))" />
+
+  <PropertyGroup>
+    <IsPackable>true</IsPackable>
+  </PropertyGroup>
+
+  <!-- Generate deterministic build when running in CI environments -->
+  <PropertyGroup Condition="'$(GITHUB_ACTIONS)' == 'true' or '$(CI)' == '1'">
+    <ContinuousIntegrationBuild Condition="'$(ContinuousIntegrationBuild)' == ''">true</ContinuousIntegrationBuild>
+  </PropertyGroup>
+
+  <!-- Nuget package properties https://docs.microsoft.com/en-us/nuget/reference/msbuild-targets -->
+  <PropertyGroup>
+    <PackageId>$(MSBuildProjectName)</PackageId>
+    <Title>$(MSBuildProjectName)</Title>
+    <PackageTags>LeaderElection;Leader;Election;Leadership;Distributed;Coordination;Kubernetes;Azure;AWS</PackageTags>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+    <PackageLicenseFile>LICENSE.md</PackageLicenseFile>
+    <PackageIcon>icon.png</PackageIcon>
+    <PackageIconUrl>$(RepositoryUrl)/blob/main/icon.png?raw=true</PackageIconUrl>
+    <PackageProjectUrl>$(RepositoryUrl)</PackageProjectUrl>
+    <PackageReleaseNotes>$(RepositoryUrl)/releases</PackageReleaseNotes>
+    <!-- SourceLink: Will generate a separate .snupkg file containing the PDB. -->
+    <!-- It will be published along with the main package. -->
+    <PublishRepositoryUrl>true</PublishRepositoryUrl>
+    <IncludeSymbols>true</IncludeSymbols>
+    <SymbolPackageFormat>snupkg</SymbolPackageFormat>
+  </PropertyGroup>
+  <ItemGroup>
+    <!-- Include license, icon, and readme files in the package -->
+    <None Include="$(RepoRoot)$(PackageLicenseFile)" Pack="true" PackagePath="" />
+    <None Include="$(RepoRoot)$(PackageIcon)" Pack="true" PackagePath="" />
+    <None
+      Condition="Exists('$(MSBuildProjectDirectory)/$(PackageReadmeFile)')"
+      Include="$(MSBuildProjectDirectory)/$(PackageReadmeFile)"
+      Pack="true"
+      PackagePath=""
+    />
+  </ItemGroup>
+</Project>
