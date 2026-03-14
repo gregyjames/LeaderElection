@@ -9,10 +9,9 @@
     <Copyright>Copyright 2025 Greg James</Copyright>
     <RepositoryUrl>https://github.com/gregyjames/LeaderElection</RepositoryUrl>
     <RepositoryType>git</RepositoryType>
-    <UseArtifactsOutput>true</UseArtifactsOutput>
-    <ArtifactsOutputDirectory>$(RepoRoot)artifacts</ArtifactsOutputDirectory>
     <!-- Folders -->
     <RepoRoot>$([MSBuild]::EnsureTrailingSlash('$(MSBuildThisFileDirectory)'))</RepoRoot>
+    <ArtifactsPath>$(RepoRoot)artifacts</ArtifactsPath>
     <SrcDir>$(RepoRoot)</SrcDir>
     <TestsDir>$(RepoRoot)</TestsDir>
     <ExamplesDir>$(RepoRoot)</ExamplesDir>
@@ -26,6 +25,7 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <IsPackable>false</IsPackable>
+    <UseArtifactsOutput>true</UseArtifactsOutput>
     <!-- TODO: Turn on maximum static analysis in all builds -->
   </PropertyGroup>
 
