@@ -1,6 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <!-- Inherits settings from Directory.Build.props -->
   <ItemGroup>
+    <PackageReference Include="AwesomeAssertions" />
     <PackageReference Include="Microsoft.NET.Test.Sdk" />
     <PackageReference Include="xunit.v3" />
     <PackageReference Include="xunit.runner.visualstudio">
@@ -13,12 +14,16 @@
     </PackageReference>
     <PackageReference Include="Testcontainers.Redis" />
     <PackageReference Include="Testcontainers.Azurite" />
-    <PackageReference Include="FluentAssertions" />
   </ItemGroup>
 
   <ItemGroup>
     <ProjectReference Include="..\LeaderElection\LeaderElection.csproj" />
     <ProjectReference Include="..\LeaderElection.Redis\LeaderElection.Redis.csproj" />
     <ProjectReference Include="..\LeaderElection.BlobStorage\LeaderElection.BlobStorage.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Using Include="Xunit" />
+    <Using Include="AwesomeAssertions" />
   </ItemGroup>
 </Project>

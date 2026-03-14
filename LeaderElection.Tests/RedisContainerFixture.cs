@@ -1,6 +1,5 @@
 using StackExchange.Redis;
 using Testcontainers.Redis;
-using Xunit;
 
 namespace LeaderElection.Tests;
 

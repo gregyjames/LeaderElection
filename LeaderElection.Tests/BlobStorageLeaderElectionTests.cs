@@ -1,10 +1,8 @@
 using Azure.Storage.Blobs;
-using FluentAssertions;
 using LeaderElection.BlobStorage;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
-using Xunit;
 
 namespace LeaderElection.Tests;
 

@@ -1,5 +1,3 @@
-using Xunit;
-
 namespace LeaderElection.Tests;
 
 public abstract class TestBase
