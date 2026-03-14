@@ -15,8 +15,8 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\LeaderElection.BlobStorage\LeaderElection.BlobStorage.csproj" />
-    <ProjectReference Include="..\LeaderElection.DistributedCache\LeaderElection.DistributedCache.csproj" />
-    <ProjectReference Include="..\LeaderElection.Redis\LeaderElection.Redis.csproj" />
+    <ProjectReference Include="$(SrcDir)LeaderElection.BlobStorage\LeaderElection.BlobStorage.csproj" />
+    <ProjectReference Include="$(SrcDir)LeaderElection.DistributedCache\LeaderElection.DistributedCache.csproj" />
+    <ProjectReference Include="$(SrcDir)LeaderElection.Redis\LeaderElection.Redis.csproj" />
   </ItemGroup>
 </Project>

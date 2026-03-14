@@ -83,9 +83,9 @@ jobs:
         run: dotnet build $Env:BUILD_TARGET --no-restore --configuration Release -p:Version=$Env:VERSION
 
       - name: Package ${{ env.BUILD_TARGET }}
-        run: dotnet pack $Env:BUILD_TARGET --no-build --configuration Release -p:Version=$Env:VERSION --output artifacts/packages
+        run: dotnet pack $Env:BUILD_TARGET --no-build --configuration Release -p:Version=$Env:VERSION --output artifacts/package/release
 
       - name: Push Nuget packages
-        run: dotnet nuget push artifacts/packages/*.nupkg --source https://api.nuget.org/v3/index.json --api-key $Env:NUGET_API_KEY
+        run: dotnet nuget push artifacts/package/release/*.nupkg --source https://api.nuget.org/v3/index.json --api-key $Env:NUGET_API_KEY
         env:
           NUGET_API_KEY: ${{ secrets.NUGET_API_KEY }}

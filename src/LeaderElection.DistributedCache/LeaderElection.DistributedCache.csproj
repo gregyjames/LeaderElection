@@ -1,18 +1,16 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
   <!-- Inherits settings from Directory.Build.props -->
   <PropertyGroup>
-    <IsPackable>true</IsPackable>
-    <PackageTags>Azure;Blobs;Blob;Storage;$(PackageTags)</PackageTags>
+    <PackageTags>DistributedCache;Distributed;Cache;Redis;$(PackageTags)</PackageTags>
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="Azure.Identity" />
-    <PackageReference Include="Azure.Storage.Blobs" />
+    <PackageReference Include="Microsoft.Extensions.Caching.Abstractions" />
     <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" />
     <PackageReference Include="Microsoft.Extensions.Options" />
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\LeaderElection\LeaderElection.csproj" />
+    <ProjectReference Include="$(SrcDir)LeaderElection\LeaderElection.csproj" />
   </ItemGroup>
 </Project>
