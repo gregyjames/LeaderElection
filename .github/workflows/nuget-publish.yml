@@ -9,6 +9,7 @@ on:
       - "blob/v*.*.*" # Blob Storage package tags
       - "distributed/v*.*.*" # Distributed Cache package tags
       - "fusion-cache/v*.*.*" # Fusion cache package tags
+      - "s3/v*.*.*" # S3 package tags
 
 permissions:
   contents: read
@@ -53,6 +54,7 @@ jobs:
             'blob'             { 'LeaderElection.BlobStorage' }
             'distributed'      { 'LeaderElection.DistributedCache' }
             'fusion-cache'     { 'LeaderElection.FusionCache' }
+            's3'               { 'LeaderElection.S3' }
             default { throw "Unexpected package prefix in tag: '$package'" }
           }
           echo "BUILD_TARGET=$buildTarget" >> $Env:GITHUB_ENV
