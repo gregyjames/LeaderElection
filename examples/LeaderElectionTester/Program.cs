@@ -28,7 +28,7 @@ builder.Services.AddSingleton(_ => lazyConnectionMultiplexer.Value);
 builder.Services.AddRedisLeaderElection(options =>
 {
     options.LockKey = "leader_election_tester";
-    options.LockExpiry = TimeSpan.FromSeconds(30);
+    options.LeaseDuration = TimeSpan.FromSeconds(30);
     options.RenewInterval = TimeSpan.FromSeconds(10);
     options.RetryInterval = TimeSpan.FromSeconds(5);
     options.MaxRetryAttempts = 3;

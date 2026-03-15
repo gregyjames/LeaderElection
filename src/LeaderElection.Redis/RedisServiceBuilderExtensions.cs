@@ -29,7 +29,7 @@ public static class RedisServiceBuilderExtensions
             opt.Database = options.Database;
             opt.LockKey = options.LockKey;
             opt.InstanceId = options.InstanceId;
-            opt.LockExpiry = options.LockExpiry;
+            opt.LeaseDuration = options.LeaseDuration;
             opt.RenewInterval = options.RenewInterval;
             opt.RetryInterval = options.RetryInterval;
             opt.MaxRetryAttempts = options.MaxRetryAttempts;

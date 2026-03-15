@@ -23,7 +23,7 @@ public sealed class RedisLeaderElectionTests(RedisContainerFixture redisFixture)
         {
             LockKey = lockKey,
             InstanceId = instanceId,
-            LockExpiry = lockExpiry ?? TimeSpan.FromSeconds(10),
+            LeaseDuration = lockExpiry ?? TimeSpan.FromSeconds(10),
             RenewInterval = renewInterval ?? TimeSpan.FromSeconds(2),
             RetryInterval = retryInterval ?? TimeSpan.FromSeconds(1),
             MaxRetryAttempts = maxRetryAttempts,

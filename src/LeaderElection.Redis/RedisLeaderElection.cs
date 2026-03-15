@@ -230,7 +230,7 @@ public class RedisLeaderElection : ILeaderElection
             var result = await _redis.StringSetAsync(
                 key: _options.LockKey,
                 value: _options.InstanceId,
-                expiry: _options.LockExpiry,
+                expiry: _options.LeaseDuration,
                 when: When.NotExists
             );
 
@@ -264,7 +264,7 @@ public class RedisLeaderElection : ILeaderElection
             var result = await _redis.ScriptEvaluateAsync(
                 script, 
                 new RedisKey[] { _options.LockKey }, 
-                new RedisValue[] { _options.InstanceId, (int)_options.LockExpiry.TotalMilliseconds }
+                new RedisValue[] { _options.InstanceId, (int)_options.LeaseDuration.TotalMilliseconds }
             );
 
             var success = (int)result != 0;
@@ -327,8 +327,8 @@ public class RedisLeaderElection : ILeaderElection
         if (string.IsNullOrWhiteSpace(_options.InstanceId))
             throw new ArgumentException("InstanceId cannot be null or empty", nameof(_options.InstanceId));
         
-        if (_options.LockExpiry <= TimeSpan.Zero)
-            throw new ArgumentException("LockExpiry must be positive", nameof(_options.LockExpiry));
+        if (_options.LeaseDuration <= TimeSpan.Zero)
+            throw new ArgumentException("LockExpiry must be positive", nameof(_options.LeaseDuration));
         
         if (_options.RenewInterval <= TimeSpan.Zero)
             throw new ArgumentException("RenewInterval must be positive", nameof(_options.RenewInterval));
