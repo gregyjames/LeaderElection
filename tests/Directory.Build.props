@@ -2,6 +2,9 @@
   <Import Project="$([MSBuild]::GetPathOfFileAbove('Directory.Build.props', '$(MSBuildThisFileDirectory)../'))" />
 
   <PropertyGroup>
-    <TargetFrameworks>net8.0;net10.0</TargetFrameworks>
+    <!-- Note: While we can target multiple TFMs here, e.g., net8.0;net10.0, we're 
+      targeting the SDK TFM for simplicity. Targeting multiple complicates the CI/CD 
+      pipeline due to multiple test frameworks needing to be installed. -->
+    <TargetFramework>net10.0</TargetFramework>
   </PropertyGroup>
 </Project>
