@@ -1,0 +1,16 @@
+<Solution>
+  <Folder Name="/examples/">
+    <Project Path="examples/LeaderElectionTester/LeaderElectionTester.csproj" />
+  </Folder>
+  <Folder Name="/src/">
+    <Project Path="src/LeaderElection.BlobStorage/LeaderElection.BlobStorage.csproj" />
+    <Project Path="src/LeaderElection.DistributedCache/LeaderElection.DistributedCache.csproj" />
+    <Project Path="src/LeaderElection.FusionCache/LeaderElection.FusionCache.csproj" />
+    <Project Path="src/LeaderElection.Redis/LeaderElection.Redis.csproj" />
+    <Project Path="src/LeaderElection.S3/LeaderElection.S3.csproj" />
+    <Project Path="src/LeaderElection/LeaderElection.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/LeaderElection.Tests/LeaderElection.Tests.csproj" />
+  </Folder>
+</Solution>
