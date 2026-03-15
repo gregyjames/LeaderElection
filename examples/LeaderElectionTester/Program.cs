@@ -66,6 +66,24 @@ builder.Services.AddRedisLeaderElection(options =>
 //     options.EnableGracefulShutdown = true;
 // });
 
+////////////////////////////////////////////////////
+// Configure S3LeaderElection
+////////////////////////////////////////////////////
+// builder.Services.AddSingleton<IMinioClient>(sp => 
+// {
+//    return new MinioClient()
+//        .WithEndpoint("localhost:9000")
+//        .WithCredentials("accessKey", "secretKey")
+//        .Build();
+// });
+// builder.Services.AddS3LeaderElection(options =>
+// {
+//     options.BucketName = "my-app-locks";
+//     options.ObjectKey = "leader-lock.json";
+//     options.LeaseDuration = TimeSpan.FromSeconds(30);
+//     options.RenewInterval = TimeSpan.FromSeconds(10);
+// });
+
 builder.Services.AddHostedService<Service>();
 
 var host = builder.Build();
