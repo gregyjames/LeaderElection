@@ -4,6 +4,7 @@
 ![NuGet Version](https://img.shields.io/nuget/v/LeaderElection.Redis?style=flat&label=LeaderElection.Redis&link=https%3A%2F%2Fwww.nuget.org%2Fpackages%2FLeaderElection.Redis)
 ![NuGet Version](https://img.shields.io/nuget/v/LeaderElection.DistributedCache?style=flat&label=LeaderElection.DistributedCache&link=https%3A%2F%2Fwww.nuget.org%2Fpackages%2FLeaderElection.DistributedCache)
 ![NuGet Version](https://img.shields.io/nuget/v/LeaderElection.FusionCache?style=flat&label=LeaderElection.FusionCache&link=https%3A%2F%2Fwww.nuget.org%2Fpackages%2FLeaderElection.FusionCache)
+![NuGet Version](https://img.shields.io/nuget/v/LeaderElection.S3?style=flat&label=LeaderElection.S3&link=https%3A%2F%2Fwww.nuget.org%2Fpackages%2FLeaderElection.S3)
 
 # Leader Election
 
@@ -24,6 +25,7 @@ An easy-to-use C# implementation of the distributed leader election pattern, lev
 - FusionCache &rarr; [LeaderElection.FusionCache](https://www.nuget.org/packages/LeaderElection.FusionCache)
 - DistributedCache &rarr; [LeaderElection.DistributedCache](https://www.nuget.org/packages/LeaderElection.DistributedCache)
 - Azure Blob Storage (blob leases) &rarr; [LeaderElection.BlobStorage](https://www.nuget.org/packages/LeaderElection.BlobStorage)
+- S3 (minio) &rarr; [LeaderElection.S3](https://www.nuget.org/packages/LeaderElection.S3)
 ## Quick Start
 
 ### 1. Install the Package
