@@ -1,6 +1,6 @@
 ﻿
 Microsoft Visual Studio Solution File, Format Version 12.00
-# 
+#
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "src", "src", "{43021A92-0CB4-4033-86C9-FDA1C968B5BD}"
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "LeaderElection", "src\LeaderElection\LeaderElection.csproj", "{DB42B3DB-CDF7-4AAF-AE75-90FCDAE4DEED}"
@@ -20,6 +20,8 @@ EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "examples", "examples", "{8C26E499-B243-4F6F-A33E-84E4E409A369}"
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "LeaderElectionTester", "examples\LeaderElectionTester\LeaderElectionTester.csproj", "{5E5B6D30-BB9D-422E-86B5-923B94FAFF4B}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "LeaderElection.S3", "src\LeaderElection.S3\LeaderElection.S3.csproj", "{74DEDA1D-888C-4EC0-909B-AB8C47E56B86}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -55,6 +57,10 @@ Global
 		{5E5B6D30-BB9D-422E-86B5-923B94FAFF4B}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{5E5B6D30-BB9D-422E-86B5-923B94FAFF4B}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{5E5B6D30-BB9D-422E-86B5-923B94FAFF4B}.Release|Any CPU.Build.0 = Release|Any CPU
+		{74DEDA1D-888C-4EC0-909B-AB8C47E56B86}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{74DEDA1D-888C-4EC0-909B-AB8C47E56B86}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{74DEDA1D-888C-4EC0-909B-AB8C47E56B86}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{74DEDA1D-888C-4EC0-909B-AB8C47E56B86}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(NestedProjects) = preSolution
 		{DB42B3DB-CDF7-4AAF-AE75-90FCDAE4DEED} = {43021A92-0CB4-4033-86C9-FDA1C968B5BD}
@@ -64,5 +70,6 @@ Global
 		{175B4C02-684A-4869-BB8A-B1D1EC3F65E7} = {43021A92-0CB4-4033-86C9-FDA1C968B5BD}
 		{CBDFCDE8-41D3-4053-ACE4-1E31B02C5F09} = {C78DE2A4-BA5C-4F3B-91E7-281F1F120835}
 		{5E5B6D30-BB9D-422E-86B5-923B94FAFF4B} = {8C26E499-B243-4F6F-A33E-84E4E409A369}
+		{74DEDA1D-888C-4EC0-909B-AB8C47E56B86} = {43021A92-0CB4-4033-86C9-FDA1C968B5BD}
 	EndGlobalSection
 EndGlobal
