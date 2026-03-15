@@ -49,12 +49,12 @@ jobs:
           # Map package prefix to project path
           $buildTarget = switch ($package) {
             'all'              { 'LeaderElection.sln' }
-            'core'             { 'LeaderElection' }
-            'redis'            { 'LeaderElection.Redis' }
-            'blob'             { 'LeaderElection.BlobStorage' }
-            'distributed'      { 'LeaderElection.DistributedCache' }
-            'fusion-cache'     { 'LeaderElection.FusionCache' }
-            's3'               { 'LeaderElection.S3' }
+            'core'             { 'src/LeaderElection' }
+            'redis'            { 'src/LeaderElection.Redis' }
+            'blob'             { 'src/LeaderElection.BlobStorage' }
+            'distributed'      { 'src/LeaderElection.DistributedCache' }
+            'fusion-cache'     { 'src/LeaderElection.FusionCache' }
+            's3'               { 'src/LeaderElection.S3' }
             default { throw "Unexpected package prefix in tag: '$package'" }
           }
           echo "BUILD_TARGET=$buildTarget" >> $Env:GITHUB_ENV
