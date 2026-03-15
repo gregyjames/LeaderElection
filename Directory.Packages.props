@@ -15,12 +15,14 @@
     <PackageVersion Include="Microsoft.Extensions.Hosting" Version="10.0.3" />
     <PackageVersion Include="Microsoft.Extensions.Logging" Version="10.0.3" />
     <PackageVersion Include="Microsoft.NET.Test.Sdk" Version="18.3.0" />
+    <PackageVersion Include="Minio" Version="7.0.0" />
     <PackageVersion Include="Serilog" Version="4.3.1" />
     <PackageVersion Include="Serilog.Extensions.Hosting" Version="10.0.0" />
     <PackageVersion Include="Serilog.Sinks.Console" Version="6.1.1" />
     <PackageVersion Include="StackExchange.Redis" Version="2.8.41" />
     <PackageVersion Include="Testcontainers.Redis" Version="4.10.0" />
     <PackageVersion Include="Testcontainers.Azurite" Version="4.10.0" />
+    <PackageVersion Include="Testcontainers.Minio" Version="4.10.0" />
     <PackageVersion Include="xunit.v3" Version="3.2.2" />
     <PackageVersion Include="xunit.runner.visualstudio" Version="3.1.5" />
     <PackageVersion Include="ZiggyCreatures.FusionCache" Version="2.5.0" />
