@@ -2,294 +2,75 @@ using Azure.Storage.Blobs;
 using Azure.Storage.Blobs.Specialized;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
+using Exception = System.Exception;
 
 namespace LeaderElection.BlobStorage;
-public class BlobStorageLeaderElection : ILeaderElection
+public sealed class BlobStorageLeaderElection : LeaderElectionBase<BlobStorageSettings>
 {
-    private readonly BlobServiceClient? _blobServiceClient;
     private readonly BlobContainerClient _containerClient;
     private readonly BlobClient _blobClient;
-    private readonly BlobStorageSettings _options;
-    private readonly ILogger<BlobStorageLeaderElection> _logger;
-    private readonly SemaphoreSlim _leadershipSemaphore = new(1, 1);
-    private readonly CancellationTokenSource _cancellationTokenSource = new();
-    
-    private volatile bool _isLeader;
-    private int _disposedValue; // 0 = not disposed, 1 = disposed
-    private Task? _leaderLoopTask;
-    private DateTime _lastLeadershipRenewal = DateTime.MinValue;
     private string? _currentLeaseId;
-
-    public event EventHandler<bool>? LeadershipChanged;
-    public event EventHandler<Exception>? ErrorOccurred;
 
     public BlobStorageLeaderElection(
         BlobServiceClient blobServiceClient,
         IOptions<BlobStorageSettings> options,
-        ILogger<BlobStorageLeaderElection> logger)
+        ILogger<BlobStorageLeaderElection> logger): base(options.Value, logger)
     {
-        _blobServiceClient = blobServiceClient ?? throw new ArgumentNullException(nameof(blobServiceClient));
-        _options = options?.Value ?? throw new ArgumentNullException(nameof(options));
-        _logger = logger ?? throw new ArgumentNullException(nameof(logger));
-        
-        ValidateOptions(false);
-        
-        _containerClient = _blobServiceClient.GetBlobContainerClient(_options.ContainerName);
-        _blobClient = _containerClient.GetBlobClient(_options.BlobName);
+        _containerClient = blobServiceClient.GetBlobContainerClient(Settings.ContainerName);
+        _blobClient = _containerClient.GetBlobClient(Settings.BlobName);
     }
     
-    public BlobStorageLeaderElection(BlobContainerClient client, BlobStorageSettings options, ILogger<BlobStorageLeaderElection> logger)
+    public BlobStorageLeaderElection(BlobContainerClient client, BlobStorageSettings options, ILogger<BlobStorageLeaderElection> logger) : base(options, logger)
     {
         _containerClient = client ?? throw new ArgumentNullException(nameof(client));
-        _options = options ?? throw new ArgumentNullException(nameof(options));
-        
-        ValidateOptions(true);
-        
-        _logger = logger ?? throw new ArgumentNullException(nameof(logger));
-        _blobClient = _containerClient.GetBlobClient(_options.BlobName);
+        _blobClient = _containerClient.GetBlobClient(Settings.BlobName);
     }
-    
-    public bool IsLeader => _isLeader && !IsDisposed;
-    private bool IsDisposed => Volatile.Read(ref _disposedValue) == 1;
-    public DateTime LastLeadershipRenewal => _lastLeadershipRenewal;
     public async Task StartAsync(CancellationToken cancellationToken = default)
     {
-        if (IsDisposed)
-            throw new ObjectDisposedException(nameof(BlobStorageLeaderElection));
-
-        if (_leaderLoopTask != null && !_leaderLoopTask.IsCompleted)
-        {
-            _logger.LogWarning("Leader election is already running");
-            return;
-        }
-
-        _logger.LogInformation("Starting Blob Storage leader election for instance {InstanceId}", _options.InstanceId);
+        if (!IsDisposed)
+            await EnsureBlobExistsAsync(cancellationToken);
         
-        // Ensure container exists
-        if (_options.CreateContainerIfNotExists)
-        {
-            await _containerClient.CreateIfNotExistsAsync(cancellationToken: cancellationToken);
-        }
-        
-        // Ensure blob exists
-        await EnsureBlobExistsAsync(cancellationToken);
-        
-        var combinedCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, _cancellationTokenSource.Token);
-        _leaderLoopTask = RunLeaderLoopAsync(combinedCts);
-        
-        await Task.CompletedTask; // Return immediately, let the loop run in background
+        await base.StartAsync(cancellationToken);
     }
-
-    public Task StopAsync(CancellationToken cancellationToken = default) =>
-        IsDisposed ? Task.CompletedTask : InternalStopAsync(cancellationToken);
-
-    private async Task InternalStopAsync(CancellationToken cancellationToken = default)
-    {
-        _logger.LogInformation("Stopping Blob Storage leader election for instance {InstanceId}", _options.InstanceId);
-        
-        _cancellationTokenSource.Cancel();
-        
-        if (_leaderLoopTask != null)
-        {
-            try
-            {
-                await _leaderLoopTask.WaitAsync(cancellationToken);
-            }
-            catch (OperationCanceledException)
-            {
-                _logger.LogDebug("Leader loop cancellation was expected");
-            }
-        }
-        await ReleaseLeadershipAsync();
-        if (_isLeader)
-        {
-            _isLeader = false;
-            LeadershipChanged?.Invoke(this, false);
-        }
-    }
-
-    public async Task<bool> TryAcquireLeadershipAsync(CancellationToken cancellationToken = default)
-    {
-        if (IsDisposed)
-            return false;
-
-        await _leadershipSemaphore.WaitAsync(cancellationToken);
-        try
-        {
-            if (_options.CreateContainerIfNotExists)
-            {
-                await EnsureBlobExistsAsync(cancellationToken);
-            }
-            var acquired = await TryAcquireLeadershipInternalAsync(cancellationToken);
-            if (acquired)
-            {
-                if (!_isLeader)
-                {
-                    _isLeader = true;
-                    LeadershipChanged?.Invoke(this, true);
-                }
-            }
-            else
-            {
-                if (_isLeader)
-                {
-                    _isLeader = false;
-                    LeadershipChanged?.Invoke(this, false);
-                }
-            }
-            return acquired;
-        }
-        finally
-        {
-            _leadershipSemaphore.Release();
-        }
-    }
-
-    public async Task RunTaskIfLeaderAsync(Func<Task> task, CancellationToken cancellationToken = default)
-    {
-        if (!IsLeader)
-        {
-            _logger.LogDebug("Not the leader. Skipping task execution");
-            return;
-        }
-
-        try
-        {
-            _logger.LogDebug("Executing task as leader");
-            await task();
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Error executing leader task");
-            ErrorOccurred?.Invoke(this, ex);
-            throw;
-        }
-    }
-
-    public async Task RunTaskIfLeaderAsync(Action task, CancellationToken cancellationToken = default)
-    {
-        await RunTaskIfLeaderAsync(() => Task.Run(task, cancellationToken), cancellationToken);
-    }
-
-    private async Task RunLeaderLoopAsync(CancellationTokenSource combinedCts)
-    {
-        try
-        {
-            var cancellationToken = combinedCts.Token;
-            var retryCount = 0;
-            
-            while (!cancellationToken.IsCancellationRequested)
-            {
-                try
-                {
-                    if (!_isLeader)
-                    {
-                        if (await TryAcquireLeadershipAsync(cancellationToken))
-                        {
-                            _logger.LogInformation("Leadership acquired for instance {InstanceId}", _options.InstanceId);
-                            SetLeadership(true);
-                            retryCount = 0; // Reset retry count on success
-                        }
-                        else
-                        {
-                            _logger.LogDebug("Failed to acquire leadership, will retry");
-                            retryCount++;
-                        }
-                    }
-                    else
-                    {
-                        if (!await RenewLeadershipAsync(cancellationToken))
-                        {
-                            _logger.LogWarning("Lost leadership during renewal for instance {InstanceId}", _options.InstanceId);
-                            SetLeadership(false);
-                            retryCount++;
-                        }
-                        else
-                        {
-                            _logger.LogDebug("Leadership renewed successfully");
-                            retryCount = 0; // Reset retry count on success
-                        }
-                    }
-
-                    // Exponential backoff for retries
-                    var delay = retryCount > 0 
-                        ? TimeSpan.FromSeconds(Math.Min(Math.Pow(2, retryCount), 60)) 
-                    : _options.RenewInterval;
-                
-                await Task.Delay(delay, cancellationToken);
-            }
-            catch (OperationCanceledException)
-            {
-                _logger.LogDebug("Leader loop cancelled");
-                break;
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Unexpected error in leader loop");
-                ErrorOccurred?.Invoke(this, ex);
-                retryCount++;
-                
-                try
-                {
-                    await Task.Delay(_options.RetryInterval, cancellationToken);
-                }
-                catch (OperationCanceledException)
-                {
-                    break;
-                }
-            }
-        }
-
-        // Cleanup on shutdown
-        if (_options.EnableGracefulShutdown && _isLeader)
-        {
-            await ReleaseLeadershipAsync();
-        }
-        }
-        finally
-        {
-            combinedCts.Dispose();
-        }
-    }
-
+    
     private async Task EnsureBlobExistsAsync(CancellationToken cancellationToken)
     {
         try
         {
             var containerExists = await _containerClient.ExistsAsync(cancellationToken);
-            if (!containerExists.Value && _options.CreateContainerIfNotExists)
+            if (!containerExists.Value && Settings.CreateContainerIfNotExists)
             {
-                _logger.LogDebug("Creating leader election container");
+                Logger.LogDebug("Creating leader election container");
                 await _containerClient.CreateIfNotExistsAsync(cancellationToken: cancellationToken);
             }
 
             var exists = await _blobClient.ExistsAsync(cancellationToken);
             if (!exists.Value)
             {
-                _logger.LogDebug("Creating leader election blob");
-                await _blobClient.UploadAsync(new BinaryData(_options.InstanceId), overwrite: true, cancellationToken: cancellationToken);
+                Logger.LogDebug("Creating leader election blob");
+                await _blobClient.UploadAsync(new BinaryData(Settings.InstanceId), overwrite: true, cancellationToken: cancellationToken);
             }
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error ensuring blob exists");
-            ErrorOccurred?.Invoke(this, ex);
+            Logger.LogError(ex, "Error ensuring blob exists");
+            throw;
         }
     }
 
-    private async Task<bool> TryAcquireLeadershipInternalAsync(CancellationToken cancellationToken)
+    protected override async Task<bool> TryAcquireLeadershipInternalAsync(CancellationToken cancellationToken)
     {
         try
         {
+            await EnsureBlobExistsAsync(cancellationToken);
             var leaseClient = _blobClient.GetBlobLeaseClient();
             
-            var leaseResponse = await leaseClient.AcquireAsync(_options.LeaseDuration, cancellationToken: cancellationToken);
+            var leaseResponse = await leaseClient.AcquireAsync(Settings.LeaseDuration, cancellationToken: cancellationToken);
             
             if (leaseResponse?.Value?.LeaseId != null)
             {
                 _currentLeaseId = leaseResponse.Value.LeaseId;
-                _lastLeadershipRenewal = DateTime.UtcNow;
-                _logger.LogDebug("Acquired lease with ID: {LeaseId}", _currentLeaseId);
+                Logger.LogDebug("Acquired lease with ID: {LeaseId}", _currentLeaseId);
                 return true;
             }
 
@@ -297,22 +78,20 @@ public class BlobStorageLeaderElection : ILeaderElection
         }
         catch (Azure.RequestFailedException ex) when (ex.Status == 409) // Conflict - lease already exists
         {
-            _logger.LogDebug("Lease already exists, cannot acquire leadership");
+            Logger.LogDebug("Lease already exists, cannot acquire leadership");
             return false;
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error acquiring leadership");
-            ErrorOccurred?.Invoke(this, ex);
+            Logger.LogError(ex, "Error acquiring leadership");
             return false;
         }
     }
 
-    private async Task<bool> RenewLeadershipAsync(CancellationToken cancellationToken)
+    protected override async Task<bool> RenewLeadershipInternalAsync(CancellationToken cancellationToken)
     {
         if (string.IsNullOrEmpty(_currentLeaseId))
         {
-            _logger.LogWarning("No current lease ID, cannot renew leadership");
             return false;
         }
 
@@ -323,8 +102,7 @@ public class BlobStorageLeaderElection : ILeaderElection
             
             if (leaseResponse?.Value?.LeaseId != null)
             {
-                _lastLeadershipRenewal = DateTime.UtcNow;
-                _logger.LogDebug("Renewed lease successfully");
+                Logger.LogDebug("Renewed lease successfully");
                 return true;
             }
 
@@ -332,27 +110,25 @@ public class BlobStorageLeaderElection : ILeaderElection
         }
         catch (Azure.RequestFailedException ex) when (ex.Status == 404) // Not Found - blob doesn't exist
         {
-            _logger.LogWarning("Blob not found during lease renewal");
+            Logger.LogWarning("Blob not found during lease renewal");
             return false;
         }
         catch (Azure.RequestFailedException ex) when (ex.Status == 409) // Conflict - lease lost
         {
-            _logger.LogWarning("Lease conflict during renewal - leadership lost");
+            Logger.LogWarning("Lease conflict during renewal - leadership lost");
             return false;
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error renewing leadership");
-            ErrorOccurred?.Invoke(this, ex);
+            Logger.LogError(ex, "Error renewing leadership");
             return false;
         }
     }
 
-    private async Task ReleaseLeadershipAsync()
+    protected override async Task ReleaseLeadershipAsync()
     {
         if (string.IsNullOrEmpty(_currentLeaseId))
         {
-            _logger.LogDebug("No lease ID to release");
             return;
         }
 
@@ -362,91 +138,32 @@ public class BlobStorageLeaderElection : ILeaderElection
             await leaseClient.ReleaseAsync();
             
             _currentLeaseId = null;
-            _logger.LogInformation("Leadership released for instance {InstanceId}", _options.InstanceId);
+            Logger.LogInformation("Leadership released for instance {InstanceId}", Settings.InstanceId);
         }
         catch (Azure.RequestFailedException ex) when (ex.Status == 404) // Not Found - blob doesn't exist
         {
-            _logger.LogDebug("Blob not found during lease release");
+            Logger.LogDebug("Blob not found during lease release");
         }
         catch (Azure.RequestFailedException ex) when (ex.Status == 409) // Conflict - lease already expired
         {
-            _logger.LogDebug("Lease already expired during release");
+            Logger.LogDebug("Lease already expired during release");
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error releasing leadership");
-            ErrorOccurred?.Invoke(this, ex);
+            Logger.LogError(ex, "Error releasing leadership");
         }
     }
-
-    private void SetLeadership(bool isLeader)
-    {
-        if (_isLeader != isLeader)
-        {
-            _isLeader = isLeader;
-            LeadershipChanged?.Invoke(this, isLeader);
-        }
-    }
-
     private void ValidateOptions(bool selfProvidedInstance)
     {
-        if (!selfProvidedInstance)
+        base.ValidateOptions();
+        if (string.IsNullOrWhiteSpace(Settings.ContainerName))
+            throw new ArgumentException("ContainerName cannot be null or empty", nameof(Settings.ContainerName));
+        if (string.IsNullOrWhiteSpace(Settings.BlobName))
+            throw new ArgumentException("BlobName cannot be null or empty", nameof(Settings.BlobName));
+        
+        if (Settings.LeaseDuration.TotalSeconds is < 15 or > 60)
         {
-            if (string.IsNullOrWhiteSpace(_options.ConnectionString))
-                throw new ArgumentException("ConnectionString cannot be null or empty",
-                    nameof(_options.ConnectionString));
-
-            if (string.IsNullOrWhiteSpace(_options.ContainerName))
-                throw new ArgumentException("ContainerName cannot be null or empty", nameof(_options.ContainerName));
+            throw new ArgumentException("LeaseDuration must be between 15 and 60 seconds for Azure Blob Storage", nameof(Settings.LeaseDuration));
         }
-
-        if (string.IsNullOrWhiteSpace(_options.BlobName))
-            throw new ArgumentException("BlobName cannot be null or empty", nameof(_options.BlobName));
-        
-        if (string.IsNullOrWhiteSpace(_options.InstanceId))
-            throw new ArgumentException("InstanceId cannot be null or empty", nameof(_options.InstanceId));
-        
-        if (_options.LeaseDuration <= TimeSpan.Zero)
-            throw new ArgumentException("LeaseDuration must be positive", nameof(_options.LeaseDuration));
-        
-        // Azure Blob Storage lease duration must be between 15 and 60 seconds, or -1 for infinite
-        if (_options.LeaseDuration.TotalSeconds < 15 && _options.LeaseDuration.TotalSeconds != -1)
-            throw new ArgumentException("LeaseDuration must be at least 15 seconds or -1 for infinite", nameof(_options.LeaseDuration));
-        
-        if (_options.LeaseDuration.TotalSeconds > 60 && _options.LeaseDuration.TotalSeconds != -1)
-            throw new ArgumentException("LeaseDuration must be at most 60 seconds or -1 for infinite", nameof(_options.LeaseDuration));
-        
-        if (_options.RenewInterval <= TimeSpan.Zero)
-            throw new ArgumentException("RenewInterval must be positive", nameof(_options.RenewInterval));
-        
-        if (_options.RetryInterval <= TimeSpan.Zero)
-            throw new ArgumentException("RetryInterval must be positive", nameof(_options.RetryInterval));
-        
-        if (_options.MaxRetryAttempts < 0)
-            throw new ArgumentException("MaxRetryAttempts cannot be negative", nameof(_options.MaxRetryAttempts));
-    }
-
-    public async ValueTask DisposeAsync()
-    {
-        if (Interlocked.Exchange(ref _disposedValue, 1) == 1)
-            return;
-
-        await DisposeAsyncCore().ConfigureAwait(false);
-        GC.SuppressFinalize(this);
-    }
-
-    protected virtual async ValueTask DisposeAsyncCore()
-    {
-        try
-        {
-            await InternalStopAsync().ConfigureAwait(false);
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Error during async disposal");
-        }
-
-        _cancellationTokenSource.Dispose();
-        _leadershipSemaphore.Dispose();
     }
 }
