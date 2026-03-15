@@ -4,6 +4,7 @@
 ![NuGet Version](https://img.shields.io/nuget/v/LeaderElection.Redis?style=flat&label=LeaderElection.Redis&link=https%3A%2F%2Fwww.nuget.org%2Fpackages%2FLeaderElection.Redis)
 ![NuGet Version](https://img.shields.io/nuget/v/LeaderElection.DistributedCache?style=flat&label=LeaderElection.DistributedCache&link=https%3A%2F%2Fwww.nuget.org%2Fpackages%2FLeaderElection.DistributedCache)
 ![NuGet Version](https://img.shields.io/nuget/v/LeaderElection.FusionCache?style=flat&label=LeaderElection.FusionCache&link=https%3A%2F%2Fwww.nuget.org%2Fpackages%2FLeaderElection.FusionCache)
+![NuGet Version](https://img.shields.io/nuget/v/LeaderElection.S3?style=flat&label=LeaderElection.S3&link=https%3A%2F%2Fwww.nuget.org%2Fpackages%2FLeaderElection.S3)
 
 # Leader Election
 
