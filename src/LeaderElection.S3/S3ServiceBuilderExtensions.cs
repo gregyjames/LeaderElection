@@ -19,7 +19,7 @@ public static class S3ServiceBuilderExtensions
         this IServiceCollection services,
         S3Settings options)
     {
-        services.Configure<S3Settings>(opt =>
+        services.AddS3LeaderElection(opt =>
         {
             opt.InstanceId = options.InstanceId;
             opt.BucketName = options.BucketName;
@@ -30,10 +30,6 @@ public static class S3ServiceBuilderExtensions
             opt.EnableGracefulShutdown = options.EnableGracefulShutdown;
             opt.MaxRetryAttempts = options.MaxRetryAttempts;
         });
-
-        services.AddSingleton<S3Settings>();
-        services.AddSingleton<S3LeaderElection>();
-        services.AddSingleton<ILeaderElection>(sp => sp.GetRequiredService<S3LeaderElection>());
         
         return services;
     }
