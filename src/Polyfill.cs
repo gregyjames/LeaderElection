@@ -11,7 +11,7 @@ internal static class Polyfill
     // csharpier-ignore-start -- contains copied code
 
 #if !NET8_0_OR_GREATER
-    // Copied from https://github.com/SimonCropp/Polyfill/blob/main/src/Split/netstandard2.1/Polyfill_CancellationTokenSource.cs
+    // Copied from https://github.com/SimonCropp/Polyfill/blob/18243e7e051c347acf023978bd18abd181ea6695/src/Split/netstandard2.1/Polyfill_CancellationTokenSource.cs
 	/// <summary>Communicates a request for cancellation asynchronously.</summary>
 	public static Task CancelAsync(this CancellationTokenSource target)
 	{
@@ -26,7 +26,7 @@ internal static class Polyfill
 #endif
 
 #if !NET6_0_OR_GREATER
-    // Copied from https://github.com/SimonCropp/Polyfill/blob/main/src/Split/netstandard2.1/Polyfill_Task.cs
+    // Copied from https://github.com/SimonCropp/Polyfill/blob/18243e7e051c347acf023978bd18abd181ea6695/src/Split/netstandard2.1/Polyfill_Task.cs
     const uint MaxSupportedTimeout = 0xfffffffe;
 	/// <summary>Gets a <see cref="Task"/> that will complete when this <see cref="Task"/> completes or when the specified <see cref="CancellationToken"/> has cancellation requested.</summary>
 	public static Task WaitAsync(this Task target, CancellationToken cancellationToken) =>
