@@ -19,7 +19,7 @@
 
   <!-- Build settings -->
   <PropertyGroup>
-    <!-- Enable the latest C# features. We also leverage PolySharp (see below) for additional language features. -->
+    <!-- Enable the latest C# features. -->
     <LangVersion>latest</LangVersion>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
@@ -31,17 +31,5 @@
   <!-- Generate deterministic build when running in CI environments -->
   <PropertyGroup Condition="'$(GITHUB_ACTIONS)' == 'true' or '$(CI)' == '1'">
     <ContinuousIntegrationBuild Condition="'$(ContinuousIntegrationBuild)' == ''">true</ContinuousIntegrationBuild>
-  </PropertyGroup>
-
-  <!-- Use PolySharp to add support for additional C#/.NET features -->
-  <ItemGroup>
-    <PackageReference Include="PolySharp">
-      <PrivateAssets>all</PrivateAssets>
-      <IncludeAssets>runtime; build; native; contentfiles; analyzers</IncludeAssets>
-    </PackageReference>
-  </ItemGroup>
-  <PropertyGroup>
-    <!-- Include only specific generated types from PolySharp to avoid over-use -->
-    <PolySharpIncludeGeneratedTypes>System.Runtime.CompilerServices.IsExternalInit;$(PolySharpIncludeGeneratedTypes)</PolySharpIncludeGeneratedTypes>
   </PropertyGroup>
 </Project>

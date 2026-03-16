@@ -39,4 +39,19 @@
       PackagePath=""
     />
   </ItemGroup>
+
+  <Choose>
+    <When Condition="'$(TargetFramework)' == 'netstandard2.1'">
+      <!-- Use PolySharp to add support for needed C#/.NET features -->
+      <ItemGroup>
+        <PackageReference Include="PolySharp" PrivateAssets="all" />
+      </ItemGroup>
+      <PropertyGroup>
+        <PolySharpIncludeGeneratedTypes>System.Runtime.CompilerServices.IsExternalInit;$(PolySharpIncludeGeneratedTypes)</PolySharpIncludeGeneratedTypes>
+      </PropertyGroup>
+      <ItemGroup>
+        <Compile Include="$(SrcDir)Polyfill.cs" />
+      </ItemGroup>
+    </When>
+  </Choose>
 </Project>
