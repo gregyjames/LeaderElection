@@ -28,7 +28,7 @@ jobs:
         shell: pwsh
 
     env:
-      BUILD_TARGET: "" # set below based on tag prefix, e.g., 'LeaderElection.Redis', or 'LeaderElection.sln' for full product release
+      BUILD_TARGET: "" # set below based on tag prefix, e.g., 'LeaderElection.Redis', or 'LeaderElection.slnx' for full product release
       VERSION: "" # set below from tag version, e.g., '1.0.0'
 
     steps:
@@ -48,7 +48,7 @@ jobs:
 
           # Map package prefix to project path
           $buildTarget = switch ($package) {
-            'all'              { 'LeaderElection.sln' }
+            'all'              { 'LeaderElection.slnx' }
             'core'             { 'src/LeaderElection' }
             'redis'            { 'src/LeaderElection.Redis' }
             'blob'             { 'src/LeaderElection.BlobStorage' }
