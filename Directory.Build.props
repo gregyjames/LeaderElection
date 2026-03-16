@@ -19,7 +19,8 @@
 
   <!-- Build settings -->
   <PropertyGroup>
-    <TargetFramework>net8.0</TargetFramework>
+    <!-- Enable the latest C# features. -->
+    <LangVersion>latest</LangVersion>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <IsPackable>false</IsPackable>
