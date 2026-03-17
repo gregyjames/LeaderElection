@@ -21,9 +21,9 @@ public abstract class TestBase
 
         var tcs = new TaskCompletionSource<bool>();
 
-        EventHandler<bool>? handler = (sender, isLeader) =>
+        EventHandler<LeadershipChangedEventArgs>? handler = (sender, leadershipEvent) =>
         {
-            if (isLeader == expectedLeadership)
+            if (leadershipEvent.IsLeader == expectedLeadership)
             {
                 tcs.TrySetResult(true);
             }
@@ -60,7 +60,7 @@ public abstract class TestBase
 
         var tcs = new TaskCompletionSource<Exception>();
 
-        EventHandler<Exception>? handler = (sender, exception) => tcs.TrySetResult(exception);
+        EventHandler<LeaderElectionErrorEventArgs>? handler = (sender, leadershipException) => tcs.TrySetResult(leadershipException.Exception);
 
         leaderElection.ErrorOccurred += handler;
         try

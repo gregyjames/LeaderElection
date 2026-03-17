@@ -23,8 +23,8 @@ public sealed class S3LeaderElection : ILeaderElection
     private DateTime _lastLeadershipRenewal = DateTime.MinValue;
     private string? _lastEtag;
 
-    public event EventHandler<bool>? LeadershipChanged;
-    public event EventHandler<Exception>? ErrorOccurred;
+    public event EventHandler<LeadershipChangedEventArgs>? LeadershipChanged;
+    public event EventHandler<LeaderElectionErrorEventArgs>? ErrorOccurred;
 
     public S3LeaderElection(
         IMinioClient client,
@@ -90,7 +90,7 @@ public sealed class S3LeaderElection : ILeaderElection
         if (_isLeader)
         {
             _isLeader = false;
-            LeadershipChanged?.Invoke(this, false);
+            LeadershipChanged?.Invoke(this, new(false));
         }
     }
 
@@ -108,7 +108,7 @@ public sealed class S3LeaderElection : ILeaderElection
                 if (!_isLeader)
                 {
                     _isLeader = true;
-                    LeadershipChanged?.Invoke(this, true);
+                    LeadershipChanged?.Invoke(this, new(true));
                 }
             }
             else
@@ -116,7 +116,7 @@ public sealed class S3LeaderElection : ILeaderElection
                 if (_isLeader)
                 {
                     _isLeader = false;
-                    LeadershipChanged?.Invoke(this, false);
+                    LeadershipChanged?.Invoke(this, new(false));
                 }
             }
             return acquired;
@@ -143,7 +143,7 @@ public sealed class S3LeaderElection : ILeaderElection
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error executing leader task");
-            ErrorOccurred?.Invoke(this, ex);
+            ErrorOccurred?.Invoke(this, new(ex));
             throw;
         }
     }
@@ -207,7 +207,7 @@ public sealed class S3LeaderElection : ILeaderElection
                 catch (Exception ex)
                 {
                     _logger.LogError(ex, "Unexpected error in leader loop");
-                    ErrorOccurred?.Invoke(this, ex);
+                    ErrorOccurred?.Invoke(this, new(ex));
                     retryCount++;
 
                     try
@@ -291,7 +291,7 @@ public sealed class S3LeaderElection : ILeaderElection
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error acquiring S3 leadership");
-            ErrorOccurred?.Invoke(this, ex);
+            ErrorOccurred?.Invoke(this, new(ex));
             return false;
         }
     }
@@ -358,7 +358,7 @@ public sealed class S3LeaderElection : ILeaderElection
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error renewing S3 leadership");
-            ErrorOccurred?.Invoke(this, ex);
+            ErrorOccurred?.Invoke(this, new(ex));
             return false;
         }
     }
@@ -382,7 +382,7 @@ public sealed class S3LeaderElection : ILeaderElection
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error releasing S3 leadership");
-            ErrorOccurred?.Invoke(this, ex);
+            ErrorOccurred?.Invoke(this, new(ex));
         }
     }
 
@@ -416,7 +416,7 @@ public sealed class S3LeaderElection : ILeaderElection
         if (_isLeader != isLeader)
         {
             _isLeader = isLeader;
-            LeadershipChanged?.Invoke(this, isLeader);
+            LeadershipChanged?.Invoke(this, new(isLeader));
         }
     }
 

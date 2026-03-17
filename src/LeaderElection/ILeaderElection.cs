@@ -19,12 +19,12 @@ public interface ILeaderElection : IAsyncDisposable
     /// <summary>
     /// Event fired when leadership status changes
     /// </summary>
-    event EventHandler<bool>? LeadershipChanged;
+    event EventHandler<LeadershipChangedEventArgs>? LeadershipChanged;
 
     /// <summary>
     /// Event fired when an error occurs during leader election
     /// </summary>
-    event EventHandler<Exception>? ErrorOccurred;
+    event EventHandler<LeaderElectionErrorEventArgs>? ErrorOccurred;
 
     /// <summary>
     /// Starts the leader election process

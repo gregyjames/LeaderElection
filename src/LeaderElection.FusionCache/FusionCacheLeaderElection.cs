@@ -17,8 +17,8 @@ public class FusionCacheLeaderElection : ILeaderElection
     private Task? _leaderLoopTask;
     private DateTime _lastLeadershipRenewal = DateTime.MinValue;
 
-    public event EventHandler<bool>? LeadershipChanged;
-    public event EventHandler<Exception>? ErrorOccurred;
+    public event EventHandler<LeadershipChangedEventArgs>? LeadershipChanged;
+    public event EventHandler<LeaderElectionErrorEventArgs>? ErrorOccurred;
 
     public FusionCacheLeaderElection(
         IFusionCache cache,
@@ -80,7 +80,7 @@ public class FusionCacheLeaderElection : ILeaderElection
         if (_isLeader)
         {
             _isLeader = false;
-            LeadershipChanged?.Invoke(this, false);
+            LeadershipChanged?.Invoke(this, new(false));
         }
     }
 
@@ -98,7 +98,7 @@ public class FusionCacheLeaderElection : ILeaderElection
                 if (!_isLeader)
                 {
                     _isLeader = true;
-                    LeadershipChanged?.Invoke(this, true);
+                    LeadershipChanged?.Invoke(this, new(true));
                 }
             }
             else
@@ -106,7 +106,7 @@ public class FusionCacheLeaderElection : ILeaderElection
                 if (_isLeader)
                 {
                     _isLeader = false;
-                    LeadershipChanged?.Invoke(this, false);
+                    LeadershipChanged?.Invoke(this, new(false));
                 }
             }
 
@@ -134,7 +134,7 @@ public class FusionCacheLeaderElection : ILeaderElection
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error executing leader task");
-            ErrorOccurred?.Invoke(this, ex);
+            ErrorOccurred?.Invoke(this, new(ex));
             throw;
         }
     }
@@ -199,7 +199,7 @@ public class FusionCacheLeaderElection : ILeaderElection
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Unexpected error in leader loop");
-                ErrorOccurred?.Invoke(this, ex);
+                ErrorOccurred?.Invoke(this, new(ex));
                 retryCount++;
 
                 try
@@ -264,7 +264,7 @@ public class FusionCacheLeaderElection : ILeaderElection
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error acquiring leadership");
-            ErrorOccurred?.Invoke(this, ex);
+            ErrorOccurred?.Invoke(this, new(ex));
             return false;
         }
     }
@@ -287,7 +287,7 @@ public class FusionCacheLeaderElection : ILeaderElection
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error renewing leadership");
-            ErrorOccurred?.Invoke(this, ex);
+            ErrorOccurred?.Invoke(this, new(ex));
             return false;
         }
     }
@@ -308,7 +308,7 @@ public class FusionCacheLeaderElection : ILeaderElection
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error releasing leadership");
-            ErrorOccurred?.Invoke(this, ex);
+            ErrorOccurred?.Invoke(this, new(ex));
         }
     }
 
@@ -317,7 +317,7 @@ public class FusionCacheLeaderElection : ILeaderElection
         if (_isLeader != isLeader)
         {
             _isLeader = isLeader;
-            LeadershipChanged?.Invoke(this, isLeader);
+            LeadershipChanged?.Invoke(this, new(isLeader));
         }
     }
 

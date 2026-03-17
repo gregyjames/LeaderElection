@@ -63,20 +63,15 @@ internal sealed class Service : BackgroundService
         }
     }
 
-    private void OnLeadershipChanged(object? sender, bool isLeader)
+    private void OnErrorOccurred(object? sender, LeaderElectionErrorEventArgs e)
     {
-        if (isLeader)
-        {
-            _logger.LogInformation("This instance is now the leader!");
-        }
-        else
-        {
-            _logger.LogInformation("This instance is no longer the leader.");
-        }
+        _logger.LogError(e.Exception, "Error occurred in leader election");
     }
 
-    private void OnErrorOccurred(object? sender, Exception exception)
+    private void OnLeadershipChanged(object? sender, LeadershipChangedEventArgs e)
     {
-        _logger.LogError(exception, "Error occurred in leader election");
+        _logger.LogInformation(e.IsLeader
+            ? "This instance is now the leader!"
+            : "This instance is no longer the leader.");
     }
 }

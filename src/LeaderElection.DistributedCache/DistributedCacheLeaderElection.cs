@@ -16,8 +16,8 @@ public class DistributedCacheLeaderElection : ILeaderElection
     private Task? _leaderLoopTask;
     private DateTime _lastLeadershipRenewal = DateTime.MinValue;
 
-    public event EventHandler<bool>? LeadershipChanged;
-    public event EventHandler<Exception>? ErrorOccurred;
+    public event EventHandler<LeadershipChangedEventArgs>? LeadershipChanged;
+    public event EventHandler<LeaderElectionErrorEventArgs>? ErrorOccurred;
 
     public DistributedCacheLeaderElection(
         IDistributedCache cache,
@@ -60,7 +60,7 @@ public class DistributedCacheLeaderElection : ILeaderElection
         if (_isLeader)
         {
             _isLeader = false;
-            LeadershipChanged?.Invoke(this, false);
+            LeadershipChanged?.Invoke(this, new(false));
         }
     }
 
@@ -72,12 +72,12 @@ public class DistributedCacheLeaderElection : ILeaderElection
         if (acquired && !_isLeader)
         {
             _isLeader = true;
-            LeadershipChanged?.Invoke(this, true);
+            LeadershipChanged?.Invoke(this, new(true));
         }
         else if (!acquired && _isLeader)
         {
             _isLeader = false;
-            LeadershipChanged?.Invoke(this, false);
+            LeadershipChanged?.Invoke(this, new(false));
         }
         return acquired;
     }
@@ -90,7 +90,7 @@ public class DistributedCacheLeaderElection : ILeaderElection
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error executing leader task");
-            ErrorOccurred?.Invoke(this, ex);
+            ErrorOccurred?.Invoke(this, new(ex));
             throw;
         }
     }
@@ -129,7 +129,7 @@ public class DistributedCacheLeaderElection : ILeaderElection
                         {
                             _logger.LogWarning("Lost leadership for instance {InstanceId}", _options.InstanceId);
                             _isLeader = false;
-                            LeadershipChanged?.Invoke(this, false);
+                            LeadershipChanged?.Invoke(this, new(false));
                             retryCount++;
                         }
                         else
@@ -149,7 +149,7 @@ public class DistributedCacheLeaderElection : ILeaderElection
                 catch (Exception ex)
                 {
                     _logger.LogError(ex, "Error in leader loop");
-                    ErrorOccurred?.Invoke(this, ex);
+                    ErrorOccurred?.Invoke(this, new(ex));
                     retryCount++;
                     await Task.Delay(_options.RetryInterval, cancellationToken);
                 }
@@ -189,7 +189,7 @@ public class DistributedCacheLeaderElection : ILeaderElection
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error acquiring leadership");
-            ErrorOccurred?.Invoke(this, ex);
+            ErrorOccurred?.Invoke(this, new(ex));
             return false;
         }
     }
@@ -212,7 +212,7 @@ public class DistributedCacheLeaderElection : ILeaderElection
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error renewing leadership");
-            ErrorOccurred?.Invoke(this, ex);
+            ErrorOccurred?.Invoke(this, new(ex));
             return false;
         }
     }
@@ -231,7 +231,7 @@ public class DistributedCacheLeaderElection : ILeaderElection
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error releasing leadership");
-            ErrorOccurred?.Invoke(this, ex);
+            ErrorOccurred?.Invoke(this, new(ex));
         }
     }
 
