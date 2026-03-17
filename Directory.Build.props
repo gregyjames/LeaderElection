@@ -27,8 +27,14 @@
     <UseArtifactsOutput>true</UseArtifactsOutput>
     <EmitCompilerGeneratedFiles>true</EmitCompilerGeneratedFiles>
     <!-- TODO: Turn on maximum static analysis in all builds -->
+    <AnalysisLevel>latest</AnalysisLevel>
+    <AnalysisMode>All</AnalysisMode>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <CodeAnalysisTreatWarningsAsErrors>true</CodeAnalysisTreatWarningsAsErrors>
+    <EnforceCodeStyleInBuild>true</EnforceCodeStyleInBuild>
+    <WarningLevel>4</WarningLevel>
   </PropertyGroup>
-
+  
   <!-- Generate deterministic build when running in CI environments -->
   <PropertyGroup Condition="'$(GITHUB_ACTIONS)' == 'true' or '$(CI)' == '1'">
     <ContinuousIntegrationBuild Condition="'$(ContinuousIntegrationBuild)' == ''">true</ContinuousIntegrationBuild>
