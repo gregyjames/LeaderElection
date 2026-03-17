@@ -39,9 +39,13 @@ public sealed class AzuriteContainerFixture : IAsyncLifetime
 
     public async ValueTask InitializeAsync()
     {
+        // The "--loose" and "--skipApiVersionCheck" flags are used to allow Azurite
+        // (which tends to lag behind a bit) to work with the latest Azure Storage SDK.
         _azuriteContainer = new AzuriteBuilder(
             image: "mcr.microsoft.com/azure-storage/azurite:latest"
-        ).Build();
+        )
+            .WithCommand("--loose", "--skipApiVersionCheck")
+            .Build();
 
         await _azuriteContainer.StartAsync().ConfigureAwait(false);
     }
