@@ -1,3 +1,5 @@
+using System.Diagnostics.CodeAnalysis;
+
 namespace LeaderElection;
 
 /// <summary>
@@ -6,6 +8,8 @@ namespace LeaderElection;
 /// </summary>
 [System.Diagnostics.CodeAnalysis.ExcludeFromCodeCoverage]
 [System.Diagnostics.DebuggerNonUserCode]
+[SuppressMessage("Reliability", "CA2007:Consider calling ConfigureAwait on the awaited task")]
+[SuppressMessage("Performance", "CA1849:Call async methods when in an async method")]
 internal static class Polyfill
 {
     // csharpier-ignore-start -- contains copied code
