@@ -13,6 +13,7 @@ on:
       - synchronize
       - reopened
       - unlocked # enables easy re-triggering of the workflow by locking and unlocking the PR
+  workflow_dispatch:
 
 permissions:
   contents: read # required for cloning the repo
