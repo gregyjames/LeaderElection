@@ -1,0 +1,4 @@
+{
+  "coverage-gutters.coverageBaseDir": "artifacts/coverage",
+  "coverage-gutters.coverageFileNames": ["coverage.info", "coverage.cobertura.xml"]
+}
