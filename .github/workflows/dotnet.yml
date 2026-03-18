@@ -4,18 +4,18 @@
 name: .NET
 
 on:
-  # Trigger on pushes to main including merge commits from PRs targeting main.
-  # Q: Do we want to run on both the merge commit and the PR branch??
-  push:
-    branches:
-      - main
-  # Also trigger on PR creation or update.
+  # Run on all PRs
   pull_request:
     branches:
       - "**"
+    types:
+      - opened
+      - synchronize
+      - reopened
+      - unlocked # enables easy re-triggering of the workflow by locking and unlocking the PR
 
 permissions:
-  contents: read
+  contents: read # required for cloning the repo
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref_name }}
@@ -53,8 +53,17 @@ jobs:
       - name: Build
         run: dotnet build --no-restore --configuration Release
 
-      - name: Test
-        run: dotnet test --no-build --configuration Release --verbosity normal
-
       - name: Package
         run: dotnet pack --no-build --configuration Release
+
+      - name: Test # also collects code coverage
+        run: |
+          dotnet test --no-build --configuration Release --verbosity normal -p:CollectCoverage=true -p:CoverletOutputFormat=cobertura -p:CoverletOutput=coverage
+
+      - name: Upload coverage
+        uses: codecov/codecov-action@v5
+        with:
+          report_type: coverage
+          files: 'tests/**/coverage.cobertura.xml'
+          token: ${{ secrets.CODECOV_TOKEN }}
+          fail_ci_if_error: false

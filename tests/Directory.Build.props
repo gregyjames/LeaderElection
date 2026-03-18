@@ -7,4 +7,21 @@
       pipeline due to multiple test frameworks needing to be installed. -->
     <TargetFramework>net10.0</TargetFramework>
   </PropertyGroup>
+
+  <ItemGroup>
+    <None Include="$(MSBuildThisFileDirectory)xunit.runner.json" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
+  <!-- Coverlet.MSBuild integration -->
+  <PropertyGroup>
+    <CoverletOutput Condition="'$(CoverletOutput)' == ''">$(RepoRoot)artifacts/coverage/</CoverletOutput>
+    <Include>[LeaderElection*]*</Include>
+    <Exclude>[*.Tests]*</Exclude>
+    <ExcludeByFile>**/artifacts/**</ExcludeByFile>
+  </PropertyGroup>
+  <!-- Generate an LCov report by default. LCov works well with the coverage-gutters VS Code extension. -->
+  <PropertyGroup Condition="'$(CollectCoverage)' == ''">
+    <CollectCoverage>true</CollectCoverage>
+    <CoverletOutputFormat>lcov</CoverletOutputFormat>
+  </PropertyGroup>
 </Project>

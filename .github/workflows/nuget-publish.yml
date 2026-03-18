@@ -22,10 +22,6 @@ jobs:
   deploy:
     name: Deploy
     runs-on: ubuntu-latest
-    # Use PowerShell for easier string manipulation
-    defaults:
-      run:
-        shell: pwsh
 
     env:
       BUILD_TARGET: "" # set below based on tag prefix, e.g., 'LeaderElection.Redis', or 'LeaderElection.slnx' for full product release
@@ -35,28 +31,25 @@ jobs:
       - name: Parse tag
         env:
           TAG_NAME: ${{ github.ref_name }}
+        shell: pwsh
         run: |
-          # Depends on a tag formatted like 'v1.0.0' for full product releases, or 'package/v1.0.0' for a specific package.
-          # Semver compatible versions are supported, e.g., 'v1.0.0', 'v1.0.0-beta', 'v1.0.0-alpha.1+metadata'.
-          $package,$version = $env:TAG_NAME.Split('/', 2)
-          if (!$version) {
-            $package,$version = 'all',$package
-          }
+          # See https://semver.org/#is-there-a-suggested-regular-expression-regex-to-check-a-semver-string
+          $semverCore = '(?<version>(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)\.(?:0|[1-9]\d*))'
+          $semverPre = '(?<prerelease>-(?:(?:0|[1-9]\d*|\d*[a-zA-Z-][0-9a-zA-Z-]*)(?:\.(?:0|[1-9]\d*|\d*[a-zA-Z-][0-9a-zA-Z-]*))*))?'
+          $semverMeta = '(?<metadata>\+(?:[0-9a-zA-Z-]+(?:\.[0-9a-zA-Z-]+)*))?'
+          $semver = $semverCore + $semverPre + $semverMeta
 
-          # Remove 'v' prefix and ignore build metadata
-          $version = $version.TrimStart('v').Split('+')[0]
-
-          # Map package prefix to project path
-          $buildTarget = switch ($package) {
-            'all'              { 'LeaderElection.slnx' }
-            'core'             { 'src/LeaderElection' }
-            'redis'            { 'src/LeaderElection.Redis' }
-            'blob'             { 'src/LeaderElection.BlobStorage' }
-            'distributed'      { 'src/LeaderElection.DistributedCache' }
-            'fusion-cache'     { 'src/LeaderElection.FusionCache' }
-            's3'               { 'src/LeaderElection.S3' }
-            default { throw "Unexpected package prefix in tag: '$package'" }
+          $buildTarget = switch -Regex ($Env:TAG_NAME) {
+            "^core/v$semver`$"         { 'src/LeaderElection' }
+            "^redis/v$semver`$"        { 'src/LeaderElection.Redis' }
+            "^blob/v$semver`$"         { 'src/LeaderElection.BlobStorage' }
+            "^distributed/v$semver`$"  { 'src/LeaderElection.DistributedCache' }
+            "^fusion-cache/v$semver`$" { 'src/LeaderElection.FusionCache' }
+            "^s3/v$semver`$"           { 'src/LeaderElection.S3' }
+            "^v$semver`$"              { 'LeaderElection.slnx' }
+            default                    { throw "Invalid tag: '$_'" }
           }
+          $version = $Matches['version'] + $Matches['prerelease'] # ignore metadata
           echo "BUILD_TARGET=$buildTarget" >> $Env:GITHUB_ENV
           echo "VERSION=$version" >> $Env:GITHUB_ENV
 
@@ -82,12 +75,15 @@ jobs:
         run: dotnet restore
 
       - name: Build ${{ env.BUILD_TARGET }}
-        run: dotnet build $Env:BUILD_TARGET --no-restore --configuration Release -p:Version=$Env:VERSION
+        run: |
+          dotnet build $BUILD_TARGET --no-restore --configuration Release -p:Version=$VERSION
 
       - name: Package ${{ env.BUILD_TARGET }}
-        run: dotnet pack $Env:BUILD_TARGET --no-build --configuration Release -p:Version=$Env:VERSION --output artifacts/package/release
+        run: |
+          dotnet pack $BUILD_TARGET --no-build --configuration Release -p:Version=$VERSION --output artifacts/package/release
 
       - name: Push Nuget packages
-        run: dotnet nuget push artifacts/package/release/*.nupkg --source https://api.nuget.org/v3/index.json --api-key $Env:NUGET_API_KEY
+        run: |
+          dotnet nuget push artifacts/package/release/*.nupkg --source https://api.nuget.org/v3/index.json --api-key $NUGET_API_KEY
         env:
           NUGET_API_KEY: ${{ secrets.NUGET_API_KEY }}
