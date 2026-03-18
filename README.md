@@ -1,4 +1,5 @@
 [![.NET](https://github.com/gregyjames/LeaderElection/actions/workflows/dotnet.yml/badge.svg)](https://github.com/gregyjames/LeaderElection/actions/workflows/dotnet.yml)
+[![codecov](https://codecov.io/gh/gregyjames/LeaderElection/graph/badge.svg?token=3Fmj814UkK)](https://codecov.io/gh/gregyjames/LeaderElection)
 ![NuGet Version](https://img.shields.io/nuget/v/LeaderElection?style=flat&label=LeaderElection&link=https%3A%2F%2Fwww.nuget.org%2Fpackages%2FLeaderElection)
 ![NuGet Version](https://img.shields.io/nuget/v/LeaderElection.BlobStorage?style=flat&label=LeaderElection.BlobStorage&link=https%3A%2F%2Fwww.nuget.org%2Fpackages%2FLeaderElection.BlobStorage)
 ![NuGet Version](https://img.shields.io/nuget/v/LeaderElection.Redis?style=flat&label=LeaderElection.Redis&link=https%3A%2F%2Fwww.nuget.org%2Fpackages%2FLeaderElection.Redis)
