@@ -4,15 +4,11 @@
 name: .NET
 
 on:
-  # Run on all PRs
-  pull_request:
-    branches:
-      - "**"
-    types:
-      - opened
-      - synchronize
-      - reopened
-      - unlocked # enables easy re-triggering of the workflow by locking and unlocking the PR
+  # - all PRs commits and when PR is unlocked (an easy way to trigger the workflow).
+  # - push to `main` to register baseline code coverage and test results with Codecov.
+  # - manual execution
+  pull_request: { types: [opened, synchronize, reopened, unlocked] }
+  push: { branches: [main] }
   workflow_dispatch:
 
 permissions:
