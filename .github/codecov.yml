@@ -1,0 +1,31 @@
+component_management:
+  individual_components:
+    - component_id: leader-election-core
+      name: LeaderElection
+      paths:
+        - src/LeaderElection/**
+
+    - component_id: leader-election-blobstorage
+      name: LeaderElection.BlobStorage
+      paths:
+        - src/LeaderElection.BlobStorage/**
+
+    - component_id: leader-election-distributedcache
+      name: LeaderElection.DistributedCache
+      paths:
+        - src/LeaderElection.DistributedCache/**
+
+    - component_id: leader-election-fusioncache
+      name: LeaderElection.FusionCache
+      paths:
+        - src/LeaderElection.FusionCache/**
+
+    - component_id: leader-election-redis
+      name: LeaderElection.Redis
+      paths:
+        - src/LeaderElection.Redis/**
+
+    - component_id: leader-election-s3
+      name: LeaderElection.S3
+      paths:
+        - src/LeaderElection.S3/**

@@ -68,6 +68,7 @@ jobs:
         with:
           files: 'tests/**/coverage.cobertura.xml'
           token: ${{ secrets.CODECOV_TOKEN }}
+          codecov_yml_path: .github/codecov.yml
 
       - name: Upload test results
         # always upload test results, even if the tests fail
@@ -77,3 +78,4 @@ jobs:
           report_type: test_results
           files: 'tests/**/TestResults/junit.xml'
           token: ${{ secrets.CODECOV_TOKEN }}
+          codecov_yml_path: .github/codecov.yml
