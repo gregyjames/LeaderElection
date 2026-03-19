@@ -62,9 +62,10 @@ jobs:
         run: |
           dotnet test --no-build --configuration Release \
             --verbosity normal \
-            --logger:junit \
+            --logger "junit;LogFilePath=TestResults/junit.xml" \
             -p:CollectCoverage=true \
-            -p:CoverletOutputFormat=cobertura
+            -p:CoverletOutputFormat=cobertura \
+            -p:CoverletOutput=coverage.cobertura.xml
 
       - name: Upload coverage
         uses: codecov/codecov-action@v5
@@ -78,5 +79,5 @@ jobs:
         uses: codecov/codecov-action@v5
         with:
           report_type: test_results
-          files: 'tests/**/TestResults.xml'
+          files: 'tests/**/TestResults/junit.xml'
           token: ${{ secrets.CODECOV_TOKEN }}
