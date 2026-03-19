@@ -58,13 +58,25 @@ jobs:
         run: dotnet pack --no-build --configuration Release
 
       - name: Test # also collects code coverage
+        id: test
         run: |
-          dotnet test --no-build --configuration Release --verbosity normal -p:CollectCoverage=true -p:CoverletOutputFormat=cobertura -p:CoverletOutput=coverage
+          dotnet test --no-build --configuration Release \
+            --verbosity normal \
+            --logger:junit \
+            -p:CollectCoverage=true \
+            -p:CoverletOutputFormat=cobertura
 
       - name: Upload coverage
         uses: codecov/codecov-action@v5
         with:
-          report_type: coverage
           files: 'tests/**/coverage.cobertura.xml'
           token: ${{ secrets.CODECOV_TOKEN }}
-          fail_ci_if_error: false
+
+      - name: Upload test results
+        # always upload test results, even if the tests fail
+        if: always() && (steps.test.outcome == 'failure' || steps.test.outcome == 'success')
+        uses: codecov/codecov-action@v5
+        with:
+          report_type: test_results
+          files: 'tests/**/TestResults.xml'
+          token: ${{ secrets.CODECOV_TOKEN }}
