@@ -2,6 +2,6 @@
 /.idea
 /LeaderElection.sln.DotSettings.user
 
-coverage.*
-lcov.info
+/tests/**/coverage.*
+/tests/**/TestResults
 /artifacts

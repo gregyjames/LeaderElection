@@ -4,15 +4,11 @@
 name: .NET
 
 on:
-  # Run on all PRs
-  pull_request:
-    branches:
-      - "**"
-    types:
-      - opened
-      - synchronize
-      - reopened
-      - unlocked # enables easy re-triggering of the workflow by locking and unlocking the PR
+  # - all PRs commits and when PR is unlocked (an easy way to trigger the workflow).
+  # - push to `main` to register baseline code coverage and test results with Codecov.
+  # - manual execution
+  pull_request: { types: [opened, synchronize, reopened, unlocked] }
+  push: { branches: [main] }
   workflow_dispatch:
 
 permissions:
@@ -58,13 +54,28 @@ jobs:
         run: dotnet pack --no-build --configuration Release
 
       - name: Test # also collects code coverage
+        id: test
         run: |
-          dotnet test --no-build --configuration Release --verbosity normal -p:CollectCoverage=true -p:CoverletOutputFormat=cobertura -p:CoverletOutput=coverage
+          dotnet test --no-build --configuration Release \
+            --verbosity normal \
+            --logger "junit;LogFilePath=TestResults/junit.xml" \
+            -p:CollectCoverage=true \
+            -p:CoverletOutputFormat=cobertura \
+            -p:CoverletOutput=coverage
 
       - name: Upload coverage
         uses: codecov/codecov-action@v5
         with:
-          report_type: coverage
           files: 'tests/**/coverage.cobertura.xml'
           token: ${{ secrets.CODECOV_TOKEN }}
-          fail_ci_if_error: false
+          codecov_yml_path: .github/codecov.yml
+
+      - name: Upload test results
+        # always upload test results, even if the tests fail
+        if: always() && (steps.test.outcome == 'failure' || steps.test.outcome == 'success')
+        uses: codecov/codecov-action@v5
+        with:
+          report_type: test_results
+          files: 'tests/**/TestResults/junit.xml'
+          token: ${{ secrets.CODECOV_TOKEN }}
+          codecov_yml_path: .github/codecov.yml
