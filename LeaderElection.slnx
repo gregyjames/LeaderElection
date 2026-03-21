@@ -9,6 +9,7 @@
     <Project Path="src/LeaderElection.Redis/LeaderElection.Redis.csproj" />
     <Project Path="src/LeaderElection.S3/LeaderElection.S3.csproj" />
     <Project Path="src/LeaderElection/LeaderElection.csproj" />
+    <Project Path="src\LeaderElection.Postgres\LeaderElection.Postgres.csproj" Type="Classic C#" />
   </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/LeaderElection.Tests/LeaderElection.Tests.csproj" />
