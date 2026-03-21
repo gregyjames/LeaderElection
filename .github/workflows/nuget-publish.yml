@@ -46,6 +46,7 @@ jobs:
             "^distributed/v$semver`$"  { 'src/LeaderElection.DistributedCache' }
             "^fusion-cache/v$semver`$" { 'src/LeaderElection.FusionCache' }
             "^s3/v$semver`$"           { 'src/LeaderElection.S3' }
+            "^postgres/v$semver`$"     { 'src/LeaderElection.Postgres' }
             "^v$semver`$"              { 'LeaderElection.slnx' }
             default                    { throw "Invalid tag: '$_'" }
           }
