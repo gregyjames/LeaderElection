@@ -10,7 +10,7 @@ public sealed class PostgresLeaderElection : ILeaderElection
     private readonly PostgresSettings _options;
     private readonly ILogger<PostgresLeaderElection> _logger;
     private readonly SemaphoreSlim _leadershipSemaphore = new(1, 1);
-    private readonly CancellationTokenSource _cancellationTokenSource = new();
+    private CancellationTokenSource? _leaderLoopTaskCTS;
 
     private volatile bool _isLeader;
     private int _disposedValue;
@@ -43,8 +43,8 @@ public sealed class PostgresLeaderElection : ILeaderElection
 
         _logger.LogInformation("Starting PostgreSQL leader election for instance {InstanceId}", _options.InstanceId);
 
-        var combinedCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, _cancellationTokenSource.Token);
-        _leaderLoopTask = RunLeaderLoopAsync(combinedCts);
+        _leaderLoopTaskCTS = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        _leaderLoopTask = RunLeaderLoopAsync(_leaderLoopTaskCTS.Token);
 
         await Task.CompletedTask;
     }
@@ -56,7 +56,10 @@ public sealed class PostgresLeaderElection : ILeaderElection
     {
         _logger.LogInformation("Stopping PostgreSQL leader election for instance {InstanceId}", _options.InstanceId);
 
-        await _cancellationTokenSource.CancelAsync();
+        if (_leaderLoopTaskCTS != null)
+        {
+            await _leaderLoopTaskCTS.CancelAsync();
+        }
 
         if (_leaderLoopTask != null)
         {
@@ -67,6 +70,12 @@ public sealed class PostgresLeaderElection : ILeaderElection
             catch (OperationCanceledException)
             {
                 _logger.LogDebug("Leader loop cancellation was expected");
+            }
+            finally
+            {
+                _leaderLoopTask = null;
+                _leaderLoopTaskCTS?.Dispose();
+                _leaderLoopTaskCTS = null;
             }
         }
 
@@ -136,73 +145,65 @@ public sealed class PostgresLeaderElection : ILeaderElection
         await RunTaskIfLeaderAsync(() => Task.Run(task, cancellationToken), cancellationToken);
     }
 
-    private async Task RunLeaderLoopAsync(CancellationTokenSource combinedCts)
+    private async Task RunLeaderLoopAsync(CancellationToken cancellationToken)
     {
-        try
-        {
-            var cancellationToken = combinedCts.Token;
-            var retryCount = 0;
+        var retryCount = 0;
 
-            while (!cancellationToken.IsCancellationRequested)
+        while (!cancellationToken.IsCancellationRequested)
+        {
+            try
             {
-                try
+                if (!_isLeader)
                 {
-                    if (!_isLeader)
+                    if (await TryAcquireLeadershipAsync(cancellationToken))
                     {
-                        if (await TryAcquireLeadershipAsync(cancellationToken))
-                        {
-                            _logger.LogInformation("Leadership acquired for instance {InstanceId}", _options.InstanceId);
-                            retryCount = 0;
-                        }
-                        else
-                        {
-                            retryCount++;
-                        }
+                        _logger.LogInformation("Leadership acquired for instance {InstanceId}", _options.InstanceId);
+                        retryCount = 0;
                     }
                     else
                     {
-                        if (!await RenewLeadershipAsync(cancellationToken))
-                        {
-                            _logger.LogWarning("Lost leadership during renewal for instance {InstanceId}", _options.InstanceId);
-                            SetLeadership(false);
-                            retryCount++;
-                        }
-                        else
-                        {
-                            retryCount = 0;
-                        }
+                        retryCount++;
                     }
+                }
+                else
+                {
+                    if (!await RenewLeadershipAsync(cancellationToken))
+                    {
+                        _logger.LogWarning("Lost leadership during renewal for instance {InstanceId}", _options.InstanceId);
+                        SetLeadership(false);
+                        retryCount++;
+                    }
+                    else
+                    {
+                        retryCount = 0;
+                    }
+                }
 
-                    var delay = retryCount > 0
-                        ? TimeSpan.FromSeconds(Math.Min(Math.Pow(2, retryCount), 60))
-                        : _options.RetryInterval;
+                var delay = retryCount > 0
+                    ? TimeSpan.FromSeconds(Math.Min(Math.Pow(2, retryCount), 60))
+                    : _options.RetryInterval;
 
-                    await Task.Delay(delay, cancellationToken);
+                await Task.Delay(delay, cancellationToken);
+            }
+            catch (OperationCanceledException)
+            {
+                break;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Unexpected error in leader loop");
+                ErrorOccurred?.Invoke(this, ex);
+                retryCount++;
+
+                try
+                {
+                    await Task.Delay(_options.RetryInterval, cancellationToken);
                 }
                 catch (OperationCanceledException)
                 {
                     break;
                 }
-                catch (Exception ex)
-                {
-                    _logger.LogError(ex, "Unexpected error in leader loop");
-                    ErrorOccurred?.Invoke(this, ex);
-                    retryCount++;
-
-                    try
-                    {
-                        await Task.Delay(_options.RetryInterval, cancellationToken);
-                    }
-                    catch (OperationCanceledException)
-                    {
-                        break;
-                    }
-                }
             }
-        }
-        finally
-        {
-            combinedCts.Dispose();
         }
     }
 
@@ -334,7 +335,7 @@ public sealed class PostgresLeaderElection : ILeaderElection
             _logger.LogError(ex, "Error during async disposal");
         }
 
-        _cancellationTokenSource.Dispose();
+        _leaderLoopTaskCTS?.Dispose();
         _leadershipSemaphore.Dispose();
     }
 }
