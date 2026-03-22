@@ -1,3 +1,5 @@
+using System.ComponentModel.DataAnnotations;
+
 namespace LeaderElection.Postgres;
 
 public class PostgresSettings
@@ -5,16 +7,19 @@ public class PostgresSettings
     /// <summary>
     /// Connection string for the PostgreSQL database.
     /// </summary>
+    [Required(AllowEmptyStrings = false)]
     public string ConnectionString { get; set; } = string.Empty;
 
     /// <summary>
     /// The unique identifier for the instance attempting to acquire leadership.
     /// </summary>
+    [Required(AllowEmptyStrings = false)]
     public string InstanceId { get; set; } = Environment.MachineName;
 
     /// <summary>
     /// The 64-bit advisory lock key to use for leader election.
     /// </summary>
+    [Required]
     public long LockId { get; set; }
 
     /// <summary>

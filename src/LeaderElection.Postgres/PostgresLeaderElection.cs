@@ -27,8 +27,6 @@ public sealed class PostgresLeaderElection : ILeaderElection
     {
         _options = options.Value ?? throw new ArgumentNullException(nameof(options));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
-
-        ValidateOptions();
     }
 
     public DateTime LastLeadershipRenewal => _lastLeadershipRenewal;
@@ -40,7 +38,7 @@ public sealed class PostgresLeaderElection : ILeaderElection
         if (IsDisposed)
             throw new ObjectDisposedException(nameof(PostgresLeaderElection));
 
-        if (_leaderLoopTask is { IsCompleted: false })
+        if (_leaderLoopTask?.IsCompleted == false)
             return;
 
         _logger.LogInformation("Starting PostgreSQL leader election for instance {InstanceId}", _options.InstanceId);
@@ -309,19 +307,7 @@ public sealed class PostgresLeaderElection : ILeaderElection
             LeadershipChanged?.Invoke(this, isLeader);
         }
     }
-
-    private void ValidateOptions()
-    {
-        if (string.IsNullOrWhiteSpace(_options.ConnectionString))
-            throw new ArgumentException("ConnectionString cannot be null or empty", nameof(_options.ConnectionString));
-
-        if (string.IsNullOrWhiteSpace(_options.InstanceId))
-            throw new ArgumentException("InstanceId cannot be null or empty", nameof(_options.InstanceId));
-
-        if (_options.RetryInterval <= TimeSpan.Zero)
-            throw new ArgumentException("RetryInterval must be positive", nameof(_options.RetryInterval));
-    }
-
+    
     public async ValueTask DisposeAsync()
     {
         if (Interlocked.Exchange(ref _disposedValue, 1) == 1)
