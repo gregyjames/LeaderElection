@@ -40,6 +40,12 @@
     />
   </ItemGroup>
 
+  <!--Pin platform specific package versions-->
+  <PropertyGroup>
+    <!--8.0.9 is the last version of Npgsql that targets .NET Standard 2.1-->
+    <PostgresVersionNetStandard21>8.0.9</PostgresVersionNetStandard21>
+  </PropertyGroup>
+
   <Choose>
     <When Condition="'$(TargetFramework)' == 'netstandard2.1'">
       <!-- Use PolySharp to add support for needed C#/.NET features -->
