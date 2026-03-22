@@ -1,0 +1,80 @@
+using LeaderElection.Postgres;
+using Microsoft.Extensions.Options;
+
+namespace LeaderElection.Tests;
+
+public class PostgresSettingsValidatorTests
+{
+    private readonly PostgresSettingsValidator _validator = new();
+
+    [Fact]
+    public void Should_Succeed_When_Settings_Are_Valid()
+    {
+        var settings = new PostgresSettings
+        {
+            ConnectionString = "Host=localhost;Database=test",
+            InstanceId = "test-instance",
+            LockId = 12345,
+            RetryInterval = TimeSpan.FromSeconds(5)
+        };
+
+        var result = _validator.Validate(null, settings);
+
+        result.Succeeded.Should().BeTrue();
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    [InlineData(" ")]
+    public void Should_Fail_When_ConnectionString_Is_Invalid(string? connectionString)
+    {
+        var settings = new PostgresSettings
+        {
+            ConnectionString = connectionString!,
+            InstanceId = "test-instance",
+            LockId = 12345
+        };
+
+        var result = _validator.Validate(null, settings);
+
+        result.Failed.Should().BeTrue();
+        result.Failures.Should().Contain(f => f.Contains("ConnectionString"));
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    [InlineData(" ")]
+    public void Should_Fail_When_InstanceId_Is_Invalid(string? instanceId)
+    {
+        var settings = new PostgresSettings
+        {
+            ConnectionString = "Host=localhost",
+            InstanceId = instanceId!,
+            LockId = 12345
+        };
+
+        var result = _validator.Validate(null, settings);
+
+        result.Failed.Should().BeTrue();
+        result.Failures.Should().Contain(f => f.Contains("InstanceId"));
+    }
+
+    [Fact]
+    public void Should_Fail_When_RetryInterval_Is_Negative()
+    {
+        var settings = new PostgresSettings
+        {
+            ConnectionString = "Host=localhost",
+            InstanceId = "test-instance",
+            LockId = 12345,
+            RetryInterval = TimeSpan.FromSeconds(-1)
+        };
+
+        var result = _validator.Validate(null, settings);
+
+        result.Failed.Should().BeTrue();
+        result.Failures.Should().Contain(f => f.Contains("RetryInterval"));
+    }
+}
