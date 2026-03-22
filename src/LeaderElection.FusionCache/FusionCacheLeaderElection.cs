@@ -4,14 +4,18 @@ using ZiggyCreatures.Caching.Fusion;
 
 namespace LeaderElection.FusionCache;
 
-public class FusionCacheLeaderElection(
-    IFusionCache cache,
-    IOptions<FusionCacheSettings> options,
-    ILogger<FusionCacheLeaderElection> logger) : LeaderElectionBase<FusionCacheSettings>(options?.Value ?? throw new ArgumentNullException(nameof(options)), logger)
+public class FusionCacheLeaderElection: LeaderElectionBase<FusionCacheSettings>
 {
-    private readonly IFusionCache _cache = cache ?? throw new ArgumentNullException(nameof(cache));
-    private readonly FusionCacheSettings _options = options.Value ?? throw new ArgumentNullException(nameof(options));
+    private readonly IFusionCache _cache;
+    private readonly FusionCacheSettings _options;
 
+    public FusionCacheLeaderElection(IFusionCache cache,
+        IOptions<FusionCacheSettings> options,
+        ILogger<FusionCacheLeaderElection> logger): base(options?.Value ?? throw new ArgumentNullException(nameof(options)), logger)
+    {
+        _cache = cache ?? throw new ArgumentNullException(nameof(cache));
+        _options = options.Value ?? throw new ArgumentNullException(nameof(options));
+    }
     private FusionCacheEntryOptions CreateLockEntryOptions()
     {
         // If a distributed cache is configured, we should ignore memory cache reads/writes

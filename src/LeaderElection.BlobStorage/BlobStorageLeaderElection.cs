@@ -170,30 +170,5 @@ public class BlobStorageLeaderElection : LeaderElectionBase<BlobStorageSettings>
             if (string.IsNullOrWhiteSpace(_options.ContainerName))
                 throw new ArgumentException("ContainerName cannot be null or empty", nameof(_options.ContainerName));
         }
-
-        if (string.IsNullOrWhiteSpace(_options.BlobName))
-            throw new ArgumentException("BlobName cannot be null or empty", nameof(_options.BlobName));
-        
-        if (string.IsNullOrWhiteSpace(_options.InstanceId))
-            throw new ArgumentException("InstanceId cannot be null or empty", nameof(_options.InstanceId));
-        
-        if (_options.LeaseDuration <= TimeSpan.Zero)
-            throw new ArgumentException("LeaseDuration must be positive", nameof(_options.LeaseDuration));
-        
-        // Azure Blob Storage lease duration must be between 15 and 60 seconds, or -1 for infinite
-        if (_options.LeaseDuration.TotalSeconds < 15 && _options.LeaseDuration.TotalSeconds != -1)
-            throw new ArgumentException("LeaseDuration must be at least 15 seconds or -1 for infinite", nameof(_options.LeaseDuration));
-        
-        if (_options.LeaseDuration.TotalSeconds > 60 && _options.LeaseDuration.TotalSeconds != -1)
-            throw new ArgumentException("LeaseDuration must be at most 60 seconds or -1 for infinite", nameof(_options.LeaseDuration));
-        
-        if (_options.RenewInterval <= TimeSpan.Zero)
-            throw new ArgumentException("RenewInterval must be positive", nameof(_options.RenewInterval));
-        
-        if (_options.RetryInterval <= TimeSpan.Zero)
-            throw new ArgumentException("RetryInterval must be positive", nameof(_options.RetryInterval));
-        
-        if (_options.MaxRetryAttempts < 0)
-            throw new ArgumentException("MaxRetryAttempts cannot be negative", nameof(_options.MaxRetryAttempts));
     }
 }

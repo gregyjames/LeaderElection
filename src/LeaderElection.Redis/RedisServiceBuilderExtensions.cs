@@ -10,7 +10,10 @@ public static class RedisServiceBuilderExtensions
         this IServiceCollection services, 
         Action<RedisSettings> configureOptions)
     {
-        services.Configure(configureOptions);
+        services.AddOptions<RedisSettings>()
+            .Configure(configureOptions)
+            .ValidateDataAnnotations()
+            .ValidateOnStart();
         services.AddSingleton<RedisLeaderElection>();
         services.AddSingleton<ILeaderElection>(sp => sp.GetRequiredService<RedisLeaderElection>());
         
@@ -21,7 +24,7 @@ public static class RedisServiceBuilderExtensions
         this IServiceCollection services,
         RedisSettings options)
     {
-        services.Configure<RedisSettings>(opt =>
+        services.AddRedisLeaderElection(opt =>
         {
             opt.Host = options.Host;
             opt.Port = options.Port;
@@ -35,10 +38,6 @@ public static class RedisServiceBuilderExtensions
             opt.MaxRetryAttempts = options.MaxRetryAttempts;
             opt.EnableGracefulShutdown = options.EnableGracefulShutdown;
         });
-
-        services.AddSingleton<RedisSettings>();
-        services.AddSingleton<RedisLeaderElection>();
-        services.AddSingleton<ILeaderElection>(sp => sp.GetRequiredService<RedisLeaderElection>());
         
         return services;
     }

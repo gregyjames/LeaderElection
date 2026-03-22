@@ -15,6 +15,7 @@
     <PackageVersion Include="Microsoft.Extensions.Options" Version="10.0.5" />
     <PackageVersion Include="Microsoft.Extensions.Hosting" Version="10.0.5" />
     <PackageVersion Include="Microsoft.Extensions.Logging" Version="10.0.5" />
+    <PackageVersion Include="Microsoft.Extensions.Options.DataAnnotations" Version="10.0.5" />
     <PackageVersion Include="Microsoft.NET.Test.Sdk" Version="18.3.0" />
     <PackageVersion Include="Minio" Version="7.0.0" />
     <PackageVersion Include="Npgsql" Version="10.0.2" />

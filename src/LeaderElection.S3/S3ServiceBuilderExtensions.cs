@@ -1,4 +1,5 @@
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Options;
 
 namespace LeaderElection.S3;
 
@@ -8,7 +9,12 @@ public static class S3ServiceBuilderExtensions
         this IServiceCollection services, 
         Action<S3Settings> configureOptions)
     {
-        services.Configure(configureOptions);
+        services.AddSingleton<IValidateOptions<S3Settings>, S3SettingsValidator>();
+        services.AddOptions<S3Settings>()
+            .Configure(configureOptions)
+            .ValidateDataAnnotations()
+            .ValidateOnStart();
+        
         services.AddSingleton<S3LeaderElection>();
         services.AddSingleton<ILeaderElection>(sp => sp.GetRequiredService<S3LeaderElection>());
         

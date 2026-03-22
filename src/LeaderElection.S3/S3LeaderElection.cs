@@ -22,8 +22,6 @@ public sealed class S3LeaderElection : LeaderElectionBase<S3Settings>
     {
         _client = client ?? throw new ArgumentNullException(nameof(client));
         _options = options.Value ?? throw new ArgumentNullException(nameof(options));
-
-        ValidateOptions();
     }
 
     protected override async Task<bool> TryAcquireLeadershipInternalAsync(CancellationToken cancellationToken)
@@ -203,26 +201,5 @@ public sealed class S3LeaderElection : LeaderElectionBase<S3Settings>
         }
 
         return etag;
-    }
-
-    private void ValidateOptions()
-    {
-        if (string.IsNullOrWhiteSpace(_options.BucketName))
-            throw new ArgumentException("BucketName cannot be null or empty", nameof(_options.BucketName));
-
-        if (string.IsNullOrWhiteSpace(_options.ObjectKey))
-            throw new ArgumentException("ObjectKey cannot be null or empty", nameof(_options.ObjectKey));
-
-        if (string.IsNullOrWhiteSpace(_options.InstanceId))
-            throw new ArgumentException("InstanceId cannot be null or empty", nameof(_options.InstanceId));
-
-        if (_options.LeaseDuration <= TimeSpan.Zero)
-            throw new ArgumentException("LeaseDuration must be positive", nameof(_options.LeaseDuration));
-
-        if (_options.RenewInterval <= TimeSpan.Zero)
-            throw new ArgumentException("RenewInterval must be positive", nameof(_options.RenewInterval));
-
-        if (_options.RetryInterval <= TimeSpan.Zero)
-            throw new ArgumentException("RetryInterval must be positive", nameof(_options.RetryInterval));
     }
 }

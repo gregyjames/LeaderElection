@@ -4,14 +4,18 @@ using Microsoft.Extensions.Options;
 
 namespace LeaderElection.DistributedCache;
 
-public class DistributedCacheLeaderElection(
-    IDistributedCache cache,
-    IOptions<DistributedCacheSettings> options,
-    ILogger<DistributedCacheLeaderElection> logger) : LeaderElectionBase<DistributedCacheSettings>(options?.Value ?? throw new ArgumentNullException(nameof(options)), logger)
+public class DistributedCacheLeaderElection: LeaderElectionBase<DistributedCacheSettings>
 {
-    private readonly IDistributedCache _cache = cache ?? throw new ArgumentNullException(nameof(cache));
-    private readonly DistributedCacheSettings _options = options?.Value ?? throw new ArgumentNullException(nameof(options));
+    private readonly IDistributedCache _cache;
+    private readonly DistributedCacheSettings _options;
 
+    public DistributedCacheLeaderElection(IDistributedCache cache,
+        IOptions<DistributedCacheSettings> options,
+        ILogger<DistributedCacheLeaderElection> logger): base(options.Value, logger)
+    {
+        _cache = cache ?? throw new ArgumentNullException(nameof(cache));
+        _options = options?.Value ?? throw new ArgumentNullException(nameof(options));
+    }
     protected override async Task<bool> TryAcquireLeadershipInternalAsync(CancellationToken cancellationToken)
     {
         try

@@ -13,12 +13,32 @@ public static class DistributedCacheServiceBuilderExtensions
     /// <returns>The service collection for chaining</returns>
     public static IServiceCollection AddDistributedCacheLeaderElection(
         this IServiceCollection services,
-        Action<DistributedCacheSettings>? configureOptions = null)
+        Action<DistributedCacheSettings> configureOptions)
     {
-        if (configureOptions != null)
-            services.Configure(configureOptions);
+        services.AddOptions<DistributedCacheSettings>()
+            .Configure(configureOptions)
+            .ValidateDataAnnotations()
+            .ValidateOnStart();
         
         services.AddSingleton<ILeaderElection, DistributedCacheLeaderElection>();
+        return services;
+    }
+    
+    public static IServiceCollection AddDistributedCacheLeaderElection(
+        this IServiceCollection services,
+        DistributedCacheSettings options)
+    {
+        services.AddDistributedCacheLeaderElection(opt =>
+        {
+            opt.InstanceId = options.InstanceId;
+            opt.LockExpiry = options.LockExpiry;
+            opt.LockKey = options.LockKey;
+            opt.EnableGracefulShutdown = options.EnableGracefulShutdown;
+            opt.RenewInterval = options.RenewInterval;
+            opt.RetryInterval = options.RetryInterval;
+            opt.MaxRetryAttempts = options.MaxRetryAttempts;
+        });
+        
         return services;
     }
 } 
