@@ -28,9 +28,9 @@ public class PostgresServiceBuilderExtensionsTests
         options.Should().NotBeNull();
         options!.Value.ConnectionString.Should().Be("Host=localhost");
         
-        var validator = serviceProvider.GetService<IValidateOptions<PostgresSettings>>();
-        validator.Should().NotBeNull();
-        validator.Should().BeOfType<PostgresSettingsValidator>();
+        var validators = serviceProvider.GetServices<IValidateOptions<PostgresSettings>>();
+        validators.Should().NotBeEmpty();
+        validators.Should().ContainSingle(v => v is PostgresSettingsValidator);
     }
 
     [Fact]
