@@ -10,6 +10,7 @@ on:
       - "distributed/v*.*.*" # Distributed Cache package tags
       - "fusion-cache/v*.*.*" # Fusion cache package tags
       - "s3/v*.*.*" # S3 package tags
+      - "postgres/v*.*.*" # Postgres package tags
 
 permissions:
   contents: read
