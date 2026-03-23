@@ -273,18 +273,4 @@ public sealed class BlobStorageLeaderElectionTests(AzuriteContainerFixture azuri
 
         await leaderElection.StopAsync(CancellationToken);
     }
-
-    [Fact]
-    public void Should_Throw_ArgumentException_When_Options_Are_Invalid()
-    {
-        var options = new BlobStorageSettings
-        {
-            ConnectionString = string.Empty, // Invalid
-            ContainerName = string.Empty,    // Invalid
-            BlobName = "test"
-        };
-        
-        var act = () => new BlobStorageLeaderElection(_blobServiceClient, Options.Create(options), NullLogger<BlobStorageLeaderElection>.Instance);
-        act.Should().Throw<ArgumentException>();
-    }
 }

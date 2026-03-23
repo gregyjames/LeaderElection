@@ -17,10 +17,8 @@ public class BlobStorageLeaderElection : LeaderElectionBase<BlobStorageSettings>
         ILogger<BlobStorageLeaderElection> logger) : base(options?.Value ?? throw new ArgumentNullException(nameof(options)), logger)
     {
         _options = options?.Value ?? throw new ArgumentNullException(nameof(options));
-        
-        ValidateOptions(false);
-        
         _containerClient = blobServiceClient.GetBlobContainerClient(_options.ContainerName);
+
         _blobClient = _containerClient.GetBlobClient(_options.BlobName);
     }
     
@@ -28,9 +26,7 @@ public class BlobStorageLeaderElection : LeaderElectionBase<BlobStorageSettings>
     {
         _containerClient = client ?? throw new ArgumentNullException(nameof(client));
         _options = options ?? throw new ArgumentNullException(nameof(options));
-        
-        ValidateOptions(true);
-        
+
         _blobClient = _containerClient.GetBlobClient(_options.BlobName);
     }
 
@@ -156,19 +152,6 @@ public class BlobStorageLeaderElection : LeaderElectionBase<BlobStorageSettings>
         catch (Exception ex)
         {
             logger.LogError(ex, "Error ensuring blob exists");
-        }
-    }
-
-    private void ValidateOptions(bool selfProvidedInstance)
-    {
-        if (!selfProvidedInstance)
-        {
-            if (string.IsNullOrWhiteSpace(_options.ConnectionString))
-                throw new ArgumentException("ConnectionString cannot be null or empty",
-                    nameof(_options.ConnectionString));
-
-            if (string.IsNullOrWhiteSpace(_options.ContainerName))
-                throw new ArgumentException("ContainerName cannot be null or empty", nameof(_options.ContainerName));
         }
     }
 }
