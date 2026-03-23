@@ -11,10 +11,8 @@ public static class BlobStorageServiceBuilderExtensions
         this IServiceCollection services, 
         Action<BlobStorageSettings> configureOptions)
     {
-        services.AddOptions<BlobStorageSettings>()
-            .Configure(configureOptions)
-            .ValidateDataAnnotations()
-            .ValidateOnStart();
+        services.AddOptionsWithValidateOnStart<BlobStorageSettings, BlobStorageSettingsValidator>()
+            .Configure(configureOptions);
         
         services.AddSingleton<BlobServiceClient>(sp =>
         {
