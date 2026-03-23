@@ -1,4 +1,5 @@
 using Azure.Storage.Blobs;
+using Azure.Storage.Blobs.Specialized;
 using LeaderElection.BlobStorage;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -225,5 +226,65 @@ public sealed class BlobStorageLeaderElectionTests(AzuriteContainerFixture azuri
         blobExists.Value.Should().BeTrue();
 
         await leaderElection.StopAsync(CancellationToken);
+    }
+
+    [Fact]
+    public async Task Should_Work_With_Second_Constructor()
+    {
+        var containerName = "test-second-constructor";
+        var options = CreateSettings(containerName);
+        var containerClient = _blobServiceClient.GetBlobContainerClient(containerName);
+        await containerClient.CreateIfNotExistsAsync(cancellationToken: CancellationToken);
+
+        await using var leaderElection = new BlobStorageLeaderElection(
+            containerClient,
+            options,
+            NullLoggerFactory.Instance.CreateLogger<BlobStorageLeaderElection>()
+        );
+        
+        await leaderElection.StartAsync(CancellationToken);
+        await WaitForLeadershipChange(leaderElection, true, options.LeaseDuration);
+        
+        leaderElection.IsLeader.Should().BeTrue();
+        await leaderElection.StopAsync(CancellationToken);
+    }
+
+    [Fact]
+    public async Task Should_Handle_Renewal_Conflict()
+    {
+        var options = CreateSettings("test-renewal-conflict", leaseDuration: TimeSpan.FromSeconds(15));
+        await using var leaderElection = CreateSUT(options);
+
+        await leaderElection.StartAsync(CancellationToken);
+        await WaitForLeadershipChange(leaderElection, true, options.LeaseDuration);
+        
+        var containerClient = _blobServiceClient.GetBlobContainerClient(options.ContainerName);
+        var blobClient = containerClient.GetBlobClient(options.BlobName);
+        var leaseClient = blobClient.GetBlobLeaseClient();
+        
+        // Break the lease immediately
+        await leaseClient.BreakAsync(TimeSpan.Zero, cancellationToken: CancellationToken);
+        
+        // Acquire it with a DIFFERENT lease ID (by not specifying one)
+        await leaseClient.AcquireAsync(TimeSpan.FromSeconds(15), cancellationToken: CancellationToken);
+        
+        await WaitForLeadershipChange(leaderElection, false, TimeSpan.FromSeconds(20));
+        leaderElection.IsLeader.Should().BeFalse();
+
+        await leaderElection.StopAsync(CancellationToken);
+    }
+
+    [Fact]
+    public void Should_Throw_ArgumentException_When_Options_Are_Invalid()
+    {
+        var options = new BlobStorageSettings
+        {
+            ConnectionString = string.Empty, // Invalid
+            ContainerName = string.Empty,    // Invalid
+            BlobName = "test"
+        };
+        
+        var act = () => new BlobStorageLeaderElection(_blobServiceClient, Options.Create(options), NullLogger<BlobStorageLeaderElection>.Instance);
+        act.Should().Throw<ArgumentException>();
     }
 }

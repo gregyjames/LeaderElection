@@ -84,10 +84,7 @@ public abstract class LeaderElectionBase<TSettings> : ILeaderElection
                     }
                 }
 
-                var delay = retryCount > 0
-                    ? TimeSpan.FromSeconds(Math.Min(Math.Pow(2, Math.Min(retryCount, settings.MaxRetryAttempts)), 60))
-                    : settings.RenewInterval;
-
+                var delay = GetNextDelay(retryCount);
                 await Task.Delay(delay, token);
             }
             catch (OperationCanceledException)
@@ -110,6 +107,16 @@ public abstract class LeaderElectionBase<TSettings> : ILeaderElection
                 }
             }
         }
+    }
+
+    protected virtual TimeSpan GetNextDelay(int retryCount)
+    {
+        if (retryCount == 0)
+        {
+            return settings.RenewInterval;
+        }
+
+        return TimeSpan.FromSeconds(Math.Min(Math.Pow(2, Math.Min(retryCount, settings.MaxRetryAttempts)), 60));
     }
 
     public virtual Task StopAsync(CancellationToken cancellationToken = default) => IsDisposed ? Task.CompletedTask : InternalStopAsync(cancellationToken);

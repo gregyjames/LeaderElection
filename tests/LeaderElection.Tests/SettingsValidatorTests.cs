@@ -3,11 +3,12 @@ using LeaderElection.DistributedCache;
 using LeaderElection.FusionCache;
 using LeaderElection.Redis;
 using LeaderElection.S3;
-using Microsoft.Extensions.Options;
-using System.Linq;
 
 namespace LeaderElection.Tests;
 
+[Collection("SettingsValidatorTests")]
+[Trait("Kind", "Integration")]
+[Trait("Category", "All")]
 public class SettingsValidatorTests
 {
     private class TestSettings : LeaderElectionSettingsBase { }
