@@ -8,11 +8,9 @@ public static class FusionCacheServiceBuilderExtensions
         this IServiceCollection services,
         Action<FusionCacheSettings> configureOptions)
     {
-        services.AddOptions<FusionCacheSettings>()
-            .Configure(configureOptions)
-            .ValidateDataAnnotations()
-            .ValidateOnStart();
-        
+        services.AddOptionsWithValidateOnStart<FusionCacheSettings, FusionCacheSettingsValidator>()
+            .Configure(configureOptions);
+
         services.AddSingleton<ILeaderElection, FusionCacheLeaderElection>();
         return services;
     }
@@ -31,7 +29,7 @@ public static class FusionCacheServiceBuilderExtensions
             opt.RetryInterval = options.RetryInterval;
             opt.MaxRetryAttempts = options.MaxRetryAttempts;
         });
-        
+
         return services;
     }
 }
