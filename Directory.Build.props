@@ -25,6 +25,7 @@
     <Nullable>enable</Nullable>
     <IsPackable>false</IsPackable>
     <UseArtifactsOutput>true</UseArtifactsOutput>
+    <EmitCompilerGeneratedFiles>true</EmitCompilerGeneratedFiles>
     <!-- TODO: Turn on maximum static analysis in all builds -->
   </PropertyGroup>
 
