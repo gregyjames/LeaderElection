@@ -4,17 +4,15 @@ using LeaderElection.FusionCache;
 using LeaderElection.Redis;
 using LeaderElection.S3;
 using Microsoft.Extensions.Options;
-using System.Linq;
 
 namespace LeaderElection.Tests;
 
-public class SettingsValidatorTests
+public partial class SettingsValidatorTests
 {
-    private class TestSettings : LeaderElectionSettingsBase { }
-    private class TestSettingsValidator : BaseSettingsValidator<TestSettings>
-    {
-        public IEnumerable<string> Validate(TestSettings options) => ValidateBase(options);
-    }
+    public class TestSettings : LeaderElectionSettingsBase { }
+
+    [OptionsValidator]
+    public partial class TestSettingsValidator : IValidateOptions<TestSettings> { }
 
     [Fact]
     public void BaseSettingsValidator_Should_Fail_When_Default_Settings()
@@ -22,11 +20,12 @@ public class SettingsValidatorTests
         var validator = new TestSettingsValidator();
         var settings = new TestSettings { InstanceId = string.Empty, RenewInterval = TimeSpan.Zero, RetryInterval = TimeSpan.Zero };
 
-        var failures = validator.Validate(settings).ToList();
+        var result = validator.Validate(null, settings);
 
-        failures.Should().Contain(f => f.Contains("InstanceId"));
-        failures.Should().Contain(f => f.Contains("RenewInterval"));
-        failures.Should().Contain(f => f.Contains("RetryInterval"));
+        result.Failed.Should().BeTrue();
+        result.Failures.Should().Contain(f => f.Contains("InstanceId"));
+        result.Failures.Should().Contain(f => f.Contains("RenewInterval"));
+        result.Failures.Should().Contain(f => f.Contains("RetryInterval"));
     }
 
     [Fact]
