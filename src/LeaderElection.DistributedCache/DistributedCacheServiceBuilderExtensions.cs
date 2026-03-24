@@ -15,15 +15,13 @@ public static class DistributedCacheServiceBuilderExtensions
         this IServiceCollection services,
         Action<DistributedCacheSettings> configureOptions)
     {
-        services.AddOptions<DistributedCacheSettings>()
-            .Configure(configureOptions)
-            .ValidateDataAnnotations()
-            .ValidateOnStart();
-        
+        services.AddOptionsWithValidateOnStart<DistributedCacheSettings, DistributedCacheSettingsValidator>()
+            .Configure(configureOptions);
+
         services.AddSingleton<ILeaderElection, DistributedCacheLeaderElection>();
         return services;
     }
-    
+
     public static IServiceCollection AddDistributedCacheLeaderElection(
         this IServiceCollection services,
         DistributedCacheSettings options)
@@ -38,7 +36,7 @@ public static class DistributedCacheServiceBuilderExtensions
             opt.RetryInterval = options.RetryInterval;
             opt.MaxRetryAttempts = options.MaxRetryAttempts;
         });
-        
+
         return services;
     }
-} 
+}
