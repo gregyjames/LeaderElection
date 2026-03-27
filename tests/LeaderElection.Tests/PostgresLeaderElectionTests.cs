@@ -10,16 +10,20 @@ namespace LeaderElection.Tests;
 [Trait("Category", "PostgreSQL")]
 public sealed class PostgresLeaderElectionTests(PostgresContainerFixture postgresFixture) : TestBase
 {
-    private static PostgresSettings CreateSettings(
-        string connectionString,
-        long lockId, string instanceId = "test-instance-1",
+    private static long _lockIdCounter = 1000;
+    private static long GetNextLockId() => Interlocked.Increment(ref _lockIdCounter);
+
+    private PostgresSettings CreateSettings(
+        string? connectionString = null,
+        long? lockId = null,
+        string instanceId = "test-instance-1",
         TimeSpan? retryInterval = null,
         bool enableGracefulShutdown = true
     ) =>
         new()
         {
-            ConnectionString = connectionString,
-            LockId = lockId,
+            ConnectionString = connectionString ?? postgresFixture.ConnectionString,
+            LockId = lockId ?? GetNextLockId(),
             InstanceId = instanceId,
             RetryInterval = retryInterval ?? TimeSpan.FromSeconds(1),
             EnableGracefulShutdown = enableGracefulShutdown,
@@ -34,7 +38,7 @@ public sealed class PostgresLeaderElectionTests(PostgresContainerFixture postgre
     [Fact]
     public async Task Should_Acquire_Leadership_When_No_Other_Instance_Exists()
     {
-        var options = CreateSettings(postgresFixture.ConnectionString, 1001);
+        var options = CreateSettings();
 
         await using var leaderElection = CreateSUT(options);
 
@@ -49,17 +53,8 @@ public sealed class PostgresLeaderElectionTests(PostgresContainerFixture postgre
     [Fact]
     public async Task Should_Not_Acquire_Leadership_When_Another_Instance_Has_Leadership()
     {
-        var options1 = CreateSettings(
-            postgresFixture.ConnectionString,
-            1002,
-            "test-instance-01"
-        );
-
-        var options2 = CreateSettings(
-            postgresFixture.ConnectionString,
-            1002,
-            "test-instance-02"
-        );
+        var options1 = CreateSettings("test-instance-01");
+        var options2 = CreateSettings("test-instance-02", lockId: options1.LockId);
 
         await using var leaderElection1 = CreateSUT(options1);
         await using var leaderElection2 = CreateSUT(options2);
@@ -80,17 +75,8 @@ public sealed class PostgresLeaderElectionTests(PostgresContainerFixture postgre
     [Fact]
     public async Task Should_Transfer_Leadership_When_Current_Leader_Stops()
     {
-        var options1 = CreateSettings(
-            postgresFixture.ConnectionString,
-            1003,
-            "test-instance-01"
-        );
-
-        var options2 = CreateSettings(
-            postgresFixture.ConnectionString,
-            1003,
-            "test-instance-02"
-        );
+        var options1 = CreateSettings("test-instance-01");
+        var options2 = CreateSettings("test-instance-02", lockId: options1.LockId);
 
         await using var leaderElection1 = CreateSUT(options1);
         await using var leaderElection2 = CreateSUT(options2);
@@ -112,10 +98,7 @@ public sealed class PostgresLeaderElectionTests(PostgresContainerFixture postgre
     [Fact]
     public async Task Should_Run_Task_Only_When_Leader()
     {
-        var options = CreateSettings(
-            postgresFixture.ConnectionString,
-            1004
-        );
+        var options = CreateSettings();
 
         await using var leaderElection = CreateSUT(options);
 
@@ -134,7 +117,7 @@ public sealed class PostgresLeaderElectionTests(PostgresContainerFixture postgre
     [Fact]
     public async Task Should_Not_Run_Task_When_Not_Leader()
     {
-        var options = CreateSettings(postgresFixture.ConnectionString, 1005);
+        var options = CreateSettings();
 
         await using var leaderElection = CreateSUT(options);
 
@@ -148,7 +131,7 @@ public sealed class PostgresLeaderElectionTests(PostgresContainerFixture postgre
     [Fact]
     public async Task Should_Handle_Manual_Leadership_Acquisition()
     {
-        var options = CreateSettings(postgresFixture.ConnectionString, 1006);
+        var options = CreateSettings();
 
         await using var leaderElection = CreateSUT(options);
 
