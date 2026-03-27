@@ -1,90 +1,137 @@
-﻿using LeaderElection.BlobStorage;
+using LeaderElection.BlobStorage;
 using LeaderElection.DistributedCache;
+using LeaderElection.FusionCache;
+using LeaderElection.Postgres;
 using LeaderElection.Redis;
+using LeaderElection.S3;
 using LeaderElectionTester;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
-using Serilog;
+using Minio;
 using StackExchange.Redis;
+using ZiggyCreatures.Caching.Fusion;
 
 var builder = Host.CreateApplicationBuilder(args);
 
-builder.Services.AddSerilog(configureLogger => configureLogger.WriteTo.Console());
-
-// Get settings from configuration
-var settings = new Settings();
-builder.Configuration.Bind(settings);
-
-// Register Redis connection multiplexer as singleton
-var lazyConnectionMultiplexer = new Lazy<IConnectionMultiplexer>(() => 
-    ConnectionMultiplexer.Connect($"{settings.Redis.Host}:{settings.Redis.Port}")
-);
-builder.Services.AddSingleton(_ => lazyConnectionMultiplexer.Value);
-
-////////////////////////////////////////////////////
-// Configure RedisLeaderElection
-////////////////////////////////////////////////////
-builder.Services.AddRedisLeaderElection(options =>
+var leaderElectionType = builder
+    .Configuration.GetValue("LeaderElectionType", "Redis")
+    .ToLowerInvariant() switch
 {
-    options.LockKey = "leader_election_tester";
-    options.LockExpiry = TimeSpan.FromSeconds(30);
-    options.RenewInterval = TimeSpan.FromSeconds(10);
-    options.RetryInterval = TimeSpan.FromSeconds(5);
-    options.MaxRetryAttempts = 3;
-    options.EnableGracefulShutdown = true;
-});
+    "redis" => "Redis",
+    "distributedcache" or "dc" => "DistributedCache",
+    "fusioncache" or "fc" => "FusionCache",
+    "blobstorage" or "blob" => "BlobStorage",
+    "s3" => "S3",
+    "postgres" => "Postgres",
+    _ => throw new ArgumentException(
+        "Invalid LeaderElection type. Supported values are: Redis, DistributedCache (dc), FusionCache (fc), BlobStorage (blob), S3, Postgres.",
+        "LeaderElectionType"
+    ),
+};
 
-////////////////////////////////////////////////////
-// Configure DistributedCacheLeaderElection
-////////////////////////////////////////////////////
-// builder.Services.AddDistributedCacheLeaderElection(options =>
-// {
-//     options.InstanceId = $"{AppDomain.CurrentDomain.FriendlyName}-{Guid.NewGuid()}";
-//     options.RenewInterval = TimeSpan.FromSeconds(10);
-//     options.MaxRetryAttempts = 3;
-//     options.EnableGracefulShutdown = true;
-// })
-// .AddStackExchangeRedisCache(options =>
-// {
-//     options.ConnectionMultiplexerFactory = () => Task.FromResult(lazyConnectionMultiplexer.Value);
-// });
+// Get a unique ID for each running instance (e.g. in different terminals or machines).
+var instanceId = builder.Configuration.GetValue(
+    "InstanceId",
+    $"{AppDomain.CurrentDomain.FriendlyName}:{Environment.MachineName}:{Environment.ProcessId}"
+);
 
-////////////////////////////////////////////////////
-// Configure BlobStorageLeaderElection
-////////////////////////////////////////////////////
-// builder.Services.AddBlobStorageLeaderElection(options =>
-// {
-//     // blob test using azurite
-//     options.ConnectionString =
-//         "DefaultEndpointsProtocol=http;AccountName=devstoreaccount1;AccountKey=Eby8vdM02xNOcqFlqUwJPLlmEtlCDXJ1OUzFT50uSRZ6IFsuFq2UVErCz4I6tq/K1SZFPTOtr/KBHBeksoGMGw==;BlobEndpoint=http://127.0.0.1:10000/devstoreaccount1;QueueEndpoint=http://127.0.0.1:10001/devstoreaccount1;TableEndpoint=http://127.0.0.1:10002/devstoreaccount1;";
-//     options.BlobName = "leader_election_tester";
-//     options.LeaseDuration = TimeSpan.FromSeconds(30);
-//     options.RenewInterval = TimeSpan.FromSeconds(10);
-//     options.RetryInterval = TimeSpan.FromSeconds(5);
-//     options.MaxRetryAttempts = 3;
-//     options.EnableGracefulShutdown = true;
-// });
+var redisConfiguration = "localhost:6379";
 
-////////////////////////////////////////////////////
-// Configure S3LeaderElection
-////////////////////////////////////////////////////
-// builder.Services.AddSingleton<IMinioClient>(sp => 
-// {
-//    return new MinioClient()
-//        .WithEndpoint("localhost:9000")
-//        .WithCredentials("accessKey", "secretKey")
-//        .Build();
-// });
-// builder.Services.AddS3LeaderElection(options =>
-// {
-//     options.BucketName = "my-app-locks";
-//     options.ObjectKey = "leader-lock.json";
-//     options.LeaseDuration = TimeSpan.FromSeconds(30);
-//     options.RenewInterval = TimeSpan.FromSeconds(10);
-// });
+if (leaderElectionType is "Redis")
+{
+    builder.Services.AddRedisServices(redisConfiguration);
+    builder.Services.AddRedisLeaderElection(options =>
+    {
+        options.LockKey = "leader_election_tester_redis";
+        options.InstanceId = instanceId;
+    });
+}
+
+if (leaderElectionType is "DistributedCache")
+{
+    builder.Services.AddRedisServices(redisConfiguration);
+    builder.Services.AddDistributedCacheLeaderElection(options =>
+    {
+        options.LockKey = "leader_election_tester_dc";
+        options.InstanceId = instanceId;
+    });
+}
+
+if (leaderElectionType is "FusionCache")
+{
+    builder.Services.AddRedisServices(redisConfiguration);
+    builder
+        .Services.AddFusionCache()
+        .WithRegisteredDistributedCache()
+        .WithSystemTextJsonSerializer();
+    builder.Services.AddFusionCacheLeaderElection(options =>
+    {
+        options.LockKey = "leader_election_tester_fc";
+        options.InstanceId = instanceId;
+    });
+}
+
+if (leaderElectionType is "BlobStorage")
+{
+    builder.Services.AddBlobStorageLeaderElection(options =>
+    {
+        options.ConnectionString = "UseDevelopmentStorage=true";
+        options.ContainerName = "leader-election";
+        options.BlobName = "leader_election_tester";
+        options.InstanceId = instanceId;
+    });
+}
+
+if (leaderElectionType is "S3")
+{
+    builder.Services.AddMinio(client =>
+        client
+            .WithEndpoint("localhost:9000")
+            .WithCredentials("accessKey", "secretKey")
+            .WithSSL(false)
+            .Build()
+    );
+    builder.Services.AddS3LeaderElection(options =>
+    {
+        options.BucketName = "my-app-locks";
+        options.ObjectKey = "leader-lock.json";
+        options.InstanceId = instanceId;
+    });
+}
+
+if (leaderElectionType is "Postgres")
+{
+    builder.Services.AddPostgresLeaderElection(options =>
+    {
+        options.ConnectionString =
+            "Host=localhost;Database=mydb;Username=myuser;Password=mypassword";
+        options.LockId = 1;
+        options.InstanceId = instanceId;
+    });
+}
 
 builder.Services.AddHostedService<Service>();
 
 var host = builder.Build();
 await host.RunAsync().ConfigureAwait(false);
+
+internal static class ProgramExtensions
+{
+    public static IServiceCollection AddRedisServices(
+        this IServiceCollection services,
+        string redisConfiguration
+    )
+    {
+        var connectionMultiplexer = new Lazy<IConnectionMultiplexer>(() =>
+            ConnectionMultiplexer.Connect(redisConfiguration)
+        );
+
+        services.AddSingleton(_ => connectionMultiplexer.Value);
+        services.AddStackExchangeRedisCache(options =>
+            options.ConnectionMultiplexerFactory = () =>
+                Task.FromResult(connectionMultiplexer.Value)
+        );
+        return services;
+    }
+}
