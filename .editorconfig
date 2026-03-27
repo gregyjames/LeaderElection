@@ -43,7 +43,7 @@ indent_size = 2
 [*.md]
 indent_size = 2
 max_line_length = 100
-# using prettierrc.yaml for proseWrap
+# using .prettierrc.yml for proseWrap
 
 # C# files
 [*.cs]
@@ -54,7 +54,7 @@ max_line_length = 100
 indent_size = 4
 tab_width = 4
 csharpier_formatter = CSharp
-# These settings are enforced by CSharpier and cannot be overriden. See https://csharpier.com/docs/Configuration#editorconfig
+# These settings are enforced by CSharpier and cannot be overridden. See https://csharpier.com/docs/Configuration#editorconfig
 charset = utf-8
 insert_final_newline = true
 trim_trailing_whitespace = true
