@@ -36,7 +36,7 @@ public sealed class S3LeaderElection : LeaderElectionBase<S3Settings>
                 var stat = await _client.StatObjectAsync(new StatObjectArgs()
                     .WithBucket(_options.BucketName)
                     .WithObject(_options.ObjectKey), cancellationToken).ConfigureAwait(false);
-                currentEtag = stat.ETag;
+                currentEtag = NormalizeETag(stat.ETag);
 
                 var memoryStream = new MemoryStream();
                 await _client.GetObjectAsync(new GetObjectArgs()
@@ -114,9 +114,10 @@ public sealed class S3LeaderElection : LeaderElectionBase<S3Settings>
                     .WithBucket(_options.BucketName)
                     .WithObject(_options.ObjectKey), cancellationToken).ConfigureAwait(false);
                 
-                if (stat.ETag != _lastEtag)
+                var etag = NormalizeETag(stat.ETag);
+                if (etag != _lastEtag)
                 {
-                    logger.LogWarning("S3 ETag mismatch during renewal. Expected {Expected}, got {Actual}", _lastEtag, stat.ETag);
+                    logger.LogWarning("S3 ETag mismatch during renewal. Expected {Expected}, got {Actual}", _lastEtag, etag);
                     return false;
                 }
 
@@ -193,7 +194,7 @@ public sealed class S3LeaderElection : LeaderElectionBase<S3Settings>
             .WithHeaders(new Dictionary<string, string>(headers));
 
         var response = await _client.PutObjectAsync(request, token).ConfigureAwait(false);
-        var etag = response?.Etag;
+        var etag = NormalizeETag(response?.Etag);
 
         if (string.IsNullOrEmpty(etag))
         {
@@ -202,4 +203,12 @@ public sealed class S3LeaderElection : LeaderElectionBase<S3Settings>
 
         return etag;
     }
+
+    // Minio's ETag handling can be inconsistent, so we normalize it by adding
+    // quotes if missing (standard etags are quoted).
+    // See https://github.com/minio/minio-dotnet/issues/1038
+    private static string? NormalizeETag(string? etag) =>
+        string.IsNullOrEmpty(etag) ? etag
+        : etag[0] == '"' && etag[^1] == '"' ? etag // already quoted
+        : $"\"{etag}\""; // add quotes
 }
