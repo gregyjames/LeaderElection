@@ -161,4 +161,21 @@ public sealed class S3LeaderElectionTests(MinioContainerFixture minioFixture) : 
 
         await leaderElection.StopAsync(CancellationToken);
     }
+
+    [Fact]
+    public async Task Should_Retain_Leadership_After_At_Least_One_Renewal_Cycle()
+    {
+        // Arrange
+        await EnsureBucketExistsAsync();
+        var options = CreateSettings(
+            "test-leader-election-renewal",
+            leaseDuration: TimeSpan.FromSeconds(3),
+            renewInterval: TimeSpan.FromSeconds(1)
+        );
+
+        await using var leaderElection = CreateSUT(options);
+
+        // Act & Assert
+        await TestShouldRetainLeadershipAfterAtLeastOneRenewalCycle(leaderElection, options);
+    }
 }

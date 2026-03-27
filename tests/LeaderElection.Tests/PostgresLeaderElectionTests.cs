@@ -14,9 +14,10 @@ public sealed class PostgresLeaderElectionTests(PostgresContainerFixture postgre
     private static long GetNextLockId() => Interlocked.Increment(ref _lockIdCounter);
 
     private PostgresSettings CreateSettings(
+        string? instanceId = null,
         string? connectionString = null,
         long? lockId = null,
-        string instanceId = "test-instance-1",
+        TimeSpan? renewInterval = null,
         TimeSpan? retryInterval = null,
         bool enableGracefulShutdown = true
     ) =>
@@ -24,8 +25,9 @@ public sealed class PostgresLeaderElectionTests(PostgresContainerFixture postgre
         {
             ConnectionString = connectionString ?? postgresFixture.ConnectionString,
             LockId = lockId ?? GetNextLockId(),
-            InstanceId = instanceId,
+            InstanceId = instanceId ?? "test-instance-1",
             RetryInterval = retryInterval ?? TimeSpan.FromSeconds(1),
+            RenewInterval = renewInterval ?? TimeSpan.FromSeconds(2),
             EnableGracefulShutdown = enableGracefulShutdown,
         };
 
@@ -53,8 +55,8 @@ public sealed class PostgresLeaderElectionTests(PostgresContainerFixture postgre
     [Fact]
     public async Task Should_Not_Acquire_Leadership_When_Another_Instance_Has_Leadership()
     {
-        var options1 = CreateSettings("test-instance-01");
-        var options2 = CreateSettings("test-instance-02", lockId: options1.LockId);
+        var options1 = CreateSettings(instanceId: "test-instance-01");
+        var options2 = CreateSettings(instanceId: "test-instance-02", lockId: options1.LockId);
 
         await using var leaderElection1 = CreateSUT(options1);
         await using var leaderElection2 = CreateSUT(options2);
@@ -75,8 +77,8 @@ public sealed class PostgresLeaderElectionTests(PostgresContainerFixture postgre
     [Fact]
     public async Task Should_Transfer_Leadership_When_Current_Leader_Stops()
     {
-        var options1 = CreateSettings("test-instance-01");
-        var options2 = CreateSettings("test-instance-02", lockId: options1.LockId);
+        var options1 = CreateSettings(instanceId: "test-instance-01");
+        var options2 = CreateSettings(instanceId: "test-instance-02", lockId: options1.LockId);
 
         await using var leaderElection1 = CreateSUT(options1);
         await using var leaderElection2 = CreateSUT(options2);
@@ -141,5 +143,17 @@ public sealed class PostgresLeaderElectionTests(PostgresContainerFixture postgre
         leaderElection.IsLeader.Should().BeTrue();
 
         await leaderElection.StopAsync(CancellationToken);
+    }
+
+    [Fact]
+    public async Task Should_Retain_Leadership_After_At_Least_One_Renewal_Cycle()
+    {
+        // Arrange
+        var options = CreateSettings(renewInterval: TimeSpan.FromSeconds(1));
+
+        await using var leaderElection = CreateSUT(options);
+
+        // Act & Assert
+        await TestShouldRetainLeadershipAfterAtLeastOneRenewalCycle(leaderElection, options);
     }
 }
