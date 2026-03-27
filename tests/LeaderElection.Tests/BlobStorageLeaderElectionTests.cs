@@ -273,4 +273,19 @@ public sealed class BlobStorageLeaderElectionTests(AzuriteContainerFixture azuri
 
         await leaderElection.StopAsync(CancellationToken);
     }
+
+    [Fact]
+    public async Task Should_Retain_Leadership_After_At_Least_One_Renewal_Cycle()
+    {
+        // Arrange
+        var options = CreateSettings(
+            "test-leader-election-renewal",
+            renewInterval: TimeSpan.FromSeconds(1)
+        );
+
+        await using var leaderElection = CreateSUT(options);
+
+        // Act & Assert
+        await TestShouldRetainLeadershipAfterAtLeastOneRenewalCycle(leaderElection, options);
+    }
 }
