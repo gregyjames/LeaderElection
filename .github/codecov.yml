@@ -29,3 +29,8 @@ component_management:
       name: LeaderElection.S3
       paths:
         - src/LeaderElection.S3/**
+
+    - component_id: leader-election-postgres
+      name: LeaderElection.Postgres
+      paths:
+        - src/LeaderElection.Postgres/**

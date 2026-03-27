@@ -17,6 +17,7 @@
     <PackageReference Include="Testcontainers.Redis" />
     <PackageReference Include="Testcontainers.Azurite" />
     <PackageReference Include="Testcontainers.Minio" />
+    <PackageReference Include="Testcontainers.PostgreSql" />
   </ItemGroup>
 
   <ItemGroup>
@@ -24,6 +25,7 @@
     <ProjectReference Include="$(SrcDir)LeaderElection.Redis\LeaderElection.Redis.csproj" />
     <ProjectReference Include="$(SrcDir)LeaderElection.BlobStorage\LeaderElection.BlobStorage.csproj" />
     <ProjectReference Include="$(SrcDir)LeaderElection.S3\LeaderElection.S3.csproj" />
+    <ProjectReference Include="$(SrcDir)LeaderElection.Postgres\LeaderElection.Postgres.csproj" />
   </ItemGroup>
 
   <ItemGroup>
