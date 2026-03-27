@@ -1,0 +1,2 @@
+editorconfig: true # use .editorconfig for indentation and other settings
+proseWrap: always # auto-wrap markdown text longer than max line length
