@@ -5,209 +5,18 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Npgsql;
 
-public sealed class PostgresLeaderElection : ILeaderElection
+public sealed class PostgresLeaderElection : LeaderElectionBase<PostgresSettings>
 {
-    private readonly PostgresSettings _options;
-    private readonly ILogger<PostgresLeaderElection> _logger;
-    private readonly SemaphoreSlim _leadershipSemaphore = new(1, 1);
-    private CancellationTokenSource? _leaderLoopTaskCTS;
-
-    private volatile bool _isLeader;
-    private int _disposedValue;
-    private Task? _leaderLoopTask;
-    private DateTime _lastLeadershipRenewal = DateTime.MinValue;
     private NpgsqlConnection? _activeConnection;
-
-    public event EventHandler<bool>? LeadershipChanged;
-    public event EventHandler<Exception>? ErrorOccurred;
 
     public PostgresLeaderElection(
         IOptions<PostgresSettings> options,
         ILogger<PostgresLeaderElection> logger)
+        : base(options?.Value ?? throw new ArgumentNullException(nameof(options)), logger)
     {
-        _options = options.Value ?? throw new ArgumentNullException(nameof(options));
-        _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }
 
-    public DateTime LastLeadershipRenewal => _lastLeadershipRenewal;
-    public bool IsLeader => _isLeader && !IsDisposed;
-    private bool IsDisposed => Volatile.Read(ref _disposedValue) == 1;
-
-    public async Task StartAsync(CancellationToken cancellationToken = default)
-    {
-        if (IsDisposed)
-            throw new ObjectDisposedException(nameof(PostgresLeaderElection));
-
-        if (_leaderLoopTask?.IsCompleted == false)
-            return;
-
-        _logger.LogInformation("Starting PostgreSQL leader election for instance {InstanceId}", _options.InstanceId);
-
-        _leaderLoopTaskCTS = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-        _leaderLoopTask = RunLeaderLoopAsync(_leaderLoopTaskCTS.Token);
-
-        await Task.CompletedTask;
-    }
-
-    public Task StopAsync(CancellationToken cancellationToken = default) =>
-        IsDisposed ? Task.CompletedTask : InternalStopAsync(cancellationToken);
-
-    private async Task InternalStopAsync(CancellationToken cancellationToken = default)
-    {
-        _logger.LogInformation("Stopping PostgreSQL leader election for instance {InstanceId}", _options.InstanceId);
-
-        if (_leaderLoopTaskCTS != null)
-        {
-            await _leaderLoopTaskCTS.CancelAsync();
-        }
-
-        if (_leaderLoopTask != null)
-        {
-            try
-            {
-                await _leaderLoopTask.WaitAsync(cancellationToken);
-            }
-            catch (OperationCanceledException)
-            {
-                _logger.LogDebug("Leader loop cancellation was expected");
-            }
-            finally
-            {
-                _leaderLoopTask = null;
-                _leaderLoopTaskCTS?.Dispose();
-                _leaderLoopTaskCTS = null;
-            }
-        }
-
-        if (_options.EnableGracefulShutdown && _isLeader)
-        {
-            await ReleaseLeadershipAsync();
-        }
-
-        if (_isLeader)
-        {
-            SetLeadership(false);
-        }
-    }
-
-    public async Task<bool> TryAcquireLeadershipAsync(CancellationToken cancellationToken = default)
-    {
-        if (IsDisposed)
-            return false;
-
-        await _leadershipSemaphore.WaitAsync(cancellationToken);
-        try
-        {
-            var acquired = await TryAcquireLeadershipInternalAsync(cancellationToken);
-            if (acquired)
-            {
-                if (!_isLeader)
-                {
-                    SetLeadership(true);
-                }
-            }
-            else
-            {
-                if (_isLeader)
-                {
-                    SetLeadership(false);
-                }
-            }
-            return acquired;
-        }
-        finally
-        {
-            _leadershipSemaphore.Release();
-        }
-    }
-
-    public async Task RunTaskIfLeaderAsync(Func<Task> task, CancellationToken cancellationToken = default)
-    {
-        if (!IsLeader)
-        {
-            return;
-        }
-
-        try
-        {
-            await task();
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Error executing leader task");
-            ErrorOccurred?.Invoke(this, ex);
-            throw;
-        }
-    }
-
-    public async Task RunTaskIfLeaderAsync(Action task, CancellationToken cancellationToken = default)
-    {
-        await RunTaskIfLeaderAsync(() => Task.Run(task, cancellationToken), cancellationToken);
-    }
-
-    private async Task RunLeaderLoopAsync(CancellationToken cancellationToken)
-    {
-        var retryCount = 0;
-
-        while (!cancellationToken.IsCancellationRequested)
-        {
-            try
-            {
-                if (!_isLeader)
-                {
-                    if (await TryAcquireLeadershipAsync(cancellationToken))
-                    {
-                        _logger.LogInformation("Leadership acquired for instance {InstanceId}", _options.InstanceId);
-                        retryCount = 0;
-                    }
-                    else
-                    {
-                        retryCount++;
-                    }
-                }
-                else
-                {
-                    if (!await RenewLeadershipAsync(cancellationToken))
-                    {
-                        _logger.LogWarning("Lost leadership during renewal for instance {InstanceId}", _options.InstanceId);
-                        SetLeadership(false);
-                        retryCount++;
-                    }
-                    else
-                    {
-                        retryCount = 0;
-                    }
-                }
-
-                var delay = retryCount > 0
-                    ? TimeSpan.FromSeconds(Math.Min(Math.Pow(2, retryCount), 60))
-                    : _options.RetryInterval;
-
-                await Task.Delay(delay, cancellationToken);
-            }
-            catch (OperationCanceledException)
-            {
-                break;
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Unexpected error in leader loop");
-                ErrorOccurred?.Invoke(this, ex);
-                retryCount++;
-
-                try
-                {
-                    await Task.Delay(_options.RetryInterval, cancellationToken);
-                }
-                catch (OperationCanceledException)
-                {
-                    break;
-                }
-            }
-        }
-    }
-
-    private async Task<bool> TryAcquireLeadershipInternalAsync(CancellationToken cancellationToken)
+    protected override async Task<bool> TryAcquireLeadershipInternalAsync(CancellationToken cancellationToken)
     {
         try
         {
@@ -217,17 +26,16 @@ public sealed class PostgresLeaderElection : ILeaderElection
                 _activeConnection = null;
             }
 
-            var connection = new NpgsqlConnection(_options.ConnectionString);
+            var connection = new NpgsqlConnection(settings.ConnectionString);
             await connection.OpenAsync(cancellationToken);
 
             await using var cmd = new NpgsqlCommand("SELECT pg_try_advisory_lock(@LockId);", connection);
-            cmd.Parameters.AddWithValue("LockId", _options.LockId);
+            cmd.Parameters.AddWithValue("LockId", settings.LockId);
 
             var result = await cmd.ExecuteScalarAsync(cancellationToken);
             if (result is true)
             {
                 _activeConnection = connection;
-                _lastLeadershipRenewal = DateTime.UtcNow;
                 return true;
             }
 
@@ -236,13 +44,12 @@ public sealed class PostgresLeaderElection : ILeaderElection
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error acquiring PostgreSQL leadership");
-            ErrorOccurred?.Invoke(this, ex);
+            logger.LogError(ex, "Error acquiring PostgreSQL leadership");
             return false;
         }
     }
 
-    private async Task<bool> RenewLeadershipAsync(CancellationToken cancellationToken)
+    protected override async Task<bool> RenewLeadershipInternalAsync(CancellationToken cancellationToken)
     {
         if (_activeConnection is not { State: ConnectionState.Open })
         {
@@ -251,28 +58,26 @@ public sealed class PostgresLeaderElection : ILeaderElection
 
         try
         {
-            //the leadership should be maintained as long as the connection is open, this is just a heartbeat
+            // The advisory lock is held as long as the connection is open; this is just a heartbeat.
             await using var cmd = new NpgsqlCommand("SELECT 1;", _activeConnection);
             await cmd.ExecuteScalarAsync(cancellationToken);
-            
-            _lastLeadershipRenewal = DateTime.UtcNow;
             return true;
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error renewing PostgreSQL leadership; connection lost");
-            ErrorOccurred?.Invoke(this, ex);
-            
+            logger.LogError(ex, "Error renewing PostgreSQL leadership; connection lost");
+
             if (_activeConnection != null)
             {
                 await _activeConnection.DisposeAsync();
                 _activeConnection = null;
             }
+
             return false;
         }
     }
 
-    private async Task ReleaseLeadershipAsync()
+    protected override async Task ReleaseLeadershipAsync()
     {
         if (_activeConnection == null)
             return;
@@ -282,16 +87,15 @@ public sealed class PostgresLeaderElection : ILeaderElection
             if (_activeConnection.State == ConnectionState.Open)
             {
                 await using var cmd = new NpgsqlCommand("SELECT pg_advisory_unlock(@LockId);", _activeConnection);
-                cmd.Parameters.AddWithValue("LockId", _options.LockId);
+                cmd.Parameters.AddWithValue("LockId", settings.LockId);
                 await cmd.ExecuteScalarAsync(default);
             }
-            
-            _logger.LogInformation("Leadership released for instance {InstanceId}", _options.InstanceId);
+
+            logger.LogInformation("Leadership released for instance {InstanceId}", settings.InstanceId);
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error releasing PostgreSQL leadership");
-            ErrorOccurred?.Invoke(this, ex);
+            logger.LogError(ex, "Error releasing PostgreSQL leadership");
         }
         finally
         {
@@ -300,42 +104,14 @@ public sealed class PostgresLeaderElection : ILeaderElection
         }
     }
 
-    private void SetLeadership(bool isLeader)
+    protected override async ValueTask DisposeAsyncCore()
     {
-        if (_isLeader != isLeader)
-        {
-            _isLeader = isLeader;
-            LeadershipChanged?.Invoke(this, isLeader);
-        }
-    }
-    
-    public async ValueTask DisposeAsync()
-    {
-        if (Interlocked.Exchange(ref _disposedValue, 1) == 1)
-            return;
+        await base.DisposeAsyncCore();
 
-        await DisposeAsyncCore().ConfigureAwait(false);
-        GC.SuppressFinalize(this);
-    }
-
-    private async ValueTask DisposeAsyncCore()
-    {
-        try
+        if (_activeConnection != null)
         {
-            await InternalStopAsync().ConfigureAwait(false);
-            
-            if (_activeConnection != null)
-            {
-                await _activeConnection.DisposeAsync();
-                _activeConnection = null;
-            }
+            await _activeConnection.DisposeAsync();
+            _activeConnection = null;
         }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Error during async disposal");
-        }
-
-        _leaderLoopTaskCTS?.Dispose();
-        _leadershipSemaphore.Dispose();
     }
 }

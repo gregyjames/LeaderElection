@@ -2,7 +2,6 @@ using Microsoft.Extensions.Options;
 
 namespace LeaderElection.Postgres;
 
-//todo: refactor out base settings validation and add for other implementations
 public sealed class PostgresSettingsValidator: IValidateOptions<PostgresSettings>
 {
     public ValidateOptionsResult Validate(string? name, PostgresSettings options)
