@@ -1,6 +1,7 @@
 using LeaderElection.BlobStorage;
 using LeaderElection.DistributedCache;
 using LeaderElection.FusionCache;
+using LeaderElection.Postgres;
 using LeaderElection.Redis;
 using LeaderElection.S3;
 using Microsoft.Extensions.Options;
@@ -119,5 +120,22 @@ public partial class SettingsValidatorTests
         result.Failed.Should().BeTrue();
         result.Failures.Should().Contain(f => f.Contains("LockKey"));
         result.Failures.Should().Contain(f => f.Contains("LockExpiry"));
+    }
+
+    [Fact]
+    public void PostgresSettingsValidator_Should_Validate_Correctly()
+    {
+        var validator = new PostgresSettingsValidator();
+        var settings = new PostgresSettings
+        {
+            ConnectionString = string.Empty,
+            LockId = 0
+        };
+
+        var result = validator.Validate(null, settings);
+
+        result.Failed.Should().BeTrue();
+        result.Failures.Should().Contain(f => f.Contains("ConnectionString"));
+        result.Failures.Should().NotContain(f => f.Contains("LockId"));
     }
 }
