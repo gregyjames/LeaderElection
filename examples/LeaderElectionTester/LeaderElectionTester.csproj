@@ -10,14 +10,16 @@
     <PackageReference Include="Microsoft.Extensions.Configuration.Json" />
     <PackageReference Include="Microsoft.Extensions.Hosting" />
     <PackageReference Include="Microsoft.Extensions.Logging" />
-    <PackageReference Include="Serilog" />
-    <PackageReference Include="Serilog.Extensions.Hosting" />
-    <PackageReference Include="Serilog.Sinks.Console" />
+    <PackageReference Include="Minio" />
+    <PackageReference Include="ZiggyCreatures.FusionCache.Serialization.SystemTextJson" />
   </ItemGroup>
 
   <ItemGroup>
     <ProjectReference Include="$(SrcDir)LeaderElection.BlobStorage\LeaderElection.BlobStorage.csproj" />
     <ProjectReference Include="$(SrcDir)LeaderElection.DistributedCache\LeaderElection.DistributedCache.csproj" />
+    <ProjectReference Include="$(SrcDir)LeaderElection.FusionCache\LeaderElection.FusionCache.csproj" />
     <ProjectReference Include="$(SrcDir)LeaderElection.Redis\LeaderElection.Redis.csproj" />
+    <ProjectReference Include="$(SrcDir)LeaderElection.S3\LeaderElection.S3.csproj" />
+    <ProjectReference Include="$(SrcDir)LeaderElection.Postgres\LeaderElection.Postgres.csproj" />
   </ItemGroup>
 </Project>

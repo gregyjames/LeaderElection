@@ -1,19 +1,19 @@
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Options;
-using StackExchange.Redis;
 
 namespace LeaderElection.Redis;
 
 public static class RedisServiceBuilderExtensions
 {
     public static IServiceCollection AddRedisLeaderElection(
-        this IServiceCollection services, 
+        this IServiceCollection services,
         Action<RedisSettings> configureOptions)
     {
-        services.Configure(configureOptions);
+        services.AddOptionsWithValidateOnStart<RedisSettings, RedisSettingsValidator>()
+            .Configure(configureOptions);
+
         services.AddSingleton<RedisLeaderElection>();
         services.AddSingleton<ILeaderElection>(sp => sp.GetRequiredService<RedisLeaderElection>());
-        
+
         return services;
     }
 
@@ -21,7 +21,7 @@ public static class RedisServiceBuilderExtensions
         this IServiceCollection services,
         RedisSettings options)
     {
-        services.Configure<RedisSettings>(opt =>
+        services.AddRedisLeaderElection(opt =>
         {
             opt.Host = options.Host;
             opt.Port = options.Port;
@@ -36,10 +36,6 @@ public static class RedisServiceBuilderExtensions
             opt.EnableGracefulShutdown = options.EnableGracefulShutdown;
         });
 
-        services.AddSingleton<RedisSettings>();
-        services.AddSingleton<RedisLeaderElection>();
-        services.AddSingleton<ILeaderElection>(sp => sp.GetRequiredService<RedisLeaderElection>());
-        
         return services;
     }
 }

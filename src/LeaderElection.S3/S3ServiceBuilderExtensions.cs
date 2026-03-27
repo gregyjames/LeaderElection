@@ -1,17 +1,20 @@
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Options;
 
 namespace LeaderElection.S3;
 
 public static class S3ServiceBuilderExtensions
 {
     public static IServiceCollection AddS3LeaderElection(
-        this IServiceCollection services, 
+        this IServiceCollection services,
         Action<S3Settings> configureOptions)
     {
-        services.Configure(configureOptions);
+        services.AddOptionsWithValidateOnStart<S3Settings, S3SettingsValidator>()
+            .Configure(configureOptions);
+
         services.AddSingleton<S3LeaderElection>();
         services.AddSingleton<ILeaderElection>(sp => sp.GetRequiredService<S3LeaderElection>());
-        
+
         return services;
     }
 
@@ -30,7 +33,7 @@ public static class S3ServiceBuilderExtensions
             opt.EnableGracefulShutdown = options.EnableGracefulShutdown;
             opt.MaxRetryAttempts = options.MaxRetryAttempts;
         });
-        
+
         return services;
     }
 }

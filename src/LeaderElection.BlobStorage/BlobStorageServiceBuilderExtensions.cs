@@ -11,7 +11,8 @@ public static class BlobStorageServiceBuilderExtensions
         this IServiceCollection services, 
         Action<BlobStorageSettings> configureOptions)
     {
-        services.Configure(configureOptions);
+        services.AddOptionsWithValidateOnStart<BlobStorageSettings, BlobStorageSettingsValidator>()
+            .Configure(configureOptions);
         
         services.AddSingleton<BlobServiceClient>(sp =>
         {
@@ -29,7 +30,7 @@ public static class BlobStorageServiceBuilderExtensions
         this IServiceCollection services,
         BlobStorageSettings options)
     {
-        services.Configure<BlobStorageSettings>(opt =>
+        services.AddBlobStorageLeaderElection(opt =>
         {
             opt.ConnectionString = options.ConnectionString;
             opt.ContainerName = options.ContainerName;
@@ -42,11 +43,6 @@ public static class BlobStorageServiceBuilderExtensions
             opt.EnableGracefulShutdown = options.EnableGracefulShutdown;
             opt.CreateContainerIfNotExists = options.CreateContainerIfNotExists;
         });
-        
-        services.AddSingleton<BlobServiceClient>(new BlobServiceClient(options.ConnectionString));
-        services.AddSingleton<BlobStorageLeaderElection>();
-        services.AddSingleton<ILeaderElection>(sp => sp.GetRequiredService<BlobStorageLeaderElection>());
-
         
         return services;
     }

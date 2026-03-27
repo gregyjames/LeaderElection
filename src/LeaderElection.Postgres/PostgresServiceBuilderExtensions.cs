@@ -1,22 +1,19 @@
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Options;
 
 namespace LeaderElection.Postgres;
 
 public static class PostgresServiceBuilderExtensions
 {
     public static IServiceCollection AddPostgresLeaderElection(
-        this IServiceCollection services, 
+        this IServiceCollection services,
         Action<PostgresSettings> configureOptions)
     {
-        services.AddSingleton<IValidateOptions<PostgresSettings>, PostgresSettingsValidator>();
-        services.AddOptions<PostgresSettings>()
-            .Configure(configureOptions)
-            .ValidateOnStart();
-        
+        services.AddOptionsWithValidateOnStart<PostgresSettings, PostgresSettingsValidator>()
+            .Configure(configureOptions);
+
         services.AddSingleton<PostgresLeaderElection>();
         services.AddSingleton<ILeaderElection>(sp => sp.GetRequiredService<PostgresLeaderElection>());
-        
+
         return services;
     }
 
@@ -32,7 +29,7 @@ public static class PostgresServiceBuilderExtensions
             opt.RetryInterval = options.RetryInterval;
             opt.EnableGracefulShutdown = options.EnableGracefulShutdown;
         });
-        
+
         return services;
     }
 }

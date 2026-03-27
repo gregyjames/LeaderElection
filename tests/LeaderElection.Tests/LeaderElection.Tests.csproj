@@ -25,6 +25,8 @@
     <ProjectReference Include="$(SrcDir)LeaderElection.Redis\LeaderElection.Redis.csproj" />
     <ProjectReference Include="$(SrcDir)LeaderElection.BlobStorage\LeaderElection.BlobStorage.csproj" />
     <ProjectReference Include="$(SrcDir)LeaderElection.S3\LeaderElection.S3.csproj" />
+    <ProjectReference Include="$(SrcDir)LeaderElection.DistributedCache\LeaderElection.DistributedCache.csproj" />
+    <ProjectReference Include="$(SrcDir)LeaderElection.FusionCache\LeaderElection.FusionCache.csproj" />
     <ProjectReference Include="$(SrcDir)LeaderElection.Postgres\LeaderElection.Postgres.csproj" />
   </ItemGroup>
 
