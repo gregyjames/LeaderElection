@@ -1,5 +1,4 @@
 using LeaderElection.Postgres;
-using Microsoft.Extensions.Options;
 
 namespace LeaderElection.Tests;
 

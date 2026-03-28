@@ -25,7 +25,7 @@ public abstract class TestBase
 
         void Handler(object? sender, LeadershipChangedEventArgs leadership)
         {
-            if (leadership.LeadershipChanged == expectedLeadership)
+            if (leadership.IsLeader == expectedLeadership)
             {
                 tcs.TrySetResult(true);
             }

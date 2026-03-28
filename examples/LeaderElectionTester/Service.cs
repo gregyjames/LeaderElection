@@ -69,7 +69,7 @@ internal sealed class Service : BackgroundService
 
     private void OnLeadershipChanged(object? sender, LeadershipChangedEventArgs changed)
     {
-        if (changed.LeadershipChanged)
+        if (changed.IsLeader)
         {
             _logger.LogInformation("This instance is now the leader!");
         }

@@ -1,4 +1,3 @@
-using System.Diagnostics.CodeAnalysis;
 using LeaderElection.BlobStorage;
 using LeaderElection.DistributedCache;
 using LeaderElection.FusionCache;

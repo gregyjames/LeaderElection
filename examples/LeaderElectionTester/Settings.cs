@@ -1,4 +1,3 @@
-using System.Diagnostics.CodeAnalysis;
 using LeaderElection.Redis;
 
 namespace LeaderElectionTester;

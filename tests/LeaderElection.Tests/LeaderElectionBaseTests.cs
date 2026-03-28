@@ -130,7 +130,7 @@ public class LeaderElectionBaseTests
         };
         using var sut = new MockLeaderElection(settings, NullLogger.Instance);
         var tcs = new TaskCompletionSource<bool>();
-        sut.LeadershipChanged += (_, leaderShipChanged) => { if (!leaderShipChanged.LeadershipChanged) tcs.TrySetResult(true); };
+        sut.LeadershipChanged += (_, leaderShipChanged) => { if (!leaderShipChanged.IsLeader) tcs.TrySetResult(true); };
 
         sut.RenewResult = _ => Task.FromResult(false);
 
