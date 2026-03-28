@@ -1,3 +1,4 @@
+using System.Diagnostics.CodeAnalysis;
 using StackExchange.Redis;
 using Testcontainers.Redis;
 
@@ -12,16 +13,20 @@ namespace LeaderElection.Tests;
 /// requires access to the singleton <see cref="RedisContainerFixture"/>.
 /// </remarks>
 [CollectionDefinition("Redis Container")]
-public sealed class RedisContainerCollection : ICollectionFixture<RedisContainerFixture> { }
+[SuppressMessage("Maintainability", "CA1515:Consider making public types internal")]
+#pragma warning disable xUnit1027
+#pragma warning disable CA1515
+public sealed class RedisContainerCollectionFixture : ICollectionFixture<RedisContainerFixture> { }
 
 /// <summary>
-/// An Xunit fixture that manages the lifecycle of a temporary Redis container for
+/// A Xunit fixture that manages the lifecycle of a temporary Redis container for
 /// testing purposes.
 /// </summary>
+[SuppressMessage("Maintainability", "CA1515:Consider making public types internal")]
 public sealed class RedisContainerFixture : IAsyncLifetime
 {
     private RedisContainer _redisContainer = default!;
-    private IConnectionMultiplexer _connectionMultiplexer = default!;
+    private ConnectionMultiplexer _connectionMultiplexer = null!;
 
     /// <summary>
     /// Gets the connection string for the Redis container.
@@ -54,14 +59,9 @@ public sealed class RedisContainerFixture : IAsyncLifetime
 
     public async ValueTask DisposeAsync()
     {
-        if (_connectionMultiplexer != null)
-        {
-            await _connectionMultiplexer.CloseAsync().ConfigureAwait(false);
-            await _connectionMultiplexer.DisposeAsync().ConfigureAwait(false);
-        }
-        if (_redisContainer != null)
-        {
-            await _redisContainer.DisposeAsync().ConfigureAwait(false);
-        }
+        await _connectionMultiplexer.CloseAsync().ConfigureAwait(false);
+        await _connectionMultiplexer.DisposeAsync().ConfigureAwait(false);
+
+        await _redisContainer.DisposeAsync().ConfigureAwait(false);
     }
 }

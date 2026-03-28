@@ -8,7 +8,7 @@ public class PostgresSettingsValidatorTests
     private readonly PostgresSettingsValidator _validator = new();
 
     [Fact]
-    public void Should_Succeed_When_Settings_Are_Valid()
+    public void ShouldSucceedWhenSettingsAreValid()
     {
         var settings = new PostgresSettings
         {
@@ -27,7 +27,7 @@ public class PostgresSettingsValidatorTests
     [InlineData(null)]
     [InlineData("")]
     [InlineData(" ")]
-    public void Should_Fail_When_ConnectionString_Is_Invalid(string? connectionString)
+    public void ShouldFailWhenConnectionStringIsInvalid(string? connectionString)
     {
         var settings = new PostgresSettings
         {
@@ -46,7 +46,7 @@ public class PostgresSettingsValidatorTests
     [InlineData(null)]
     [InlineData("")]
     [InlineData(" ")]
-    public void Should_Fail_When_InstanceId_Is_Invalid(string? instanceId)
+    public void ShouldFailWhenInstanceIdIsInvalid(string? instanceId)
     {
         var settings = new PostgresSettings
         {
@@ -62,7 +62,7 @@ public class PostgresSettingsValidatorTests
     }
 
     [Fact]
-    public void Should_Fail_When_RetryInterval_Is_Negative()
+    public void ShouldFailWhenRetryIntervalIsNegative()
     {
         var settings = new PostgresSettings
         {

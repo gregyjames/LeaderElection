@@ -1,3 +1,4 @@
+using System.Diagnostics.CodeAnalysis;
 using Azure.Storage.Blobs;
 using Testcontainers.Azurite;
 
@@ -12,21 +13,23 @@ namespace LeaderElection.Tests;
 /// requires access to the singleton <see cref="AzuriteContainerFixture"/>.
 /// </remarks>
 [CollectionDefinition("Azurite Container")]
-public sealed class AzuriteContainerCollection : ICollectionFixture<AzuriteContainerFixture> { }
+[SuppressMessage("Maintainability", "CA1515:Consider making public types internal")]
+public sealed class AzuriteContainerCollectionFixture : ICollectionFixture<AzuriteContainerFixture> { }
 
 /// <summary>
 /// An Xunit fixture that manages the lifecycle of a temporary Azurite container for
 /// testing purposes.
 /// </summary>
+[SuppressMessage("Maintainability", "CA1515:Consider making public types internal")]
 public sealed class AzuriteContainerFixture : IAsyncLifetime
 {
-    private AzuriteContainer _azuriteContainer = default!;
+    private AzuriteContainer _azuriteContainer = null!;
 
     /// <summary>
     /// Gets the connection string for the Azurite container.
     /// </summary>
     public string ConnectionString =>
-        _azuriteContainer?.GetConnectionString()
+        _azuriteContainer.GetConnectionString()
         ?? throw new InvalidOperationException(
             "Azurite container is not initialized. Ensure InitializeAsync has been called."
         );
@@ -52,7 +55,6 @@ public sealed class AzuriteContainerFixture : IAsyncLifetime
 
     public async ValueTask DisposeAsync()
     {
-        if (_azuriteContainer != null)
-            await _azuriteContainer.DisposeAsync().ConfigureAwait(false);
+        await _azuriteContainer.DisposeAsync().ConfigureAwait(false);
     }
 }

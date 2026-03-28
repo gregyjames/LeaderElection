@@ -1,3 +1,4 @@
+using System.Diagnostics.CodeAnalysis;
 using Minio;
 using Testcontainers.Minio;
 
@@ -8,20 +9,23 @@ namespace LeaderElection.Tests;
 /// across all tests that require it.
 /// </summary>
 [CollectionDefinition("Minio Container")]
-public sealed class MinioContainerCollection : ICollectionFixture<MinioContainerFixture> { }
+[SuppressMessage("Maintainability", "CA1515:Consider making public types internal")]
+public sealed class MinioContainerCollectionFixture : ICollectionFixture<MinioContainerFixture> { }
 
 /// <summary>
-/// An Xunit fixture that manages the lifecycle of a temporary Minio container for
+/// A Xunit fixture that manages the lifecycle of a temporary Minio container for
 /// testing purposes.
 /// </summary>
+[SuppressMessage("Maintainability", "CA1515:Consider making public types internal")]
 public sealed class MinioContainerFixture : IAsyncLifetime
 {
-    private MinioContainer _minioContainer = default!;
+    private MinioContainer _minioContainer = null!;
 
-    public string AccessKey => "minioadmin";
-    public string SecretKey => "minioadmin";
-    public string Endpoint => _minioContainer?.GetConnectionString() ?? throw new InvalidOperationException("Minio container is not initialized.");
+    public static string AccessKey => "minioadmin";
+    public static string SecretKey => "minioadmin";
+    public string Endpoint => _minioContainer.GetConnectionString() ?? throw new InvalidOperationException("Minio container is not initialized.");
 
+    [SuppressMessage("Reliability", "CA2000:Dispose objects before losing scope")]
     public IMinioClient CreateClient()
     {
         return new MinioClient()
@@ -43,7 +47,6 @@ public sealed class MinioContainerFixture : IAsyncLifetime
 
     public async ValueTask DisposeAsync()
     {
-        if (_minioContainer != null)
-            await _minioContainer.DisposeAsync().ConfigureAwait(false);
+        await _minioContainer.DisposeAsync().ConfigureAwait(false);
     }
 }
