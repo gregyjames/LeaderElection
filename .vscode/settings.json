@@ -1,4 +1,51 @@
 {
-  "coverage-gutters.coverageBaseDir": "artifacts/coverage",
+  "terminal.integrated.automationProfile.windows": {
+    // Use cmd.exe when performing automation tasks such as debugging. Cmd.exe opens very fast
+    "path": "C:\\WINDOWS\\system32\\cmd.exe"
+  },
+
+  // Use .editorconfig for code style settings. The "EditorConfig for VS Code"
+  // extension automatically applies .editorconfig settings to VS Code.
+  "editor.formatOnSave": false,
+  "editor.defaultFormatter": null,
+  "[csharp]": {
+    // "editor.formatOnSave": true,
+    "editor.defaultFormatter": "csharpier.csharpier-vscode"
+  },
+  "[json]": {
+    // "editor.formatOnSave": true,
+    "editor.defaultFormatter": "esbenp.prettier-vscode"
+  },
+  "[jsonc]": {
+    // "editor.formatOnSave": true,
+    "editor.defaultFormatter": "esbenp.prettier-vscode"
+  },
+  "[markdown]": {
+    // "editor.formatOnSave": true,
+    "editor.defaultFormatter": "esbenp.prettier-vscode"
+  },
+  "[yaml]": {
+    // "editor.formatOnSave": true,
+    "editor.defaultFormatter": "esbenp.prettier-vscode"
+  },
+  "[xml]": {
+    // "editor.formatOnSave": true,
+    "editor.defaultFormatter": "DotJoshJohnson.xml"
+  },
+  "[github-actions-workflow]": {
+    // "editor.formatOnSave": true,
+    "editor.defaultFormatter": "esbenp.prettier-vscode"
+  },
+  "[plaintext]": {
+    "editor.formatOnSave": false,
+    "editor.defaultFormatter": null
+  },
+  "files.associations": {
+    "CODEOWNERS": "text",
+    "**/*.props": "xml"
+  },
+  "search.exclude": {
+    "artifacts/**": true
+  },
   "coverage-gutters.coverageFileNames": ["coverage.info", "coverage.cobertura.xml"]
 }

@@ -1,0 +1,10 @@
+{
+  "recommendations": [
+    "aaron-bond.better-comments",
+    "csharpier.csharpier-vscode",
+    "dotjoshjohnson.xml",
+    "editorconfig.editorconfig",
+    "esbenp.prettier-vscode",
+    "ms-dotnettools.csdevkit"
+  ]
+}
