@@ -19,12 +19,12 @@ public interface ILeaderElection : IAsyncDisposable
     /// <summary>
     /// Event fired when leadership status changes
     /// </summary>
-    event EventHandler<bool>? LeadershipChanged;
+    event EventHandler<LeadershipChangedEventArgs>? LeadershipChanged;
 
     /// <summary>
     /// Event fired when an error occurs during leader election
     /// </summary>
-    event EventHandler<Exception>? ErrorOccurred;
+    event EventHandler<LeadershipExceptionEventArgs>? ErrorOccurred;
 
     /// <summary>
     /// Starts the leader election process
@@ -62,4 +62,4 @@ public interface ILeaderElection : IAsyncDisposable
     /// <param name="cancellationToken">Cancellation token</param>
     /// <returns>Task representing the async operation</returns>
     Task RunTaskIfLeaderAsync(Action task, CancellationToken cancellationToken = default);
-} 
+}
