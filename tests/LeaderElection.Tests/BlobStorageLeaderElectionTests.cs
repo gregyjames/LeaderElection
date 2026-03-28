@@ -12,7 +12,7 @@ namespace LeaderElection.Tests;
 [Trait("Category", "BlobStorage")]
 public sealed class BlobStorageLeaderElectionTests(AzuriteContainerFixture azuriteFixture) : TestBase
 {
-    private BlobServiceClient _blobServiceClient = azuriteFixture.BlobServiceClient;
+    private readonly BlobServiceClient _blobServiceClient = azuriteFixture.BlobServiceClient;
 
     private BlobStorageSettings CreateSettings(
         string containerName, // should be unique per test to avoid conflicts
@@ -40,7 +40,7 @@ public sealed class BlobStorageLeaderElectionTests(AzuriteContainerFixture azuri
             CreateContainerIfNotExists = createContainerIfNotExists
         };
 
-    private BlobStorageLeaderElection CreateSUT(BlobStorageSettings options) =>
+    private BlobStorageLeaderElection CreateSut(BlobStorageSettings options) =>
         new(
             _blobServiceClient,
             Options.Create(options),
@@ -48,12 +48,12 @@ public sealed class BlobStorageLeaderElectionTests(AzuriteContainerFixture azuri
         );
 
     [Fact]
-    public async Task Should_Acquire_Leadership_When_No_Other_Instance_Exists()
+    public async Task ShouldAcquireLeadershipWhenNoOtherInstanceExists()
     {
         // Arrange
         var options = CreateSettings("test-leader-election");
 
-        await using var leaderElection = CreateSUT(options);
+        await using var leaderElection = CreateSut(options);
 
         // Act
         await leaderElection.StartAsync(CancellationToken);
@@ -66,7 +66,7 @@ public sealed class BlobStorageLeaderElectionTests(AzuriteContainerFixture azuri
     }
 
     [Fact]
-    public async Task Should_Not_Acquire_Leadership_When_Another_Instance_Has_Leadership()
+    public async Task ShouldNotAcquireLeadershipWhenAnotherInstanceHasLeadership()
     {
         // Arrange
         var options1 = CreateSettings(
@@ -83,8 +83,8 @@ public sealed class BlobStorageLeaderElectionTests(AzuriteContainerFixture azuri
             renewInterval: TimeSpan.FromSeconds(5)
         );
 
-        await using var leaderElection1 = CreateSUT(options1);
-        await using var leaderElection2 = CreateSUT(options2);
+        await using var leaderElection1 = CreateSut(options1);
+        await using var leaderElection2 = CreateSut(options2);
 
         // Act
         await leaderElection1.StartAsync(CancellationToken);
@@ -102,7 +102,7 @@ public sealed class BlobStorageLeaderElectionTests(AzuriteContainerFixture azuri
     }
 
     [Fact]
-    public async Task Should_Transfer_Leadership_When_Current_Leader_Stops()
+    public async Task ShouldTransferLeadershipWhenCurrentLeaderStops()
     {
         // Arrange
         var options1 = CreateSettings(
@@ -121,9 +121,9 @@ public sealed class BlobStorageLeaderElectionTests(AzuriteContainerFixture azuri
             retryInterval: TimeSpan.FromSeconds(1)
         );
 
-        await using var leaderElection1 = CreateSUT(options1);
+        await using var leaderElection1 = CreateSut(options1);
 
-        await using var leaderElection2 = CreateSUT(options2);
+        await using var leaderElection2 = CreateSut(options2);
 
         // Act
         await leaderElection1.StartAsync(CancellationToken);
@@ -143,12 +143,12 @@ public sealed class BlobStorageLeaderElectionTests(AzuriteContainerFixture azuri
     }
 
     [Fact]
-    public async Task Should_Run_Task_Only_When_Leader()
+    public async Task ShouldRunTaskOnlyWhenLeader()
     {
         // Arrange
         var options = CreateSettings("test-leader-election-task");
 
-        await using var leaderElection = CreateSUT(options);
+        await using var leaderElection = CreateSut(options);
 
         var taskExecuted = false;
 
@@ -165,12 +165,12 @@ public sealed class BlobStorageLeaderElectionTests(AzuriteContainerFixture azuri
     }
 
     [Fact]
-    public async Task Should_Not_Run_Task_When_Not_Leader()
+    public async Task ShouldNotRunTaskWhenNotLeader()
     {
         // Arrange
         var options = CreateSettings("test-leader-election-no-task");
 
-        await using var leaderElection = CreateSUT(options);
+        await using var leaderElection = CreateSut(options);
 
         var taskExecuted = false;
 
@@ -182,12 +182,12 @@ public sealed class BlobStorageLeaderElectionTests(AzuriteContainerFixture azuri
     }
 
     [Fact]
-    public async Task Should_Handle_Manual_Leadership_Acquisition()
+    public async Task ShouldHandleManualLeadershipAcquisition()
     {
         // Arrange
         var options = CreateSettings("test-leader-election-manual");
 
-        await using var leaderElection = CreateSUT(options);
+        await using var leaderElection = CreateSut(options);
 
         // Act
         var result = await leaderElection.TryAcquireLeadershipAsync(CancellationToken);
@@ -200,14 +200,14 @@ public sealed class BlobStorageLeaderElectionTests(AzuriteContainerFixture azuri
     }
 
     [Fact]
-    public async Task Should_Create_Container_And_Blob_If_Not_Exists()
+    public async Task ShouldCreateContainerAndBlobIfNotExists()
     {
         // Arrange
         var options = CreateSettings(
             $"test-container-{Guid.NewGuid():N}",
             createContainerIfNotExists: true);
 
-        await using var leaderElection = CreateSUT(options);
+        await using var leaderElection = CreateSut(options);
 
         // Act
         await leaderElection.StartAsync(CancellationToken);
@@ -229,45 +229,47 @@ public sealed class BlobStorageLeaderElectionTests(AzuriteContainerFixture azuri
     }
 
     [Fact]
-    public async Task Should_Work_With_Second_Constructor()
+    public async Task ShouldWorkWithSecondConstructor()
     {
         var containerName = "test-second-constructor";
         var options = CreateSettings(containerName);
         var containerClient = _blobServiceClient.GetBlobContainerClient(containerName);
         await containerClient.CreateIfNotExistsAsync(cancellationToken: CancellationToken);
 
+#pragma warning disable CA2007
         await using var leaderElection = new BlobStorageLeaderElection(
             containerClient,
             options,
             NullLoggerFactory.Instance.CreateLogger<BlobStorageLeaderElection>()
         );
-        
+#pragma warning restore CA2007
+
         await leaderElection.StartAsync(CancellationToken);
         await WaitForLeadershipChange(leaderElection, true, options.LeaseDuration);
-        
+
         leaderElection.IsLeader.Should().BeTrue();
         await leaderElection.StopAsync(CancellationToken);
     }
 
     [Fact]
-    public async Task Should_Handle_Renewal_Conflict()
+    public async Task ShouldHandleRenewalConflict()
     {
         var options = CreateSettings("test-renewal-conflict", leaseDuration: TimeSpan.FromSeconds(15));
-        await using var leaderElection = CreateSUT(options);
+        await using var leaderElection = CreateSut(options);
 
         await leaderElection.StartAsync(CancellationToken);
         await WaitForLeadershipChange(leaderElection, true, options.LeaseDuration);
-        
+
         var containerClient = _blobServiceClient.GetBlobContainerClient(options.ContainerName);
         var blobClient = containerClient.GetBlobClient(options.BlobName);
         var leaseClient = blobClient.GetBlobLeaseClient();
-        
+
         // Break the lease immediately
         await leaseClient.BreakAsync(TimeSpan.Zero, cancellationToken: CancellationToken);
-        
+
         // Acquire it with a DIFFERENT lease ID (by not specifying one)
         await leaseClient.AcquireAsync(TimeSpan.FromSeconds(15), cancellationToken: CancellationToken);
-        
+
         await WaitForLeadershipChange(leaderElection, false, TimeSpan.FromSeconds(20));
         leaderElection.IsLeader.Should().BeFalse();
 
@@ -275,7 +277,7 @@ public sealed class BlobStorageLeaderElectionTests(AzuriteContainerFixture azuri
     }
 
     [Fact]
-    public async Task Should_Retain_Leadership_After_At_Least_One_Renewal_Cycle()
+    public async Task ShouldRetainLeadershipAfterAtLeastOneRenewalCycle()
     {
         // Arrange
         var options = CreateSettings(
@@ -283,7 +285,7 @@ public sealed class BlobStorageLeaderElectionTests(AzuriteContainerFixture azuri
             renewInterval: TimeSpan.FromSeconds(1)
         );
 
-        await using var leaderElection = CreateSUT(options);
+        await using var leaderElection = CreateSut(options);
 
         // Act & Assert
         await TestShouldRetainLeadershipAfterAtLeastOneRenewalCycle(leaderElection, options);

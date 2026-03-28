@@ -7,11 +7,11 @@ namespace LeaderElection.Tests;
 public class PostgresServiceBuilderExtensionsTests
 {
     [Fact]
-    public void Should_Register_All_Required_Services()
+    public void ShouldRegisterAllRequiredServices()
     {
         var services = new ServiceCollection();
         services.AddLogging();
-        
+
         services.AddPostgresLeaderElection(options =>
         {
             options.ConnectionString = "Host=localhost";
@@ -19,26 +19,27 @@ public class PostgresServiceBuilderExtensionsTests
         });
 
         var serviceProvider = services.BuildServiceProvider();
-        
+
         serviceProvider.GetService<ILeaderElection>().Should().NotBeNull();
-        
+
         serviceProvider.GetService<PostgresLeaderElection>().Should().NotBeNull();
-        
+
         var options = serviceProvider.GetService<IOptions<PostgresSettings>>();
         options.Should().NotBeNull();
-        options!.Value.ConnectionString.Should().Be("Host=localhost");
-        
+        options.Value.ConnectionString.Should().Be("Host=localhost");
+
         var validators = serviceProvider.GetServices<IValidateOptions<PostgresSettings>>();
-        validators.Should().NotBeEmpty();
-        validators.Should().ContainSingle(v => v is PostgresSettingsValidator);
+        var validateOptionsEnumerable = validators.ToList();
+        validateOptionsEnumerable.Should().NotBeEmpty();
+        validateOptionsEnumerable.Should().ContainSingle(v => v is PostgresSettingsValidator);
     }
 
     [Fact]
-    public void Should_Fail_Validation_When_Settings_Are_Invalid()
+    public void ShouldFailValidationWhenSettingsAreInvalid()
     {
         var services = new ServiceCollection();
         services.AddLogging();
-        
+
         services.AddPostgresLeaderElection(options =>
         {
             // Specifically leave ConnectionString empty
@@ -56,11 +57,11 @@ public class PostgresServiceBuilderExtensionsTests
     }
 
     [Fact]
-    public void Should_Register_With_PostgresSettings_Instance()
+    public void ShouldRegisterWithPostgresSettingsInstance()
     {
         var services = new ServiceCollection();
         services.AddLogging();
-        
+
         var settings = new PostgresSettings
         {
             ConnectionString = "Host=localhost",

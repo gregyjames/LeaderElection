@@ -31,18 +31,18 @@ public sealed class PostgresLeaderElectionTests(PostgresContainerFixture postgre
             EnableGracefulShutdown = enableGracefulShutdown,
         };
 
-    private PostgresLeaderElection CreateSUT(PostgresSettings options) =>
+    private static PostgresLeaderElection CreateSut(PostgresSettings options) =>
         new(
             Options.Create(options),
             NullLoggerFactory.Instance.CreateLogger<PostgresLeaderElection>()
         );
 
     [Fact]
-    public async Task Should_Acquire_Leadership_When_No_Other_Instance_Exists()
+    public async Task ShouldAcquireLeadershipWhenNoOtherInstanceExists()
     {
         var options = CreateSettings();
 
-        await using var leaderElection = CreateSUT(options);
+        await using var leaderElection = CreateSut(options);
 
         await leaderElection.StartAsync(CancellationToken);
 
@@ -53,13 +53,13 @@ public sealed class PostgresLeaderElectionTests(PostgresContainerFixture postgre
     }
 
     [Fact]
-    public async Task Should_Not_Acquire_Leadership_When_Another_Instance_Has_Leadership()
+    public async Task ShouldNotAcquireLeadershipWhenAnotherInstanceHasLeadership()
     {
         var options1 = CreateSettings(instanceId: "test-instance-01");
         var options2 = CreateSettings(instanceId: "test-instance-02", lockId: options1.LockId);
 
-        await using var leaderElection1 = CreateSUT(options1);
-        await using var leaderElection2 = CreateSUT(options2);
+        await using var leaderElection1 = CreateSut(options1);
+        await using var leaderElection2 = CreateSut(options2);
 
         await leaderElection1.StartAsync(CancellationToken);
         await WaitForLeadershipChange(leaderElection1, true, TimeSpan.FromSeconds(10));
@@ -75,13 +75,13 @@ public sealed class PostgresLeaderElectionTests(PostgresContainerFixture postgre
     }
 
     [Fact]
-    public async Task Should_Transfer_Leadership_When_Current_Leader_Stops()
+    public async Task ShouldTransferLeadershipWhenCurrentLeaderStops()
     {
         var options1 = CreateSettings(instanceId: "test-instance-01");
         var options2 = CreateSettings(instanceId: "test-instance-02", lockId: options1.LockId);
 
-        await using var leaderElection1 = CreateSUT(options1);
-        await using var leaderElection2 = CreateSUT(options2);
+        await using var leaderElection1 = CreateSut(options1);
+        await using var leaderElection2 = CreateSut(options2);
 
         await leaderElection1.StartAsync(CancellationToken);
         await WaitForLeadershipChange(leaderElection1, true, TimeSpan.FromSeconds(10));
@@ -98,11 +98,11 @@ public sealed class PostgresLeaderElectionTests(PostgresContainerFixture postgre
     }
 
     [Fact]
-    public async Task Should_Run_Task_Only_When_Leader()
+    public async Task ShouldRunTaskOnlyWhenLeader()
     {
         var options = CreateSettings();
 
-        await using var leaderElection = CreateSUT(options);
+        await using var leaderElection = CreateSut(options);
 
         var taskExecuted = false;
 
@@ -117,11 +117,11 @@ public sealed class PostgresLeaderElectionTests(PostgresContainerFixture postgre
     }
 
     [Fact]
-    public async Task Should_Not_Run_Task_When_Not_Leader()
+    public async Task ShouldNotRunTaskWhenNotLeader()
     {
         var options = CreateSettings();
 
-        await using var leaderElection = CreateSUT(options);
+        await using var leaderElection = CreateSut(options);
 
         var taskExecuted = false;
 
@@ -131,11 +131,11 @@ public sealed class PostgresLeaderElectionTests(PostgresContainerFixture postgre
     }
 
     [Fact]
-    public async Task Should_Handle_Manual_Leadership_Acquisition()
+    public async Task ShouldHandleManualLeadershipAcquisition()
     {
         var options = CreateSettings();
 
-        await using var leaderElection = CreateSUT(options);
+        await using var leaderElection = CreateSut(options);
 
         var result = await leaderElection.TryAcquireLeadershipAsync(CancellationToken);
 
@@ -146,12 +146,12 @@ public sealed class PostgresLeaderElectionTests(PostgresContainerFixture postgre
     }
 
     [Fact]
-    public async Task Should_Retain_Leadership_After_At_Least_One_Renewal_Cycle()
+    public async Task ShouldRetainLeadershipAfterAtLeastOneRenewalCycle()
     {
         // Arrange
         var options = CreateSettings(renewInterval: TimeSpan.FromSeconds(1));
 
-        await using var leaderElection = CreateSUT(options);
+        await using var leaderElection = CreateSut(options);
 
         // Act & Assert
         await TestShouldRetainLeadershipAfterAtLeastOneRenewalCycle(leaderElection, options);

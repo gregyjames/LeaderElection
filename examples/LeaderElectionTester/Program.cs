@@ -11,24 +11,29 @@ using Microsoft.Extensions.Hosting;
 using Minio;
 using StackExchange.Redis;
 using ZiggyCreatures.Caching.Fusion;
+// ReSharper disable NotResolvedInText
 
 var builder = Host.CreateApplicationBuilder(args);
 
-var leaderElectionType = builder
-    .Configuration.GetValue("LeaderElectionType", "Redis")
+#pragma warning disable CA1308
+var leaderElectionType = ConfigurationBinder.GetValue(builder
+        .Configuration, "LeaderElectionType", "Redis")
     .ToLowerInvariant() switch
-{
+#pragma warning restore CA1308
+    {
     "redis" => "Redis",
     "distributedcache" or "dc" => "DistributedCache",
     "fusioncache" or "fc" => "FusionCache",
     "blobstorage" or "blob" => "BlobStorage",
     "s3" => "S3",
     "postgres" => "Postgres",
+#pragma warning disable CA2208
     _ => throw new ArgumentException(
         "Invalid LeaderElection type. Supported values are: Redis, DistributedCache (dc), FusionCache (fc), BlobStorage (blob), S3, Postgres.",
         "LeaderElectionType"
     ),
-};
+#pragma warning restore CA2208
+    };
 
 // Get a unique ID for each running instance (e.g. in different terminals or machines).
 var instanceId = builder.Configuration.GetValue(

@@ -1,35 +1,38 @@
+using System.Diagnostics;
+using System.Diagnostics.CodeAnalysis;
+
 namespace LeaderElection.Tests;
 
+[SuppressMessage("Maintainability", "CA1515:Consider making public types internal")]
 public abstract class TestBase
 {
     /// <summary>
     /// The <see cref="CancellationToken"/> used to abort the test.
     /// Tests should observe this token and gracefully exit when cancellation is requested.
     /// </summary>
-    protected CancellationToken CancellationToken => TestContext.Current.CancellationToken;
+    protected static CancellationToken CancellationToken => TestContext.Current.CancellationToken;
 
-    protected TestBase() { }
-
-    protected async Task WaitForLeadershipChange(
+    protected static async Task WaitForLeadershipChange(
         ILeaderElection leaderElection,
         bool expectedLeadership,
         TimeSpan timeout = default
     )
     {
-        if (timeout == default)
+        if (timeout == TimeSpan.Zero)
             timeout = TimeSpan.FromSeconds(30);
 
         var tcs = new TaskCompletionSource<bool>();
 
-        EventHandler<bool>? handler = (sender, isLeader) =>
+        void Handler(object? sender, LeadershipChangedEventArgs leadership)
         {
-            if (isLeader == expectedLeadership)
+            if (leadership.IsLeader == expectedLeadership)
             {
                 tcs.TrySetResult(true);
             }
-        };
+        }
 
-        leaderElection.LeadershipChanged += handler;
+        Debug.Assert(leaderElection != null, nameof(leaderElection) + " != null");
+        leaderElection.LeadershipChanged += Handler;
         try
         {
             // Check if already in the expected state
@@ -45,24 +48,26 @@ public abstract class TestBase
             );
             linkedCts.Token.Register(() => tcs.TrySetCanceled());
 
-            await tcs.Task;
+            await tcs.Task.ConfigureAwait(false);
         }
         finally
         {
-            leaderElection.LeadershipChanged -= handler;
+            leaderElection.LeadershipChanged -= Handler;
         }
     }
 
-    protected async Task WaitForError(ILeaderElection leaderElection, TimeSpan timeout = default)
+    protected static async Task WaitForError(ILeaderElection leaderElection, TimeSpan timeout = default)
     {
-        if (timeout == default)
+        if (timeout == TimeSpan.Zero)
             timeout = TimeSpan.FromSeconds(30);
 
         var tcs = new TaskCompletionSource<Exception>();
 
-        EventHandler<Exception>? handler = (sender, exception) => tcs.TrySetResult(exception);
+        void Handler(object? sender, LeadershipExceptionEventArgs args) => tcs.TrySetResult(args.LeadershipException);
 
-        leaderElection.ErrorOccurred += handler;
+        Debug.Assert(leaderElection != null, nameof(leaderElection) + " != null");
+        leaderElection.ErrorOccurred += Handler;
+
         try
         {
             using var timeoutCts = new CancellationTokenSource(timeout);
@@ -72,11 +77,11 @@ public abstract class TestBase
             );
             linkedCts.Token.Register(() => tcs.TrySetCanceled());
 
-            await tcs.Task;
+            await tcs.Task.ConfigureAwait(false);
         }
         finally
         {
-            leaderElection.ErrorOccurred -= handler;
+            leaderElection.ErrorOccurred -= Handler;
         }
     }
 
@@ -97,22 +102,23 @@ public abstract class TestBase
     /// <param name="timeout">The maximum time to wait for a renewal.</param>
     /// <param name="pollInterval">The interval at which to check for leadership renewal.</param>
     /// <returns>True if a renewal was observed within the timeout period; otherwise, false.</returns>
-    protected async Task<bool> WaitForLeadershipRenewal(
+    protected static async Task<bool> WaitForLeadershipRenewal(
         ILeaderElection leaderElection,
-        TimeSpan? timeout = default,
-        TimeSpan? pollInterval = default
+        TimeSpan? timeout = null,
+        TimeSpan? pollInterval = null
     )
     {
         timeout ??= TimeSpan.FromSeconds(30);
         pollInterval ??= TimeSpan.FromMilliseconds(50);
 
+        Debug.Assert(leaderElection != null, nameof(leaderElection) + " != null");
         leaderElection.IsLeader.Should().BeTrue("Expected to be leader before waiting for renewal");
         var lastKnownRenewal = leaderElection.LastLeadershipRenewal;
 
         var stopTime = DateTime.UtcNow + timeout.Value;
         while (DateTime.UtcNow < stopTime)
         {
-            await Task.Delay(pollInterval.Value, CancellationToken);
+            await Task.Delay(pollInterval.Value, CancellationToken).ConfigureAwait(false);
 
             if (!leaderElection.IsLeader)
             {
@@ -127,23 +133,25 @@ public abstract class TestBase
         return false; // Timeout reached without observing renewal
     }
 
-    protected async Task TestShouldRetainLeadershipAfterAtLeastOneRenewalCycle(
+    protected static async Task TestShouldRetainLeadershipAfterAtLeastOneRenewalCycle(
         ILeaderElection leaderElection,
         LeaderElectionSettingsBase settings
     )
     {
         // Act
-        await leaderElection.StartAsync(CancellationToken);
-        await WaitForLeadershipChange(leaderElection, true);
+        Debug.Assert(leaderElection != null, nameof(leaderElection) + " != null");
+        await leaderElection.StartAsync(CancellationToken).ConfigureAwait(false);
+        await WaitForLeadershipChange(leaderElection, true).ConfigureAwait(false);
 
+        Debug.Assert(settings != null, nameof(settings) + " != null");
         var renewalObserved = await WaitForLeadershipRenewal(
             leaderElection,
             settings.RenewInterval + TimeSpan.FromSeconds(0.5) // Add a buffer to avoid timing issues
-        );
+        ).ConfigureAwait(false);
 
         // Assert
         renewalObserved.Should().BeTrue();
 
-        await leaderElection.StopAsync(CancellationToken);
+        await leaderElection.StopAsync(CancellationToken).ConfigureAwait(false);
     }
 }

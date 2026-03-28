@@ -10,13 +10,15 @@ namespace LeaderElection.Tests;
 
 public partial class SettingsValidatorTests
 {
-    public class TestSettings : LeaderElectionSettingsBase { }
+    #pragma warning disable CA1852
+    internal class TestSettings : LeaderElectionSettingsBase { }
 
     [OptionsValidator]
-    public partial class TestSettingsValidator : IValidateOptions<TestSettings> { }
+    #pragma warning disable CA1852
+    internal partial class TestSettingsValidator : IValidateOptions<TestSettings> { }
 
     [Fact]
-    public void BaseSettingsValidator_Should_Fail_When_Default_Settings()
+    public void BaseSettingsValidatorShouldFailWhenDefaultSettings()
     {
         var validator = new TestSettingsValidator();
         var settings = new TestSettings { InstanceId = string.Empty, RenewInterval = TimeSpan.Zero, RetryInterval = TimeSpan.Zero };
@@ -30,7 +32,7 @@ public partial class SettingsValidatorTests
     }
 
     [Fact]
-    public void S3SettingsValidator_Should_Validate_Correctly()
+    public void S3SettingsValidatorShouldValidateCorrectly()
     {
         var validator = new S3SettingsValidator();
         var settings = new S3Settings
@@ -49,7 +51,7 @@ public partial class SettingsValidatorTests
     }
 
     [Fact]
-    public void RedisSettingsValidator_Should_Validate_Correctly()
+    public void RedisSettingsValidatorShouldValidateCorrectly()
     {
         var validator = new RedisSettingsValidator();
         var settings = new RedisSettings
@@ -70,7 +72,7 @@ public partial class SettingsValidatorTests
     }
 
     [Fact]
-    public void BlobStorageSettingsValidator_Should_Validate_Correctly()
+    public void BlobStorageSettingsValidatorShouldValidateCorrectly()
     {
         var validator = new BlobStorageSettingsValidator();
         var settings = new BlobStorageSettings
@@ -89,7 +91,7 @@ public partial class SettingsValidatorTests
     }
 
     [Fact]
-    public void DistributedCacheSettingsValidator_Should_Validate_Correctly()
+    public void DistributedCacheSettingsValidatorShouldValidateCorrectly()
     {
         var validator = new DistributedCacheSettingsValidator();
         var settings = new DistributedCacheSettings
@@ -106,7 +108,7 @@ public partial class SettingsValidatorTests
     }
 
     [Fact]
-    public void FusionCacheSettingsValidator_Should_Validate_Correctly()
+    public void FusionCacheSettingsValidatorShouldValidateCorrectly()
     {
         var validator = new FusionCacheSettingsValidator();
         var settings = new FusionCacheSettings
@@ -123,7 +125,7 @@ public partial class SettingsValidatorTests
     }
 
     [Fact]
-    public void PostgresSettingsValidator_Should_Validate_Correctly()
+    public void PostgresSettingsValidatorShouldValidateCorrectly()
     {
         var validator = new PostgresSettingsValidator();
         var settings = new PostgresSettings
