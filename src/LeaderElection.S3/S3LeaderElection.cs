@@ -16,8 +16,9 @@ public sealed partial class S3LeaderElection : LeaderElectionBase<S3Settings>
 
     public S3LeaderElection(
         IMinioClient client,
-        IOptions<S3Settings>? options,
-        ILogger<S3LeaderElection> logger) : base(options?.Value ?? throw new ArgumentNullException(nameof(options)), logger)
+        IOptions<S3Settings> options,
+        ILogger<S3LeaderElection> logger)
+        : base(options?.Value ?? throw new ArgumentNullException(nameof(options)), logger)
     {
         _client = client ?? throw new ArgumentNullException(nameof(client));
     }

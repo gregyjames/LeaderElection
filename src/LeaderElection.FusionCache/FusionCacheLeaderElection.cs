@@ -9,8 +9,9 @@ public partial class FusionCacheLeaderElection: LeaderElectionBase<FusionCacheSe
     private readonly IFusionCache _cache;
 
     public FusionCacheLeaderElection(IFusionCache cache,
-        IOptions<FusionCacheSettings>? options,
-        ILogger<FusionCacheLeaderElection> logger): base(options?.Value ?? throw new ArgumentNullException(nameof(options)), logger)
+        IOptions<FusionCacheSettings> options,
+        ILogger<FusionCacheLeaderElection> logger)
+        : base(options?.Value ?? throw new ArgumentNullException(nameof(options)), logger)
     {
         _cache = cache ?? throw new ArgumentNullException(nameof(cache));
     }

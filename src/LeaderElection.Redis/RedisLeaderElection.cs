@@ -4,13 +4,19 @@ using StackExchange.Redis;
 
 namespace LeaderElection.Redis;
 
-public partial class RedisLeaderElection(
-    IConnectionMultiplexer connectionMultiplexer,
-    IOptions<RedisSettings>? options,
-    ILogger<RedisLeaderElection> logger)
-    : LeaderElectionBase<RedisSettings>(options?.Value ?? throw new ArgumentNullException(nameof(options)), logger)
+public partial class RedisLeaderElection : LeaderElectionBase<RedisSettings>
 {
-    private readonly IDatabase _redis = connectionMultiplexer.GetDatabase() ?? throw new ArgumentNullException(nameof(connectionMultiplexer));
+    private readonly IDatabase _redis;
+
+    public RedisLeaderElection(
+        IConnectionMultiplexer connectionMultiplexer,
+        IOptions<RedisSettings> options,
+        ILogger<RedisLeaderElection> logger)
+        : base(options?.Value ?? throw new ArgumentNullException(nameof(options)), logger)
+    {
+        _ = connectionMultiplexer ?? throw new ArgumentNullException(nameof(connectionMultiplexer));
+        this._redis = connectionMultiplexer.GetDatabase() ?? throw new ArgumentNullException(nameof(connectionMultiplexer));
+    }
 
     protected override async Task<bool> TryAcquireLeadershipInternalAsync(CancellationToken cancellationToken)
     {

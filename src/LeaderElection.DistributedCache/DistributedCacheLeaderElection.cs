@@ -9,8 +9,9 @@ public partial class DistributedCacheLeaderElection: LeaderElectionBase<Distribu
     private readonly IDistributedCache _cache;
 
     public DistributedCacheLeaderElection(IDistributedCache cache,
-        IOptions<DistributedCacheSettings>? options,
-        ILogger<DistributedCacheLeaderElection> logger): base(options?.Value ?? throw new InvalidOperationException(), logger)
+        IOptions<DistributedCacheSettings> options,
+        ILogger<DistributedCacheLeaderElection> logger)
+        : base(options?.Value ?? throw new InvalidOperationException(), logger)
     {
         _cache = cache ?? throw new ArgumentNullException(nameof(cache));
     }

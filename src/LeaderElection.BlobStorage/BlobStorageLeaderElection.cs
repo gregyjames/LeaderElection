@@ -11,16 +11,22 @@ public partial class BlobStorageLeaderElection : LeaderElectionBase<BlobStorageS
     private string? _currentLeaseId;
 
     public BlobStorageLeaderElection(
-        BlobServiceClient? blobServiceClient,
-        IOptions<BlobStorageSettings>? options,
-        ILogger<BlobStorageLeaderElection> logger) : base(options?.Value ?? throw new ArgumentNullException(nameof(options)), logger)
+        BlobServiceClient blobServiceClient,
+        IOptions<BlobStorageSettings> options,
+        ILogger<BlobStorageLeaderElection> logger)
+        : base(options?.Value ?? throw new ArgumentNullException(nameof(options)), logger)
     {
-        _containerClient = blobServiceClient?.GetBlobContainerClient(_settings.ContainerName);
+        _ = blobServiceClient ?? throw new ArgumentNullException(nameof(blobServiceClient));
+        _containerClient = blobServiceClient.GetBlobContainerClient(_settings.ContainerName);
 
-        _blobClient = _containerClient?.GetBlobClient(_settings.BlobName);
+        _blobClient = _containerClient.GetBlobClient(_settings.BlobName);
     }
 
-    public BlobStorageLeaderElection(BlobContainerClient client, BlobStorageSettings settings, ILogger<BlobStorageLeaderElection> logger) : base(settings ?? throw new ArgumentNullException(nameof(settings)), logger)
+    public BlobStorageLeaderElection(
+        BlobContainerClient client,
+        BlobStorageSettings settings,
+        ILogger<BlobStorageLeaderElection> logger)
+        : base(settings ?? throw new ArgumentNullException(nameof(settings)), logger)
     {
         _containerClient = client ?? throw new ArgumentNullException(nameof(client));
 

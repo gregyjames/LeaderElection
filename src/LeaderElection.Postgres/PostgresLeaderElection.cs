@@ -10,7 +10,7 @@ public sealed partial class PostgresLeaderElection : LeaderElectionBase<Postgres
     private NpgsqlConnection? _activeConnection;
 
     public PostgresLeaderElection(
-        IOptions<PostgresSettings>? options,
+        IOptions<PostgresSettings> options,
         ILogger<PostgresLeaderElection> logger)
         : base(options?.Value ?? throw new ArgumentNullException(nameof(options)), logger)
     {
