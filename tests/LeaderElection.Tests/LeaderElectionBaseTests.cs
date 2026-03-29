@@ -3,9 +3,6 @@ using Microsoft.Extensions.Logging.Abstractions;
 
 namespace LeaderElection.Tests;
 
-[Collection("LeaderElectionBase")]
-[Trait("Kind", "Integration")]
-[Trait("Category", "Base")]
 public class LeaderElectionBaseTests
 {
     private sealed class MockLeaderElection(LeaderElectionSettingsBase settings, ILogger logger)
