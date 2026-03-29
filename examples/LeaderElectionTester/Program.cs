@@ -14,21 +14,24 @@ using ZiggyCreatures.Caching.Fusion;
 
 var builder = Host.CreateApplicationBuilder(args);
 
-var leaderElectionType = builder
-    .Configuration.GetValue("LeaderElectionType", "Redis")
-    .ToLowerInvariant() switch
-{
-    "redis" => "Redis",
-    "distributedcache" or "dc" => "DistributedCache",
-    "fusioncache" or "fc" => "FusionCache",
-    "blobstorage" or "blob" => "BlobStorage",
-    "s3" => "S3",
-    "postgres" => "Postgres",
+var leaderElectionType = ConfigurationBinder.GetValue(builder
+        .Configuration, "LeaderElectionType", "Redis")
+    .ToUpperInvariant() switch
+    {
+    "REDIS" => "Redis",
+    "DISTRIBUTEDCACHE" or "DC" => "DistributedCache",
+    "FUSIONCACHE" or "FC" => "FusionCache",
+    "BLOBSTORAGE" or "BLOB" => "BlobStorage",
+    "S3" => "S3",
+    "POSTGRES" => "Postgres",
+#pragma warning disable CA2208
     _ => throw new ArgumentException(
         "Invalid LeaderElection type. Supported values are: Redis, DistributedCache (dc), FusionCache (fc), BlobStorage (blob), S3, Postgres.",
+        // ReSharper disable once NotResolvedInText
         "LeaderElectionType"
     ),
-};
+#pragma warning restore CA2208
+    };
 
 // Get a unique ID for each running instance (e.g. in different terminals or machines).
 var instanceId = builder.Configuration.GetValue(

@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using Minio;
 using Testcontainers.Minio;
 
@@ -8,27 +9,35 @@ namespace LeaderElection.Tests;
 /// across all tests that require it.
 /// </summary>
 [CollectionDefinition("Minio Container")]
-public sealed class MinioContainerCollection : ICollectionFixture<MinioContainerFixture> { }
+public sealed class MinioContainerCollectionFixture : ICollectionFixture<MinioContainerFixture> { }
 
 /// <summary>
-/// An Xunit fixture that manages the lifecycle of a temporary Minio container for
+/// A Xunit fixture that manages the lifecycle of a temporary Minio container for
 /// testing purposes.
 /// </summary>
 public sealed class MinioContainerFixture : IAsyncLifetime
 {
-    private MinioContainer _minioContainer = default!;
+    private MinioContainer? _minioContainer;
 
-    public string AccessKey => "minioadmin";
-    public string SecretKey => "minioadmin";
+    public static string AccessKey => "minioadmin";
+    public static string SecretKey => "minioadmin";
     public string Endpoint => _minioContainer?.GetConnectionString() ?? throw new InvalidOperationException("Minio container is not initialized.");
 
     public IMinioClient CreateClient()
     {
-        return new MinioClient()
+        if (_minioContainer == null)
+        {
+            throw new InvalidOperationException("Minio container is not initialized.");
+        }
+
+        var client = new MinioClient();
+        var iclient = client
             .WithEndpoint(_minioContainer.Hostname, _minioContainer.GetMappedPublicPort(9000))
             .WithCredentials(AccessKey, SecretKey)
             .WithSSL(false)
             .Build();
+        Debug.Assert(object.ReferenceEquals(iclient, client), "Build returns the disposable instance.");
+        return client;
     }
 
     public async ValueTask InitializeAsync()
@@ -44,6 +53,8 @@ public sealed class MinioContainerFixture : IAsyncLifetime
     public async ValueTask DisposeAsync()
     {
         if (_minioContainer != null)
+        {
             await _minioContainer.DisposeAsync().ConfigureAwait(false);
+        }
     }
 }

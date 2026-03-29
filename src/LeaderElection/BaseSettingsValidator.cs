@@ -2,7 +2,7 @@ using System.ComponentModel.DataAnnotations;
 
 namespace LeaderElection;
 
-public class BaseSettingsValidator
+public static class BaseSettingsValidator
 {
     public static ValidationResult? ValidateRenewInterval(TimeSpan renewInterval) =>
         renewInterval > TimeSpan.Zero

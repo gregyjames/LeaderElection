@@ -2,7 +2,6 @@ using LeaderElection.S3;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
-using Minio;
 using Minio.DataModel.Args;
 
 namespace LeaderElection.Tests;
@@ -12,7 +11,7 @@ namespace LeaderElection.Tests;
 [Trait("Category", "S3")]
 public sealed class S3LeaderElectionTests(MinioContainerFixture minioFixture) : TestBase
 {
-    private const string BucketName = "leader-election";
+    private const string BUCKET_NAME = "leader-election";
 
     private static S3Settings CreateSettings(
         string objectKey,
@@ -22,7 +21,7 @@ public sealed class S3LeaderElectionTests(MinioContainerFixture minioFixture) : 
         TimeSpan? retryInterval = null) =>
         new()
         {
-            BucketName = BucketName,
+            BucketName = BUCKET_NAME,
             ObjectKey = objectKey,
             InstanceId = instanceId,
             LeaseDuration = leaseDuration ?? TimeSpan.FromSeconds(10),
@@ -30,30 +29,34 @@ public sealed class S3LeaderElectionTests(MinioContainerFixture minioFixture) : 
             RetryInterval = retryInterval ?? TimeSpan.FromSeconds(1)
         };
 
-    private S3LeaderElection CreateSUT(S3Settings options) =>
+    private S3LeaderElection CreateSut(S3Settings options) =>
         new(
+#pragma warning disable CA2000 // dispose object
             minioFixture.CreateClient(),
+#pragma warning restore CA2000
             Options.Create(options),
             NullLoggerFactory.Instance.CreateLogger<S3LeaderElection>()
         );
 
     private async Task EnsureBucketExistsAsync()
     {
+#pragma warning disable CA2000 // dispose object
         var client = minioFixture.CreateClient();
-        if (!await client.BucketExistsAsync(new BucketExistsArgs().WithBucket(BucketName)))
+#pragma warning restore CA2000
+        if (!await client.BucketExistsAsync(new BucketExistsArgs().WithBucket(BUCKET_NAME)).ConfigureAwait(false))
         {
-            await client.MakeBucketAsync(new MakeBucketArgs().WithBucket(BucketName));
+            await client.MakeBucketAsync(new MakeBucketArgs().WithBucket(BUCKET_NAME)).ConfigureAwait(false);
         }
     }
 
     [Fact]
-    public async Task Should_Acquire_Leadership_When_No_Other_Instance_Exists()
+    public async Task ShouldAcquireLeadershipWhenNoOtherInstanceExists()
     {
         // Arrange
         await EnsureBucketExistsAsync();
         var options = CreateSettings("test-leader-election");
 
-        await using var leaderElection = CreateSUT(options);
+        await using var leaderElection = CreateSut(options);
 
         // Act
         await leaderElection.StartAsync(CancellationToken);
@@ -66,16 +69,16 @@ public sealed class S3LeaderElectionTests(MinioContainerFixture minioFixture) : 
     }
 
     [Fact]
-    public async Task Should_Not_Acquire_Leadership_When_Another_Instance_Has_Leadership()
+    public async Task ShouldNotAcquireLeadershipWhenAnotherInstanceHasLeadership()
     {
         // Arrange
         await EnsureBucketExistsAsync();
         var key = "test-leader-election-conflict";
-        var options1 = CreateSettings(key, "test-instance-1", leaseDuration: TimeSpan.FromSeconds(30));
+        var options1 = CreateSettings(key, leaseDuration: TimeSpan.FromSeconds(30));
         var options2 = CreateSettings(key, "test-instance-2", leaseDuration: TimeSpan.FromSeconds(30));
 
-        await using var leaderElection1 = CreateSUT(options1);
-        await using var leaderElection2 = CreateSUT(options2);
+        await using var leaderElection1 = CreateSut(options1);
+        await using var leaderElection2 = CreateSut(options2);
 
         // Act
         await leaderElection1.StartAsync(CancellationToken);
@@ -93,16 +96,16 @@ public sealed class S3LeaderElectionTests(MinioContainerFixture minioFixture) : 
     }
 
     [Fact]
-    public async Task Should_Transfer_Leadership_When_Current_Leader_Stops()
+    public async Task ShouldTransferLeadershipWhenCurrentLeaderStops()
     {
         // Arrange
         await EnsureBucketExistsAsync();
         var key = "test-leader-election-transfer";
-        var options1 = CreateSettings(key, "test-instance-1", leaseDuration: TimeSpan.FromSeconds(5), renewInterval: TimeSpan.FromSeconds(1));
+        var options1 = CreateSettings(key, leaseDuration: TimeSpan.FromSeconds(5), renewInterval: TimeSpan.FromSeconds(1));
         var options2 = CreateSettings(key, "test-instance-2", leaseDuration: TimeSpan.FromSeconds(5), renewInterval: TimeSpan.FromSeconds(1));
 
-        await using var leaderElection1 = CreateSUT(options1);
-        await using var leaderElection2 = CreateSUT(options2);
+        await using var leaderElection1 = CreateSut(options1);
+        await using var leaderElection2 = CreateSut(options2);
 
         // Act
         await leaderElection1.StartAsync(CancellationToken);
@@ -122,13 +125,13 @@ public sealed class S3LeaderElectionTests(MinioContainerFixture minioFixture) : 
     }
 
     [Fact]
-    public async Task Should_Run_Task_Only_When_Leader()
+    public async Task ShouldRunTaskOnlyWhenLeader()
     {
         // Arrange
         await EnsureBucketExistsAsync();
         var options = CreateSettings("test-leader-election-task");
 
-        await using var leaderElection = CreateSUT(options);
+        await using var leaderElection = CreateSut(options);
         var taskExecuted = false;
 
         // Act
@@ -144,13 +147,13 @@ public sealed class S3LeaderElectionTests(MinioContainerFixture minioFixture) : 
     }
 
     [Fact]
-    public async Task Should_Handle_Manual_Leadership_Acquisition()
+    public async Task ShouldHandleManualLeadershipAcquisition()
     {
         // Arrange
         await EnsureBucketExistsAsync();
         var options = CreateSettings("test-leader-election-manual");
 
-        await using var leaderElection = CreateSUT(options);
+        await using var leaderElection = CreateSut(options);
 
         // Act
         var result = await leaderElection.TryAcquireLeadershipAsync(CancellationToken);
@@ -163,7 +166,7 @@ public sealed class S3LeaderElectionTests(MinioContainerFixture minioFixture) : 
     }
 
     [Fact]
-    public async Task Should_Retain_Leadership_After_At_Least_One_Renewal_Cycle()
+    public async Task ShouldRetainLeadershipAfterAtLeastOneRenewalCycle()
     {
         // Arrange
         await EnsureBucketExistsAsync();
@@ -173,7 +176,7 @@ public sealed class S3LeaderElectionTests(MinioContainerFixture minioFixture) : 
             renewInterval: TimeSpan.FromSeconds(1)
         );
 
-        await using var leaderElection = CreateSUT(options);
+        await using var leaderElection = CreateSut(options);
 
         // Act & Assert
         await TestShouldRetainLeadershipAfterAtLeastOneRenewalCycle(leaderElection, options);

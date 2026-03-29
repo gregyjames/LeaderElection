@@ -4,36 +4,35 @@ using Microsoft.Extensions.Options;
 
 namespace LeaderElection.DistributedCache;
 
-public class DistributedCacheLeaderElection: LeaderElectionBase<DistributedCacheSettings>
+public partial class DistributedCacheLeaderElection: LeaderElectionBase<DistributedCacheSettings>
 {
     private readonly IDistributedCache _cache;
-    private readonly DistributedCacheSettings _options;
 
     public DistributedCacheLeaderElection(IDistributedCache cache,
         IOptions<DistributedCacheSettings> options,
-        ILogger<DistributedCacheLeaderElection> logger): base(options.Value, logger)
+        ILogger<DistributedCacheLeaderElection> logger)
+        : base(options?.Value ?? throw new InvalidOperationException(), logger)
     {
         _cache = cache ?? throw new ArgumentNullException(nameof(cache));
-        _options = options?.Value ?? throw new ArgumentNullException(nameof(options));
     }
     protected override async Task<bool> TryAcquireLeadershipInternalAsync(CancellationToken cancellationToken)
     {
         try
         {
-            var currentValue = await _cache.GetStringAsync(_options.LockKey, cancellationToken);
+            var currentValue = await _cache.GetStringAsync(_settings.LockKey, cancellationToken).ConfigureAwait(false);
             if (!string.IsNullOrEmpty(currentValue)) return false;
 
-            await _cache.SetStringAsync(_options.LockKey, _options.InstanceId, new DistributedCacheEntryOptions
+            await _cache.SetStringAsync(_settings.LockKey, _settings.InstanceId, new DistributedCacheEntryOptions
             {
-                AbsoluteExpirationRelativeToNow = _options.LockExpiry
-            }, cancellationToken);
+                AbsoluteExpirationRelativeToNow = _settings.LockExpiry
+            }, cancellationToken).ConfigureAwait(false);
 
-            var verifyValue = await _cache.GetStringAsync(_options.LockKey, cancellationToken);
-            return verifyValue == _options.InstanceId;
+            var verifyValue = await _cache.GetStringAsync(_settings.LockKey, cancellationToken).ConfigureAwait(false);
+            return verifyValue == _settings.InstanceId;
         }
         catch (Exception ex)
         {
-            logger.LogError(ex, "Error acquiring leadership");
+            LogErrorAcquiringLeadership(_logger, ex);
             return false;
         }
     }
@@ -42,19 +41,19 @@ public class DistributedCacheLeaderElection: LeaderElectionBase<DistributedCache
     {
         try
         {
-            var currentValue = await _cache.GetStringAsync(_options.LockKey, cancellationToken);
-            if (currentValue != _options.InstanceId) return false;
+            var currentValue = await _cache.GetStringAsync(_settings.LockKey, cancellationToken).ConfigureAwait(false);
+            if (currentValue != _settings.InstanceId) return false;
 
-            await _cache.SetStringAsync(_options.LockKey, _options.InstanceId, new DistributedCacheEntryOptions
+            await _cache.SetStringAsync(_settings.LockKey, _settings.InstanceId, new DistributedCacheEntryOptions
             {
-                AbsoluteExpirationRelativeToNow = _options.LockExpiry
-            }, cancellationToken);
+                AbsoluteExpirationRelativeToNow = _settings.LockExpiry
+            }, cancellationToken).ConfigureAwait(false);
 
             return true;
         }
         catch (Exception ex)
         {
-            logger.LogError(ex, "Error renewing leadership");
+            LogErrorRenewingLeadership(_logger, ex);
             return false;
         }
     }
@@ -63,17 +62,28 @@ public class DistributedCacheLeaderElection: LeaderElectionBase<DistributedCache
     {
         try
         {
-            var currentValue = await _cache.GetStringAsync(_options.LockKey);
-            if (currentValue == _options.InstanceId)
+            var currentValue = await _cache.GetStringAsync(_settings.LockKey).ConfigureAwait(false);
+            if (currentValue == _settings.InstanceId)
             {
-                await _cache.RemoveAsync(_options.LockKey);
-                logger.LogInformation("Leadership released for instance {InstanceId}", _options.InstanceId);
+                await _cache.RemoveAsync(_settings.LockKey).ConfigureAwait(false);
+                LogLeadershipReleasedForInstanceInstanceId(_logger, _settings.InstanceId);
             }
         }
         catch (Exception ex)
         {
-            logger.LogError(ex, "Error releasing leadership");
+            LogErrorReleasingLeadership(_logger, ex);
         }
     }
-}
 
+    [LoggerMessage(LogLevel.Error, "Error acquiring leadership")]
+    static partial void LogErrorAcquiringLeadership(ILogger logger, Exception exception);
+
+    [LoggerMessage(LogLevel.Error, "Error renewing leadership")]
+    static partial void LogErrorRenewingLeadership(ILogger logger, Exception exception);
+
+    [LoggerMessage(LogLevel.Information, "Leadership released for instance {instanceId}")]
+    static partial void LogLeadershipReleasedForInstanceInstanceId(ILogger logger, string instanceId);
+
+    [LoggerMessage(LogLevel.Error, "Error releasing leadership")]
+    static partial void LogErrorReleasingLeadership(ILogger logger, Exception exception);
+}

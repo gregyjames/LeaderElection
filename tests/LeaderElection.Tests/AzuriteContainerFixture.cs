@@ -12,7 +12,7 @@ namespace LeaderElection.Tests;
 /// requires access to the singleton <see cref="AzuriteContainerFixture"/>.
 /// </remarks>
 [CollectionDefinition("Azurite Container")]
-public sealed class AzuriteContainerCollection : ICollectionFixture<AzuriteContainerFixture> { }
+public sealed class AzuriteContainerCollectionFixture : ICollectionFixture<AzuriteContainerFixture> { }
 
 /// <summary>
 /// An Xunit fixture that manages the lifecycle of a temporary Azurite container for
@@ -20,7 +20,7 @@ public sealed class AzuriteContainerCollection : ICollectionFixture<AzuriteConta
 /// </summary>
 public sealed class AzuriteContainerFixture : IAsyncLifetime
 {
-    private AzuriteContainer _azuriteContainer = default!;
+    private AzuriteContainer? _azuriteContainer;
 
     /// <summary>
     /// Gets the connection string for the Azurite container.
@@ -53,6 +53,8 @@ public sealed class AzuriteContainerFixture : IAsyncLifetime
     public async ValueTask DisposeAsync()
     {
         if (_azuriteContainer != null)
+        {
             await _azuriteContainer.DisposeAsync().ConfigureAwait(false);
+        }
     }
 }

@@ -30,7 +30,7 @@ public sealed class RedisLeaderElectionTests(RedisContainerFixture redisFixture)
             EnableGracefulShutdown = enableGracefulShutdown,
         };
 
-    private RedisLeaderElection CreateSUT(RedisSettings options) =>
+    private RedisLeaderElection CreateSut(RedisSettings options) =>
         new(
             redisFixture.ConnectionMultiplexer,
             Options.Create(options),
@@ -38,12 +38,12 @@ public sealed class RedisLeaderElectionTests(RedisContainerFixture redisFixture)
         );
 
     [Fact]
-    public async Task Should_Acquire_Leadership_When_No_Other_Instance_Exists()
+    public async Task ShouldAcquireLeadershipWhenNoOtherInstanceExists()
     {
         // Arrange
         var options = CreateSettings("test-leader-election", lockExpiry: TimeSpan.FromSeconds(10));
 
-        await using var leaderElection = CreateSUT(options);
+        await using var leaderElection = CreateSut(options);
 
         // Act
         await leaderElection.StartAsync(CancellationToken);
@@ -56,12 +56,11 @@ public sealed class RedisLeaderElectionTests(RedisContainerFixture redisFixture)
     }
 
     [Fact]
-    public async Task Should_Not_Acquire_Leadership_When_Another_Instance_Has_Leadership()
+    public async Task ShouldNotAcquireLeadershipWhenAnotherInstanceHasLeadership()
     {
         // Arrange
         var options1 = CreateSettings(
             "test-leader-election-conflict",
-            "test-instance-1",
             lockExpiry: TimeSpan.FromSeconds(30)
         );
 
@@ -71,8 +70,8 @@ public sealed class RedisLeaderElectionTests(RedisContainerFixture redisFixture)
             lockExpiry: TimeSpan.FromSeconds(30)
         );
 
-        await using var leaderElection1 = CreateSUT(options1);
-        await using var leaderElection2 = CreateSUT(options2);
+        await using var leaderElection1 = CreateSut(options1);
+        await using var leaderElection2 = CreateSut(options2);
 
         // Act
         await leaderElection1.StartAsync(CancellationToken);
@@ -90,12 +89,11 @@ public sealed class RedisLeaderElectionTests(RedisContainerFixture redisFixture)
     }
 
     [Fact]
-    public async Task Should_Transfer_Leadership_When_Current_Leader_Stops()
+    public async Task ShouldTransferLeadershipWhenCurrentLeaderStops()
     {
         // Arrange
         var options1 = CreateSettings(
             "test-leader-election-transfer",
-            "test-instance-1",
             lockExpiry: TimeSpan.FromSeconds(5),
             renewInterval: TimeSpan.FromSeconds(1)
         );
@@ -107,8 +105,8 @@ public sealed class RedisLeaderElectionTests(RedisContainerFixture redisFixture)
             renewInterval: TimeSpan.FromSeconds(1)
         );
 
-        await using var leaderElection1 = CreateSUT(options1);
-        await using var leaderElection2 = CreateSUT(options2);
+        await using var leaderElection1 = CreateSut(options1);
+        await using var leaderElection2 = CreateSut(options2);
 
         // Act
         await leaderElection1.StartAsync(CancellationToken);
@@ -128,7 +126,7 @@ public sealed class RedisLeaderElectionTests(RedisContainerFixture redisFixture)
     }
 
     [Fact]
-    public async Task Should_Run_Task_Only_When_Leader()
+    public async Task ShouldRunTaskOnlyWhenLeader()
     {
         // Arrange
         var options = CreateSettings(
@@ -136,7 +134,7 @@ public sealed class RedisLeaderElectionTests(RedisContainerFixture redisFixture)
             lockExpiry: TimeSpan.FromSeconds(10)
         );
 
-        await using var leaderElection = CreateSUT(options);
+        await using var leaderElection = CreateSut(options);
 
         var taskExecuted = false;
 
@@ -153,12 +151,12 @@ public sealed class RedisLeaderElectionTests(RedisContainerFixture redisFixture)
     }
 
     [Fact]
-    public async Task Should_Not_Run_Task_When_Not_Leader()
+    public async Task ShouldNotRunTaskWhenNotLeader()
     {
         // Arrange
         var options = CreateSettings("test-leader-election-no-task");
 
-        await using var leaderElection = CreateSUT(options);
+        await using var leaderElection = CreateSut(options);
 
         var taskExecuted = false;
 
@@ -170,12 +168,12 @@ public sealed class RedisLeaderElectionTests(RedisContainerFixture redisFixture)
     }
 
     [Fact]
-    public async Task Should_Handle_Manual_Leadership_Acquisition()
+    public async Task ShouldHandleManualLeadershipAcquisition()
     {
         // Arrange
         var options = CreateSettings("test-leader-election-manual");
 
-        await using var leaderElection = CreateSUT(options);
+        await using var leaderElection = CreateSut(options);
 
         // Act
         var result = await leaderElection.TryAcquireLeadershipAsync(CancellationToken);
@@ -188,7 +186,7 @@ public sealed class RedisLeaderElectionTests(RedisContainerFixture redisFixture)
     }
 
     [Fact]
-    public async Task Should_Retain_Leadership_After_At_Least_One_Renewal_Cycle()
+    public async Task ShouldRetainLeadershipAfterAtLeastOneRenewalCycle()
     {
         // Arrange
         var options = CreateSettings(
@@ -196,7 +194,7 @@ public sealed class RedisLeaderElectionTests(RedisContainerFixture redisFixture)
             renewInterval: TimeSpan.FromSeconds(1)
         );
 
-        await using var leaderElection = CreateSUT(options);
+        await using var leaderElection = CreateSut(options);
 
         // Act & Assert
         await TestShouldRetainLeadershipAfterAtLeastOneRenewalCycle(leaderElection, options);

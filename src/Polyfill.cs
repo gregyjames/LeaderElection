@@ -1,3 +1,5 @@
+using System.Diagnostics.CodeAnalysis;
+
 namespace LeaderElection;
 
 /// <summary>
@@ -6,6 +8,8 @@ namespace LeaderElection;
 /// </summary>
 [System.Diagnostics.CodeAnalysis.ExcludeFromCodeCoverage]
 [System.Diagnostics.DebuggerNonUserCode]
+[SuppressMessage("Reliability", "CA2007:Consider calling ConfigureAwait on the awaited task", Justification = "Do not alter these implementations")]
+[SuppressMessage("Performance", "CA1849:Call async methods when in an async method", Justification = "Do not alter these implementations")]
 internal static class Polyfill
 {
     // csharpier-ignore-start -- contains copied code
@@ -27,7 +31,7 @@ internal static class Polyfill
 
 #if !NET6_0_OR_GREATER
     // Copied from https://github.com/SimonCropp/Polyfill/blob/18243e7e051c347acf023978bd18abd181ea6695/src/Split/netstandard2.1/Polyfill_Task.cs
-    const uint MaxSupportedTimeout = 0xfffffffe;
+    const uint MAX_SUPPORTED_TIMEOUT = 0xfffffffe;
 	/// <summary>Gets a <see cref="Task"/> that will complete when this <see cref="Task"/> completes or when the specified <see cref="CancellationToken"/> has cancellation requested.</summary>
 	public static Task WaitAsync(this Task target, CancellationToken cancellationToken) =>
 		target.WaitAsync(Timeout.InfiniteTimeSpan, cancellationToken);
@@ -43,7 +47,7 @@ internal static class Polyfill
 		CancellationToken cancellationToken)
 	{
 		var milliseconds = (long)timeout.TotalMilliseconds;
-		if (milliseconds is < -1 or > MaxSupportedTimeout)
+		if (milliseconds is < -1 or > MAX_SUPPORTED_TIMEOUT)
 		{
 			throw new ArgumentOutOfRangeException(nameof(timeout));
 		}

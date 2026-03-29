@@ -12,16 +12,16 @@ namespace LeaderElection.Tests;
 /// requires access to the singleton <see cref="RedisContainerFixture"/>.
 /// </remarks>
 [CollectionDefinition("Redis Container")]
-public sealed class RedisContainerCollection : ICollectionFixture<RedisContainerFixture> { }
+public sealed class RedisContainerCollectionFixture : ICollectionFixture<RedisContainerFixture> { }
 
 /// <summary>
-/// An Xunit fixture that manages the lifecycle of a temporary Redis container for
+/// A Xunit fixture that manages the lifecycle of a temporary Redis container for
 /// testing purposes.
 /// </summary>
 public sealed class RedisContainerFixture : IAsyncLifetime
 {
-    private RedisContainer _redisContainer = default!;
-    private IConnectionMultiplexer _connectionMultiplexer = default!;
+    private RedisContainer? _redisContainer;
+    private ConnectionMultiplexer? _connectionMultiplexer;
 
     /// <summary>
     /// Gets the connection string for the Redis container.
@@ -59,6 +59,7 @@ public sealed class RedisContainerFixture : IAsyncLifetime
             await _connectionMultiplexer.CloseAsync().ConfigureAwait(false);
             await _connectionMultiplexer.DisposeAsync().ConfigureAwait(false);
         }
+
         if (_redisContainer != null)
         {
             await _redisContainer.DisposeAsync().ConfigureAwait(false);

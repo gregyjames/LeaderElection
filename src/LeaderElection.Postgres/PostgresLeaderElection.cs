@@ -5,7 +5,7 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Npgsql;
 
-public sealed class PostgresLeaderElection : LeaderElectionBase<PostgresSettings>
+public sealed partial class PostgresLeaderElection : LeaderElectionBase<PostgresSettings>
 {
     private NpgsqlConnection? _activeConnection;
 
@@ -22,29 +22,29 @@ public sealed class PostgresLeaderElection : LeaderElectionBase<PostgresSettings
         {
             if (_activeConnection != null)
             {
-                await _activeConnection.DisposeAsync();
+                await _activeConnection.DisposeAsync().ConfigureAwait(false);
                 _activeConnection = null;
             }
 
-            var connection = new NpgsqlConnection(settings.ConnectionString);
-            await connection.OpenAsync(cancellationToken);
+            var connection = new NpgsqlConnection(_settings.ConnectionString);
+            await connection.OpenAsync(cancellationToken).ConfigureAwait(false);
 
-            await using var cmd = new NpgsqlCommand("SELECT pg_try_advisory_lock(@LockId);", connection);
-            cmd.Parameters.AddWithValue("LockId", settings.LockId);
+            using var cmd = new NpgsqlCommand("SELECT pg_try_advisory_lock(@LockId);", connection);
+            cmd.Parameters.AddWithValue("LockId", _settings.LockId);
 
-            var result = await cmd.ExecuteScalarAsync(cancellationToken);
+            var result = await cmd.ExecuteScalarAsync(cancellationToken).ConfigureAwait(false);
             if (result is true)
             {
                 _activeConnection = connection;
                 return true;
             }
 
-            await connection.DisposeAsync();
+            await connection.DisposeAsync().ConfigureAwait(false);
             return false;
         }
         catch (Exception ex)
         {
-            logger.LogError(ex, "Error acquiring PostgreSQL leadership");
+            LogErrorAcquiringPostgresqlLeadership(_logger, ex);
             return false;
         }
     }
@@ -59,17 +59,17 @@ public sealed class PostgresLeaderElection : LeaderElectionBase<PostgresSettings
         try
         {
             // The advisory lock is held as long as the connection is open; this is just a heartbeat.
-            await using var cmd = new NpgsqlCommand("SELECT 1;", _activeConnection);
-            await cmd.ExecuteScalarAsync(cancellationToken);
+            using var cmd = new NpgsqlCommand("SELECT 1;", _activeConnection);
+            await cmd.ExecuteScalarAsync(cancellationToken).ConfigureAwait(false);
             return true;
         }
         catch (Exception ex)
         {
-            logger.LogError(ex, "Error renewing PostgreSQL leadership; connection lost");
+            LogErrorRenewingPostgresqlLeadershipConnectionLost(_logger, ex);
 
             if (_activeConnection != null)
             {
-                await _activeConnection.DisposeAsync();
+                await _activeConnection.DisposeAsync().ConfigureAwait(false);
                 _activeConnection = null;
             }
 
@@ -86,32 +86,44 @@ public sealed class PostgresLeaderElection : LeaderElectionBase<PostgresSettings
         {
             if (_activeConnection.State == ConnectionState.Open)
             {
-                await using var cmd = new NpgsqlCommand("SELECT pg_advisory_unlock(@LockId);", _activeConnection);
-                cmd.Parameters.AddWithValue("LockId", settings.LockId);
-                await cmd.ExecuteScalarAsync(default);
+                using var cmd = new NpgsqlCommand("SELECT pg_advisory_unlock(@LockId);", _activeConnection);
+                cmd.Parameters.AddWithValue("LockId", _settings.LockId);
+                await cmd.ExecuteScalarAsync(CancellationToken.None).ConfigureAwait(false);
             }
 
-            logger.LogInformation("Leadership released for instance {InstanceId}", settings.InstanceId);
+            LogLeadershipReleasedForInstanceInstanceId(_logger, _settings.InstanceId);
         }
         catch (Exception ex)
         {
-            logger.LogError(ex, "Error releasing PostgreSQL leadership");
+            LogErrorReleasingPostgresqlLeadership(_logger, ex);
         }
         finally
         {
-            await _activeConnection.DisposeAsync();
+            await _activeConnection.DisposeAsync().ConfigureAwait(false);
             _activeConnection = null;
         }
     }
 
     protected override async ValueTask DisposeAsyncCore()
     {
-        await base.DisposeAsyncCore();
+        await base.DisposeAsyncCore().ConfigureAwait(false);
 
         if (_activeConnection != null)
         {
-            await _activeConnection.DisposeAsync();
+            await _activeConnection.DisposeAsync().ConfigureAwait(false);
             _activeConnection = null;
         }
     }
+
+    [LoggerMessage(LogLevel.Error, "Error acquiring PostgreSQL leadership")]
+    static partial void LogErrorAcquiringPostgresqlLeadership(ILogger logger, Exception exception);
+
+    [LoggerMessage(LogLevel.Error, "Error renewing PostgreSQL leadership; connection lost")]
+    static partial void LogErrorRenewingPostgresqlLeadershipConnectionLost(ILogger logger, Exception exception);
+
+    [LoggerMessage(LogLevel.Information, "Leadership released for instance {instanceId}")]
+    static partial void LogLeadershipReleasedForInstanceInstanceId(ILogger logger, string instanceId);
+
+    [LoggerMessage(LogLevel.Error, "Error releasing PostgreSQL leadership")]
+    static partial void LogErrorReleasingPostgresqlLeadership(ILogger logger, Exception exception);
 }

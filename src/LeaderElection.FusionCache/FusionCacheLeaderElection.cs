@@ -4,17 +4,16 @@ using ZiggyCreatures.Caching.Fusion;
 
 namespace LeaderElection.FusionCache;
 
-public class FusionCacheLeaderElection: LeaderElectionBase<FusionCacheSettings>
+public partial class FusionCacheLeaderElection: LeaderElectionBase<FusionCacheSettings>
 {
     private readonly IFusionCache _cache;
-    private readonly FusionCacheSettings _options;
 
     public FusionCacheLeaderElection(IFusionCache cache,
         IOptions<FusionCacheSettings> options,
-        ILogger<FusionCacheLeaderElection> logger): base(options?.Value ?? throw new ArgumentNullException(nameof(options)), logger)
+        ILogger<FusionCacheLeaderElection> logger)
+        : base(options?.Value ?? throw new ArgumentNullException(nameof(options)), logger)
     {
         _cache = cache ?? throw new ArgumentNullException(nameof(cache));
-        _options = options.Value ?? throw new ArgumentNullException(nameof(options));
     }
     private FusionCacheEntryOptions CreateLockEntryOptions()
     {
@@ -22,7 +21,7 @@ public class FusionCacheLeaderElection: LeaderElectionBase<FusionCacheSettings>
         // to always observe the actual shared lock state and promptly detect leadership loss.
         var useDistributedOnly = _cache.HasDistributedCache;
 
-        var options = new FusionCacheEntryOptions(_options.LockExpiry)
+        var options = new FusionCacheEntryOptions(_settings.LockExpiry)
             .SetFailSafe(false)
             .SetAllowStaleOnReadOnly(false)
             .SetSkipMemoryCacheRead(useDistributedOnly)
@@ -37,18 +36,18 @@ public class FusionCacheLeaderElection: LeaderElectionBase<FusionCacheSettings>
         {
             var entryOptions = CreateLockEntryOptions();
 
-            var currentValue = await _cache.GetOrDefaultAsync<string?>(_options.LockKey, default, entryOptions, cancellationToken);
+            var currentValue = await _cache.GetOrDefaultAsync<string?>(_settings.LockKey, null, entryOptions, cancellationToken).ConfigureAwait(false);
             if (!string.IsNullOrEmpty(currentValue))
                 return false;
 
-            await _cache.SetAsync(_options.LockKey, _options.InstanceId, entryOptions, cancellationToken);
+            await _cache.SetAsync(_settings.LockKey, _settings.InstanceId, entryOptions, cancellationToken).ConfigureAwait(false);
 
-            var verifyValue = await _cache.GetOrDefaultAsync<string?>(_options.LockKey, default, entryOptions, cancellationToken);
-            return verifyValue == _options.InstanceId;
+            var verifyValue = await _cache.GetOrDefaultAsync<string?>(_settings.LockKey, null, entryOptions, cancellationToken).ConfigureAwait(false);
+            return verifyValue == _settings.InstanceId;
         }
         catch (Exception ex)
         {
-            logger.LogError(ex, "Error acquiring leadership");
+            LogErrorAcquiringLeadership(_logger, ex);
             return false;
         }
     }
@@ -59,17 +58,17 @@ public class FusionCacheLeaderElection: LeaderElectionBase<FusionCacheSettings>
         {
             var entryOptions = CreateLockEntryOptions();
 
-            var currentValue = await _cache.GetOrDefaultAsync<string?>(_options.LockKey, default, entryOptions, cancellationToken);
-            if (currentValue != _options.InstanceId)
+            var currentValue = await _cache.GetOrDefaultAsync<string?>(_settings.LockKey, null, entryOptions, cancellationToken).ConfigureAwait(false);
+            if (currentValue != _settings.InstanceId)
                 return false;
 
-            await _cache.SetAsync(_options.LockKey, _options.InstanceId, entryOptions, cancellationToken);
+            await _cache.SetAsync(_settings.LockKey, _settings.InstanceId, entryOptions, cancellationToken).ConfigureAwait(false);
 
             return true;
         }
         catch (Exception ex)
         {
-            logger.LogError(ex, "Error renewing leadership");
+            LogErrorRenewingLeadership(_logger, ex);
             return false;
         }
     }
@@ -80,16 +79,28 @@ public class FusionCacheLeaderElection: LeaderElectionBase<FusionCacheSettings>
         {
             var entryOptions = CreateLockEntryOptions();
 
-            var currentValue = await _cache.GetOrDefaultAsync<string?>(_options.LockKey, default, entryOptions, CancellationToken.None);
-            if (currentValue == _options.InstanceId)
+            var currentValue = await _cache.GetOrDefaultAsync<string?>(_settings.LockKey, null, entryOptions, CancellationToken.None).ConfigureAwait(false);
+            if (currentValue == _settings.InstanceId)
             {
-                await _cache.RemoveAsync(_options.LockKey, entryOptions, CancellationToken.None);
-                logger.LogInformation("Leadership released for instance {InstanceId}", _options.InstanceId);
+                await _cache.RemoveAsync(_settings.LockKey, entryOptions, CancellationToken.None).ConfigureAwait(false);
+                LogLeadershipReleasedForInstanceInstanceid(_logger, _settings.InstanceId);
             }
         }
         catch (Exception ex)
         {
-            logger.LogError(ex, "Error releasing leadership");
+            LogErrorReleasingLeadership(_logger, ex);
         }
     }
+
+    [LoggerMessage(LogLevel.Error, "Error acquiring leadership")]
+    static partial void LogErrorAcquiringLeadership(ILogger logger, Exception exception);
+
+    [LoggerMessage(LogLevel.Error, "Error renewing leadership")]
+    static partial void LogErrorRenewingLeadership(ILogger logger, Exception exception);
+
+    [LoggerMessage(LogLevel.Information, "Leadership released for instance {instanceId}")]
+    static partial void LogLeadershipReleasedForInstanceInstanceid(ILogger logger, string instanceId);
+
+    [LoggerMessage(LogLevel.Error, "Error releasing leadership")]
+    static partial void LogErrorReleasingLeadership(ILogger logger, Exception exception);
 }

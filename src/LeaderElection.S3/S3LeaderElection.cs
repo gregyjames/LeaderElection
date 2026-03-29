@@ -8,20 +8,19 @@ using Minio.Exceptions;
 
 namespace LeaderElection.S3;
 
-public sealed class S3LeaderElection : LeaderElectionBase<S3Settings>
+public sealed partial class S3LeaderElection : LeaderElectionBase<S3Settings>
 {
     private readonly IMinioClient _client;
-    private readonly S3Settings _options;
     private readonly JsonSerializerOptions _jsonOptions = new(JsonSerializerDefaults.Web);
     private string? _lastEtag;
 
     public S3LeaderElection(
         IMinioClient client,
         IOptions<S3Settings> options,
-        ILogger<S3LeaderElection> logger) : base(options.Value ?? throw new ArgumentNullException(nameof(options)), logger)
+        ILogger<S3LeaderElection> logger)
+        : base(options?.Value ?? throw new ArgumentNullException(nameof(options)), logger)
     {
         _client = client ?? throw new ArgumentNullException(nameof(client));
-        _options = options.Value ?? throw new ArgumentNullException(nameof(options));
     }
 
     protected override async Task<bool> TryAcquireLeadershipInternalAsync(CancellationToken cancellationToken)
@@ -34,14 +33,14 @@ public sealed class S3LeaderElection : LeaderElectionBase<S3Settings>
             try
             {
                 var stat = await _client.StatObjectAsync(new StatObjectArgs()
-                    .WithBucket(_options.BucketName)
-                    .WithObject(_options.ObjectKey), cancellationToken).ConfigureAwait(false);
+                    .WithBucket(_settings.BucketName)
+                    .WithObject(_settings.ObjectKey), cancellationToken).ConfigureAwait(false);
                 currentEtag = NormalizeETag(stat.ETag);
 
                 var memoryStream = new MemoryStream();
                 await _client.GetObjectAsync(new GetObjectArgs()
-                    .WithBucket(_options.BucketName)
-                    .WithObject(_options.ObjectKey)
+                    .WithBucket(_settings.BucketName)
+                    .WithObject(_settings.ObjectKey)
                     .WithCallbackStream((stream) => stream.CopyTo(memoryStream)), cancellationToken).ConfigureAwait(false);
 
                 memoryStream.Position = 0;
@@ -50,20 +49,20 @@ public sealed class S3LeaderElection : LeaderElectionBase<S3Settings>
             }
             catch (ObjectNotFoundException)
             {
-                logger.LogDebug("Object not found, Trying to create it.");
+                LogObjectNotFoundTryingToCreateIt(_logger);
             }
 
             var now = DateTime.UtcNow;
-            if (currentLease != null && currentLease.LeaseUntilUtc > now && currentLease.HolderId != _options.InstanceId)
+            if (currentLease != null && currentLease.LeaseUntilUtc > now && currentLease.HolderId != _settings.InstanceId)
             {
                 // Lease is still valid and held by someone else
                 return false;
             }
-            
+
             var leaseRecord = new LeaseRecord
             {
-                HolderId = _options.InstanceId,
-                LeaseUntilUtc = now.Add(_options.LeaseDuration)
+                HolderId = _settings.InstanceId,
+                LeaseUntilUtc = now.Add(_settings.LeaseDuration)
             };
 
             // We use the etag here to prevent race conditions of multiple instances going for leadership at once
@@ -86,7 +85,7 @@ public sealed class S3LeaderElection : LeaderElectionBase<S3Settings>
         }
         catch (Exception ex)
         {
-            logger.LogError(ex, "Error acquiring S3 leadership");
+            LogErrorAcquiringS3Leadership(_logger, ex);
             return false;
         }
     }
@@ -103,39 +102,39 @@ public sealed class S3LeaderElection : LeaderElectionBase<S3Settings>
             var now = DateTime.UtcNow;
             var leaseRecord = new LeaseRecord
             {
-                HolderId = _options.InstanceId,
-                LeaseUntilUtc = now.Add(_options.LeaseDuration)
+                HolderId = _settings.InstanceId,
+                LeaseUntilUtc = now.Add(_settings.LeaseDuration)
             };
 
             // Read current record to verify ETag
             try
             {
                 var stat = await _client.StatObjectAsync(new StatObjectArgs()
-                    .WithBucket(_options.BucketName)
-                    .WithObject(_options.ObjectKey), cancellationToken).ConfigureAwait(false);
-                
+                    .WithBucket(_settings.BucketName)
+                    .WithObject(_settings.ObjectKey), cancellationToken).ConfigureAwait(false);
+
                 var etag = NormalizeETag(stat.ETag);
                 if (etag != _lastEtag)
                 {
-                    logger.LogWarning("S3 ETag mismatch during renewal. Expected {Expected}, got {Actual}", _lastEtag, etag);
+                    LogS3EtagMismatchDuringRenewalExpectedExpectedGotActual(_logger, _lastEtag, etag ?? string.Empty);
                     return false;
                 }
 
                 var memoryStream = new MemoryStream();
                 await _client.GetObjectAsync(new GetObjectArgs()
-                    .WithBucket(_options.BucketName)
-                    .WithObject(_options.ObjectKey)
+                    .WithBucket(_settings.BucketName)
+                    .WithObject(_settings.ObjectKey)
                     .WithCallbackStream((stream) => stream.CopyTo(memoryStream)), cancellationToken).ConfigureAwait(false);
 
                 memoryStream.Position = 0;
                 var currentLease =
                     await JsonSerializer.DeserializeAsync<LeaseRecord>(memoryStream, _jsonOptions,
                         cancellationToken).ConfigureAwait(false);
-                if (currentLease?.HolderId != _options.InstanceId)
+                if (currentLease?.HolderId != _settings.InstanceId)
                 {
                     return false;
                 }
-                
+
                 await memoryStream.DisposeAsync().ConfigureAwait(false);
             }
             catch (Exception)
@@ -152,7 +151,7 @@ public sealed class S3LeaderElection : LeaderElectionBase<S3Settings>
         }
         catch (Exception ex)
         {
-            logger.LogError(ex, "Error renewing S3 leadership");
+            LogErrorRenewingS3Leadership(_logger, ex);
             return false;
         }
     }
@@ -162,20 +161,20 @@ public sealed class S3LeaderElection : LeaderElectionBase<S3Settings>
         try
         {
             if (string.IsNullOrEmpty(_lastEtag)) return;
-            
+
             var now = DateTime.UtcNow;
             var leaseRecord = new LeaseRecord
             {
-                HolderId = _options.InstanceId,
+                HolderId = _settings.InstanceId,
                 LeaseUntilUtc = now.AddSeconds(-1)
             };
 
-            await PutLeaseAsync(leaseRecord, new Dictionary<string, string> { ["If-Match"] = _lastEtag }, default).ConfigureAwait(false);
-            logger.LogInformation("Leadership released for instance {InstanceId}", _options.InstanceId);
+            await PutLeaseAsync(leaseRecord, new Dictionary<string, string> { ["If-Match"] = _lastEtag }, CancellationToken.None).ConfigureAwait(false);
+            LogLeadershipReleasedForInstanceInstanceId(_logger, _settings.InstanceId);
         }
         catch (Exception ex)
         {
-            logger.LogError(ex, "Error releasing S3 leadership");
+            LogErrorReleasingS3Leadership(_logger, ex);
         }
     }
 
@@ -186,8 +185,8 @@ public sealed class S3LeaderElection : LeaderElectionBase<S3Settings>
         using var stream = new MemoryStream(bytes, writable: false);
 
         var request = new PutObjectArgs()
-            .WithBucket(_options.BucketName)
-            .WithObject(_options.ObjectKey)
+            .WithBucket(_settings.BucketName)
+            .WithObject(_settings.ObjectKey)
             .WithStreamData(stream)
             .WithObjectSize(stream.Length)
             .WithContentType("application/json")
@@ -211,4 +210,22 @@ public sealed class S3LeaderElection : LeaderElectionBase<S3Settings>
         string.IsNullOrEmpty(etag) ? etag
         : etag[0] == '"' && etag[^1] == '"' ? etag // already quoted
         : $"\"{etag}\""; // add quotes
+
+    [LoggerMessage(LogLevel.Debug, "Object not found, Trying to create it.")]
+    static partial void LogObjectNotFoundTryingToCreateIt(ILogger logger);
+
+    [LoggerMessage(LogLevel.Error, "Error acquiring S3 leadership")]
+    static partial void LogErrorAcquiringS3Leadership(ILogger logger, Exception exception);
+
+    [LoggerMessage(LogLevel.Warning, "S3 ETag mismatch during renewal. Expected {expected}, got {actual}")]
+    static partial void LogS3EtagMismatchDuringRenewalExpectedExpectedGotActual(ILogger logger, string expected, string actual);
+
+    [LoggerMessage(LogLevel.Error, "Error renewing S3 leadership")]
+    static partial void LogErrorRenewingS3Leadership(ILogger logger, Exception exception);
+
+    [LoggerMessage(LogLevel.Information, "Leadership released for instance {instanceId}")]
+    static partial void LogLeadershipReleasedForInstanceInstanceId(ILogger logger, string instanceId);
+
+    [LoggerMessage(LogLevel.Error, "Error releasing S3 leadership")]
+    static partial void LogErrorReleasingS3Leadership(ILogger logger, Exception exception);
 }
