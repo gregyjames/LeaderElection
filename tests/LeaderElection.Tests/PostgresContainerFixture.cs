@@ -15,7 +15,7 @@ public sealed class PostgresContainerCollectionFixture : ICollectionFixture<Post
 /// </summary>
 public sealed class PostgresContainerFixture : IAsyncLifetime
 {
-    private PostgreSqlContainer _postgresContainer = default!;
+    private PostgreSqlContainer? _postgresContainer;
 
     /// <summary>
     /// Gets the connection string for the PostgreSQL container.

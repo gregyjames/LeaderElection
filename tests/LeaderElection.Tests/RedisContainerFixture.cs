@@ -20,8 +20,8 @@ public sealed class RedisContainerCollectionFixture : ICollectionFixture<RedisCo
 /// </summary>
 public sealed class RedisContainerFixture : IAsyncLifetime
 {
-    private RedisContainer _redisContainer = default!;
-    private ConnectionMultiplexer _connectionMultiplexer = null!;
+    private RedisContainer? _redisContainer;
+    private ConnectionMultiplexer? _connectionMultiplexer;
 
     /// <summary>
     /// Gets the connection string for the Redis container.
@@ -54,9 +54,15 @@ public sealed class RedisContainerFixture : IAsyncLifetime
 
     public async ValueTask DisposeAsync()
     {
-        await _connectionMultiplexer.CloseAsync().ConfigureAwait(false);
-        await _connectionMultiplexer.DisposeAsync().ConfigureAwait(false);
+        if (_connectionMultiplexer != null)
+        {
+            await _connectionMultiplexer.CloseAsync().ConfigureAwait(false);
+            await _connectionMultiplexer.DisposeAsync().ConfigureAwait(false);
+        }
 
-        await _redisContainer.DisposeAsync().ConfigureAwait(false);
+        if (_redisContainer != null)
+        {
+            await _redisContainer.DisposeAsync().ConfigureAwait(false);
+        }
     }
 }

@@ -17,14 +17,19 @@ public sealed class MinioContainerCollectionFixture : ICollectionFixture<MinioCo
 /// </summary>
 public sealed class MinioContainerFixture : IAsyncLifetime
 {
-    private MinioContainer _minioContainer = null!;
+    private MinioContainer? _minioContainer;
 
     public static string AccessKey => "minioadmin";
     public static string SecretKey => "minioadmin";
-    public string Endpoint => _minioContainer.GetConnectionString() ?? throw new InvalidOperationException("Minio container is not initialized.");
+    public string Endpoint => _minioContainer?.GetConnectionString() ?? throw new InvalidOperationException("Minio container is not initialized.");
 
     public IMinioClient CreateClient()
     {
+        if (_minioContainer == null)
+        {
+            throw new InvalidOperationException("Minio container is not initialized.");
+        }
+
         var client = new MinioClient();
         var iclient = client
             .WithEndpoint(_minioContainer.Hostname, _minioContainer.GetMappedPublicPort(9000))
@@ -47,6 +52,9 @@ public sealed class MinioContainerFixture : IAsyncLifetime
 
     public async ValueTask DisposeAsync()
     {
-        await _minioContainer.DisposeAsync().ConfigureAwait(false);
+        if (_minioContainer != null)
+        {
+            await _minioContainer.DisposeAsync().ConfigureAwait(false);
+        }
     }
 }

@@ -20,13 +20,13 @@ public sealed class AzuriteContainerCollectionFixture : ICollectionFixture<Azuri
 /// </summary>
 public sealed class AzuriteContainerFixture : IAsyncLifetime
 {
-    private AzuriteContainer _azuriteContainer = null!;
+    private AzuriteContainer? _azuriteContainer;
 
     /// <summary>
     /// Gets the connection string for the Azurite container.
     /// </summary>
     public string ConnectionString =>
-        _azuriteContainer.GetConnectionString()
+        _azuriteContainer?.GetConnectionString()
         ?? throw new InvalidOperationException(
             "Azurite container is not initialized. Ensure InitializeAsync has been called."
         );
@@ -52,6 +52,9 @@ public sealed class AzuriteContainerFixture : IAsyncLifetime
 
     public async ValueTask DisposeAsync()
     {
-        await _azuriteContainer.DisposeAsync().ConfigureAwait(false);
+        if (_azuriteContainer != null)
+        {
+            await _azuriteContainer.DisposeAsync().ConfigureAwait(false);
+        }
     }
 }
