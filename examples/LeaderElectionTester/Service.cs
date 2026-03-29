@@ -1,13 +1,9 @@
-using System.Diagnostics.CodeAnalysis;
 using LeaderElection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 
 namespace LeaderElectionTester;
 
-[SuppressMessage("Performance", "CA1848:Use the LoggerMessage delegates")]
-[SuppressMessage("Performance", "CA1873:Avoid potentially expensive logging")]
-#pragma warning disable CA1812
 internal sealed class Service : BackgroundService
 {
     private readonly ILogger<Service> _logger;
