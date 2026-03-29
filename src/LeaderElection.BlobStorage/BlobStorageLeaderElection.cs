@@ -10,7 +10,6 @@ public partial class BlobStorageLeaderElection : LeaderElectionBase<BlobStorageS
 {
     private readonly BlobContainerClient? _containerClient;
     private readonly BlobClient? _blobClient;
-    private readonly BlobStorageSettings _options;
     private string? _currentLeaseId;
 
     public BlobStorageLeaderElection(
@@ -18,36 +17,34 @@ public partial class BlobStorageLeaderElection : LeaderElectionBase<BlobStorageS
         IOptions<BlobStorageSettings>? options,
         ILogger<BlobStorageLeaderElection> logger) : base(options?.Value ?? throw new ArgumentNullException(nameof(options)), logger)
     {
-        _options = options.Value ?? throw new ArgumentNullException(nameof(options));
-        _containerClient = blobServiceClient?.GetBlobContainerClient(_options.ContainerName);
+        _containerClient = blobServiceClient?.GetBlobContainerClient(_settings.ContainerName);
 
-        _blobClient = _containerClient?.GetBlobClient(_options.BlobName);
+        _blobClient = _containerClient?.GetBlobClient(_settings.BlobName);
     }
 
-    public BlobStorageLeaderElection(BlobContainerClient client, BlobStorageSettings options, ILogger<BlobStorageLeaderElection> logger) : base(options ?? throw new ArgumentNullException(nameof(options)), logger)
+    public BlobStorageLeaderElection(BlobContainerClient client, BlobStorageSettings settings, ILogger<BlobStorageLeaderElection> logger) : base(settings ?? throw new ArgumentNullException(nameof(settings)), logger)
     {
         _containerClient = client ?? throw new ArgumentNullException(nameof(client));
-        _options = options;
 
-        _blobClient = _containerClient.GetBlobClient(_options.BlobName);
+        _blobClient = _containerClient.GetBlobClient(_settings.BlobName);
     }
 
     protected override async Task<bool> TryAcquireLeadershipInternalAsync(CancellationToken cancellationToken)
     {
         try
         {
-            if (_options.CreateContainerIfNotExists)
+            if (_settings.CreateContainerIfNotExists)
             {
                 await EnsureBlobExistsAsync(cancellationToken).ConfigureAwait(false);
             }
 
             var leaseClient = _blobClient.GetBlobLeaseClient();
-            var leaseResponse = await leaseClient.AcquireAsync(_options.LeaseDuration, cancellationToken: cancellationToken).ConfigureAwait(false);
+            var leaseResponse = await leaseClient.AcquireAsync(_settings.LeaseDuration, cancellationToken: cancellationToken).ConfigureAwait(false);
 
             if (leaseResponse?.Value?.LeaseId != null)
             {
                 _currentLeaseId = leaseResponse.Value.LeaseId;
-                LogAcquiredLeaseWithIdLeaseId(Logger, _currentLeaseId);
+                LogAcquiredLeaseWithIdLeaseId(_logger, _currentLeaseId);
                 return true;
             }
 
@@ -55,12 +52,12 @@ public partial class BlobStorageLeaderElection : LeaderElectionBase<BlobStorageS
         }
         catch (Azure.RequestFailedException ex) when (ex.Status == 409) // Conflict - lease already exists
         {
-            LogLeaseAlreadyExistsCannotAcquireLeadership(Logger);
+            LogLeaseAlreadyExistsCannotAcquireLeadership(_logger);
             return false;
         }
         catch (Exception ex)
         {
-            LogErrorAcquiringLeadership(Logger, ex);
+            LogErrorAcquiringLeadership(_logger, ex);
             return false;
         }
     }
@@ -69,7 +66,7 @@ public partial class BlobStorageLeaderElection : LeaderElectionBase<BlobStorageS
     {
         if (string.IsNullOrEmpty(_currentLeaseId))
         {
-            LogNoCurrentLeaseIdCannotRenewLeadership(Logger);
+            LogNoCurrentLeaseIdCannotRenewLeadership(_logger);
             return false;
         }
 
@@ -80,7 +77,7 @@ public partial class BlobStorageLeaderElection : LeaderElectionBase<BlobStorageS
 
             if (leaseResponse?.Value?.LeaseId != null)
             {
-                LogRenewedLeaseSuccessfully(Logger);
+                LogRenewedLeaseSuccessfully(_logger);
                 return true;
             }
 
@@ -88,17 +85,17 @@ public partial class BlobStorageLeaderElection : LeaderElectionBase<BlobStorageS
         }
         catch (Azure.RequestFailedException ex) when (ex.Status == 404) // Not Found - blob doesn't exist
         {
-            LogBlobNotFoundDuringLeaseRenewal(Logger);
+            LogBlobNotFoundDuringLeaseRenewal(_logger);
             return false;
         }
         catch (Azure.RequestFailedException ex) when (ex.Status == 409) // Conflict - lease lost
         {
-            LogLeaseConflictDuringRenewalLeadershipLost(Logger);
+            LogLeaseConflictDuringRenewalLeadershipLost(_logger);
             return false;
         }
         catch (Exception ex)
         {
-            LogErrorRenewingLeadership(Logger, ex);
+            LogErrorRenewingLeadership(_logger, ex);
             return false;
         }
     }
@@ -107,7 +104,7 @@ public partial class BlobStorageLeaderElection : LeaderElectionBase<BlobStorageS
     {
         if (string.IsNullOrEmpty(_currentLeaseId))
         {
-            LogNoLeaseIdToRelease(Logger);
+            LogNoLeaseIdToRelease(_logger);
             return;
         }
 
@@ -117,19 +114,19 @@ public partial class BlobStorageLeaderElection : LeaderElectionBase<BlobStorageS
             await leaseClient.ReleaseAsync().ConfigureAwait(false);
 
             _currentLeaseId = null;
-            LogLeadershipReleasedForInstanceInstanceId(Logger, _options.InstanceId);
+            LogLeadershipReleasedForInstanceInstanceId(_logger, _settings.InstanceId);
         }
         catch (Azure.RequestFailedException ex) when (ex.Status == 404) // Not Found - blob doesn't exist
         {
-            LogBlobNotFoundDuringLeaseRelease(Logger);
+            LogBlobNotFoundDuringLeaseRelease(_logger);
         }
         catch (Azure.RequestFailedException ex) when (ex.Status == 409) // Conflict - lease already expired
         {
-            LogLeaseAlreadyExpiredDuringRelease(Logger);
+            LogLeaseAlreadyExpiredDuringRelease(_logger);
         }
         catch (Exception ex)
         {
-            LogErrorReleasingLeadership(Logger, ex);
+            LogErrorReleasingLeadership(_logger, ex);
         }
     }
 
@@ -140,9 +137,9 @@ public partial class BlobStorageLeaderElection : LeaderElectionBase<BlobStorageS
             if (_containerClient != null)
             {
                 var containerExists = await _containerClient.ExistsAsync(cancellationToken).ConfigureAwait(false);
-                if (!containerExists.Value && _options.CreateContainerIfNotExists)
+                if (!containerExists.Value && _settings.CreateContainerIfNotExists)
                 {
-                    LogCreatingLeaderElectionContainer(Logger);
+                    LogCreatingLeaderElectionContainer(_logger);
                     await _containerClient.CreateIfNotExistsAsync(cancellationToken: cancellationToken).ConfigureAwait(false);
                 }
             }
@@ -152,14 +149,14 @@ public partial class BlobStorageLeaderElection : LeaderElectionBase<BlobStorageS
                 var exists = await _blobClient.ExistsAsync(cancellationToken).ConfigureAwait(false);
                 if (!exists.Value)
                 {
-                    LogCreatingLeaderElectionBlob(Logger);
-                    await _blobClient.UploadAsync(new BinaryData(_options.InstanceId), overwrite: true, cancellationToken: cancellationToken).ConfigureAwait(false);
+                    LogCreatingLeaderElectionBlob(_logger);
+                    await _blobClient.UploadAsync(new BinaryData(_settings.InstanceId), overwrite: true, cancellationToken: cancellationToken).ConfigureAwait(false);
                 }
             }
         }
         catch (Exception ex)
         {
-            LogErrorEnsuringBlobExists(Logger, ex);
+            LogErrorEnsuringBlobExists(_logger, ex);
         }
     }
 

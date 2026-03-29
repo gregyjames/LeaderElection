@@ -9,19 +9,19 @@ namespace LeaderElection.Redis;
 public partial class RedisLeaderElection(
     IConnectionMultiplexer connectionMultiplexer,
     IOptions<RedisSettings>? options,
-    ILogger<RedisLeaderElection> logger) : LeaderElectionBase<RedisSettings>(options.Value ?? throw new ArgumentNullException(nameof(options)), logger)
+    ILogger<RedisLeaderElection> logger)
+    : LeaderElectionBase<RedisSettings>(options?.Value ?? throw new ArgumentNullException(nameof(options)), logger)
 {
     private readonly IDatabase _redis = connectionMultiplexer.GetDatabase() ?? throw new ArgumentNullException(nameof(connectionMultiplexer));
-    private readonly RedisSettings _options = options?.Value ?? throw new ArgumentNullException(nameof(options));
 
     protected override async Task<bool> TryAcquireLeadershipInternalAsync(CancellationToken cancellationToken)
     {
         try
         {
             var result = await _redis.StringSetAsync(
-                key: _options.LockKey,
-                value: _options.InstanceId,
-                expiry: _options.LockExpiry,
+                key: _settings.LockKey,
+                value: _settings.InstanceId,
+                expiry: _settings.LockExpiry,
                 when: When.NotExists
             ).ConfigureAwait(false);
 
@@ -29,7 +29,7 @@ public partial class RedisLeaderElection(
         }
         catch (Exception ex)
         {
-            LogErrorAcquiringLeadership(Logger, ex);
+            LogErrorAcquiringLeadership(_logger, ex);
             return false;
         }
     }
@@ -48,15 +48,15 @@ public partial class RedisLeaderElection(
 
             var result = await _redis.ScriptEvaluateAsync(
                 script,
-                [ _options.LockKey ],
-                [ _options.InstanceId, (int)_options.LockExpiry.TotalMilliseconds ]
+                [ _settings.LockKey ],
+                [ _settings.InstanceId, (int)_settings.LockExpiry.TotalMilliseconds ]
             ).ConfigureAwait(false);
 
             return (int)result != 0;
         }
         catch (Exception ex)
         {
-            LogErrorRenewingLeadership(Logger, ex);
+            LogErrorRenewingLeadership(_logger, ex);
             return false;
         }
     }
@@ -75,15 +75,15 @@ public partial class RedisLeaderElection(
 
             await _redis.ScriptEvaluateAsync(
                 script,
-                [ _options.LockKey ],
-                [ _options.InstanceId ]
+                [ _settings.LockKey ],
+                [ _settings.InstanceId ]
             ).ConfigureAwait(false);
 
-            LogLeadershipReleasedForInstanceInstanceId(Logger, _options.InstanceId);
+            LogLeadershipReleasedForInstanceInstanceId(_logger, _settings.InstanceId);
         }
         catch (Exception ex)
         {
-            LogErrorReleasingLeadership(Logger, ex);
+            LogErrorReleasingLeadership(_logger, ex);
         }
     }
 
@@ -99,5 +99,3 @@ public partial class RedisLeaderElection(
     [LoggerMessage(LogLevel.Error, "Error releasing leadership")]
     static partial void LogErrorReleasingLeadership(ILogger logger, Exception exception);
 }
-
-

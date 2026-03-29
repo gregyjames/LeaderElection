@@ -4,17 +4,18 @@ using Microsoft.Extensions.Logging;
 namespace LeaderElection;
 
 [SuppressMessage("Design", "CA1031:Do not catch general exception types")]
-[SuppressMessage("Design", "CA1051:Do not declare visible instance fields")]
 public abstract partial class LeaderElectionBase<TSettings> : ILeaderElection
     where TSettings : LeaderElectionSettingsBase
 {
-    protected readonly TSettings Settings;
-    protected readonly ILogger Logger;
+    [SuppressMessage("Design", "CA1051", Justification = "Field readonly to derived types")]
+    protected readonly TSettings _settings;
+    [SuppressMessage("Design", "CA1051", Justification = "Field readonly to derived types")]
+    protected readonly ILogger _logger;
 
     protected LeaderElectionBase(TSettings settings, ILogger logger)
     {
-        this.Settings = settings ?? throw new ArgumentNullException(nameof(settings));
-        this.Logger = logger ?? throw new ArgumentNullException(nameof(logger));
+        _settings = settings ?? throw new ArgumentNullException(nameof(settings));
+        _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }
 
     private readonly SemaphoreSlim _leadershipSemaphore = new(1,1);
@@ -46,7 +47,7 @@ public abstract partial class LeaderElectionBase<TSettings> : ILeaderElection
             return;
         }
 
-        LogStartingLeaderElectionForInstanceInstanceid(Settings.InstanceId);
+        LogStartingLeaderElectionForInstanceInstanceid(_settings.InstanceId);
 
         _leadershipLoopCancellationTokenSource = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         _leadershipLoopTask = RunLeaderLoopAsync(_leadershipLoopCancellationTokenSource.Token);
@@ -66,7 +67,7 @@ public abstract partial class LeaderElectionBase<TSettings> : ILeaderElection
                 {
                     if (await TryAcquireLeadershipAsync(token).ConfigureAwait(false))
                     {
-                        LogLeadershipAcquiredForInstanceInstanceid(Settings.InstanceId);
+                        LogLeadershipAcquiredForInstanceInstanceid(_settings.InstanceId);
                         retryCount = 0;
                     }
                     else
@@ -79,7 +80,7 @@ public abstract partial class LeaderElectionBase<TSettings> : ILeaderElection
                 {
                     if (!await RenewLeadershipInternalAsync(token).ConfigureAwait(false))
                     {
-                        LogLostLeadershipDuringRenewalForInstanceInstanceid(Settings.InstanceId);
+                        LogLostLeadershipDuringRenewalForInstanceInstanceid(_settings.InstanceId);
                         SetLeadership(false);
                         retryCount++;
                     }
@@ -106,7 +107,7 @@ public abstract partial class LeaderElectionBase<TSettings> : ILeaderElection
 
                 try
                 {
-                    await Task.Delay(Settings.RetryInterval, token).ConfigureAwait(false);
+                    await Task.Delay(_settings.RetryInterval, token).ConfigureAwait(false);
                 }
                 catch (OperationCanceledException)
                 {
@@ -120,16 +121,16 @@ public abstract partial class LeaderElectionBase<TSettings> : ILeaderElection
     {
         if (retryCount == 0)
         {
-            return Settings.RenewInterval;
+            return _settings.RenewInterval;
         }
 
-        return TimeSpan.FromSeconds(Math.Min(Math.Pow(2, Math.Min(retryCount, Settings.MaxRetryAttempts)), 60));
+        return TimeSpan.FromSeconds(Math.Min(Math.Pow(2, Math.Min(retryCount, _settings.MaxRetryAttempts)), 60));
     }
 
     public virtual Task StopAsync(CancellationToken cancellationToken = default) => IsDisposed ? Task.CompletedTask : InternalStopAsync(cancellationToken);
     private async Task InternalStopAsync(CancellationToken cancellationToken = default)
     {
-        LogStoppingLeaderElectionForInstanceInstanceid(Settings.InstanceId);
+        LogStoppingLeaderElectionForInstanceInstanceid(_settings.InstanceId);
 
         if (_leadershipLoopCancellationTokenSource != null)
         {
@@ -154,7 +155,7 @@ public abstract partial class LeaderElectionBase<TSettings> : ILeaderElection
             }
         }
 
-        if (Settings.EnableGracefulShutdown && _isLeader)
+        if (_settings.EnableGracefulShutdown && _isLeader)
         {
             await ReleaseLeadershipAsync().ConfigureAwait(false);
         }

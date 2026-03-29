@@ -29,11 +29,11 @@ public sealed partial class PostgresLeaderElection : LeaderElectionBase<Postgres
                 _activeConnection = null;
             }
 
-            var connection = new NpgsqlConnection(Settings.ConnectionString);
+            var connection = new NpgsqlConnection(_settings.ConnectionString);
             await connection.OpenAsync(cancellationToken).ConfigureAwait(false);
 
             using var cmd = new NpgsqlCommand("SELECT pg_try_advisory_lock(@LockId);", connection);
-            cmd.Parameters.AddWithValue("LockId", Settings.LockId);
+            cmd.Parameters.AddWithValue("LockId", _settings.LockId);
 
             var result = await cmd.ExecuteScalarAsync(cancellationToken).ConfigureAwait(false);
             if (result is true)
@@ -47,7 +47,7 @@ public sealed partial class PostgresLeaderElection : LeaderElectionBase<Postgres
         }
         catch (Exception ex)
         {
-            LogErrorAcquiringPostgresqlLeadership(Logger, ex);
+            LogErrorAcquiringPostgresqlLeadership(_logger, ex);
             return false;
         }
     }
@@ -68,7 +68,7 @@ public sealed partial class PostgresLeaderElection : LeaderElectionBase<Postgres
         }
         catch (Exception ex)
         {
-            LogErrorRenewingPostgresqlLeadershipConnectionLost(Logger, ex);
+            LogErrorRenewingPostgresqlLeadershipConnectionLost(_logger, ex);
 
             if (_activeConnection != null)
             {
@@ -90,15 +90,15 @@ public sealed partial class PostgresLeaderElection : LeaderElectionBase<Postgres
             if (_activeConnection.State == ConnectionState.Open)
             {
                 using var cmd = new NpgsqlCommand("SELECT pg_advisory_unlock(@LockId);", _activeConnection);
-                cmd.Parameters.AddWithValue("LockId", Settings.LockId);
+                cmd.Parameters.AddWithValue("LockId", _settings.LockId);
                 await cmd.ExecuteScalarAsync(CancellationToken.None).ConfigureAwait(false);
             }
 
-            LogLeadershipReleasedForInstanceInstanceId(Logger, Settings.InstanceId);
+            LogLeadershipReleasedForInstanceInstanceId(_logger, _settings.InstanceId);
         }
         catch (Exception ex)
         {
-            LogErrorReleasingPostgresqlLeadership(Logger, ex);
+            LogErrorReleasingPostgresqlLeadership(_logger, ex);
         }
         finally
         {
