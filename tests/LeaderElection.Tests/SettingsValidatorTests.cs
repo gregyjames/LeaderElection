@@ -10,11 +10,9 @@ namespace LeaderElection.Tests;
 
 public partial class SettingsValidatorTests
 {
-    #pragma warning disable CA1852
     internal class TestSettings : LeaderElectionSettingsBase { }
 
     [OptionsValidator]
-    #pragma warning disable CA1852
     internal partial class TestSettingsValidator : IValidateOptions<TestSettings> { }
 
     [Fact]
