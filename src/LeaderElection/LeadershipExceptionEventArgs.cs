@@ -1,6 +1,6 @@
 namespace LeaderElection;
 
-public class LeadershipExceptionEventArgs(Exception ex) : EventArgs
+public sealed class LeadershipExceptionEventArgs(Exception ex) : EventArgs
 {
-    public Exception LeadershipException { get; set; } = ex;
+    public Exception LeadershipException { get; } = ex;
 }
