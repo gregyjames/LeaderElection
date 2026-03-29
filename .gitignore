@@ -1,6 +1,14 @@
 /.DS_Store
-/.idea
+
+# Rider support
+!/.idea
 /LeaderElection.sln.DotSettings.user
+
+# VSCode support
+!/.vscode
+
+# Visual Studio support
+/.vs
 
 /tests/**/coverage.*
 /tests/**/TestResults
