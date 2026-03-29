@@ -1,4 +1,3 @@
-using System.Diagnostics.CodeAnalysis;
 using StackExchange.Redis;
 using Testcontainers.Redis;
 
@@ -13,16 +12,12 @@ namespace LeaderElection.Tests;
 /// requires access to the singleton <see cref="RedisContainerFixture"/>.
 /// </remarks>
 [CollectionDefinition("Redis Container")]
-[SuppressMessage("Maintainability", "CA1515:Consider making public types internal")]
-#pragma warning disable xUnit1027
-#pragma warning disable CA1515
 public sealed class RedisContainerCollectionFixture : ICollectionFixture<RedisContainerFixture> { }
 
 /// <summary>
 /// A Xunit fixture that manages the lifecycle of a temporary Redis container for
 /// testing purposes.
 /// </summary>
-[SuppressMessage("Maintainability", "CA1515:Consider making public types internal")]
 public sealed class RedisContainerFixture : IAsyncLifetime
 {
     private RedisContainer _redisContainer = default!;

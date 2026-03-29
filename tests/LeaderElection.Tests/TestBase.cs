@@ -1,9 +1,7 @@
 using System.Diagnostics;
-using System.Diagnostics.CodeAnalysis;
 
 namespace LeaderElection.Tests;
 
-[SuppressMessage("Maintainability", "CA1515:Consider making public types internal")]
 public abstract class TestBase
 {
     /// <summary>

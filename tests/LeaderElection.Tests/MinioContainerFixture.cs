@@ -9,14 +9,12 @@ namespace LeaderElection.Tests;
 /// across all tests that require it.
 /// </summary>
 [CollectionDefinition("Minio Container")]
-[SuppressMessage("Maintainability", "CA1515:Consider making public types internal")]
 public sealed class MinioContainerCollectionFixture : ICollectionFixture<MinioContainerFixture> { }
 
 /// <summary>
 /// A Xunit fixture that manages the lifecycle of a temporary Minio container for
 /// testing purposes.
 /// </summary>
-[SuppressMessage("Maintainability", "CA1515:Consider making public types internal")]
 public sealed class MinioContainerFixture : IAsyncLifetime
 {
     private MinioContainer _minioContainer = null!;

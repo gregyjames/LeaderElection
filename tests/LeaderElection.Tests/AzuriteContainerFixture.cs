@@ -1,4 +1,3 @@
-using System.Diagnostics.CodeAnalysis;
 using Azure.Storage.Blobs;
 using Testcontainers.Azurite;
 
@@ -13,14 +12,12 @@ namespace LeaderElection.Tests;
 /// requires access to the singleton <see cref="AzuriteContainerFixture"/>.
 /// </remarks>
 [CollectionDefinition("Azurite Container")]
-[SuppressMessage("Maintainability", "CA1515:Consider making public types internal")]
 public sealed class AzuriteContainerCollectionFixture : ICollectionFixture<AzuriteContainerFixture> { }
 
 /// <summary>
 /// An Xunit fixture that manages the lifecycle of a temporary Azurite container for
 /// testing purposes.
 /// </summary>
-[SuppressMessage("Maintainability", "CA1515:Consider making public types internal")]
 public sealed class AzuriteContainerFixture : IAsyncLifetime
 {
     private AzuriteContainer _azuriteContainer = null!;
