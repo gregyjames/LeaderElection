@@ -1,4 +1,3 @@
-using System.Diagnostics.CodeAnalysis;
 using System.Text;
 using System.Text.Json;
 using Microsoft.Extensions.Logging;
@@ -9,7 +8,6 @@ using Minio.Exceptions;
 
 namespace LeaderElection.S3;
 
-[SuppressMessage("Design", "CA1031:Do not catch general exception types")]
 public sealed partial class S3LeaderElection : LeaderElectionBase<S3Settings>
 {
     private readonly IMinioClient _client;

@@ -3,7 +3,6 @@ using Microsoft.Extensions.Logging;
 
 namespace LeaderElection;
 
-[SuppressMessage("Design", "CA1031:Do not catch general exception types")]
 public abstract partial class LeaderElectionBase<TSettings> : ILeaderElection
     where TSettings : LeaderElectionSettingsBase
 {

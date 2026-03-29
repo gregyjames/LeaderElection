@@ -1,5 +1,3 @@
-using System.Diagnostics.CodeAnalysis;
-
 namespace LeaderElection.Postgres;
 
 using System.Data;
@@ -7,7 +5,6 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Npgsql;
 
-[SuppressMessage("Design", "CA1031:Do not catch general exception types")]
 public sealed partial class PostgresLeaderElection : LeaderElectionBase<PostgresSettings>
 {
     private NpgsqlConnection? _activeConnection;

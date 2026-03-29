@@ -1,11 +1,9 @@
-using System.Diagnostics.CodeAnalysis;
 using Microsoft.Extensions.Caching.Distributed;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 
 namespace LeaderElection.DistributedCache;
 
-[SuppressMessage("Design", "CA1031:Do not catch general exception types")]
 public partial class DistributedCacheLeaderElection: LeaderElectionBase<DistributedCacheSettings>
 {
     private readonly IDistributedCache _cache;

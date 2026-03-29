@@ -1,11 +1,9 @@
-using System.Diagnostics.CodeAnalysis;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using StackExchange.Redis;
 
 namespace LeaderElection.Redis;
 
-[SuppressMessage("Design", "CA1031:Do not catch general exception types")]
 public partial class RedisLeaderElection(
     IConnectionMultiplexer connectionMultiplexer,
     IOptions<RedisSettings>? options,

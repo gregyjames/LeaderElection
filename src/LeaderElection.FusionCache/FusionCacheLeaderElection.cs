@@ -1,11 +1,9 @@
-using System.Diagnostics.CodeAnalysis;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using ZiggyCreatures.Caching.Fusion;
 
 namespace LeaderElection.FusionCache;
 
-[SuppressMessage("Design", "CA1031:Do not catch general exception types")]
 public partial class FusionCacheLeaderElection: LeaderElectionBase<FusionCacheSettings>
 {
     private readonly IFusionCache _cache;

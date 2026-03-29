@@ -33,6 +33,7 @@
     <CodeAnalysisTreatWarningsAsErrors>true</CodeAnalysisTreatWarningsAsErrors>
     <EnforceCodeStyleInBuild>true</EnforceCodeStyleInBuild>
     <WarningLevel>4</WarningLevel>
+    <!-- Disable warnings globally in .editorconfig -->
   </PropertyGroup>
   
   <!-- Generate deterministic build when running in CI environments -->

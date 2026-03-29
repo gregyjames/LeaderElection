@@ -1,11 +1,9 @@
-using System.Diagnostics.CodeAnalysis;
 using Azure.Storage.Blobs;
 using Azure.Storage.Blobs.Specialized;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 
 namespace LeaderElection.BlobStorage;
-[SuppressMessage("Design", "CA1031:Do not catch general exception types")]
 public partial class BlobStorageLeaderElection : LeaderElectionBase<BlobStorageSettings>
 {
     private readonly BlobContainerClient? _containerClient;
