@@ -31,14 +31,18 @@ public sealed class S3LeaderElectionTests(MinioContainerFixture minioFixture) : 
 
     private S3LeaderElection CreateSut(S3Settings options) =>
         new(
+#pragma warning disable CA2000 // dispose object
             minioFixture.CreateClient(),
+#pragma warning restore CA2000
             Options.Create(options),
             NullLoggerFactory.Instance.CreateLogger<S3LeaderElection>()
         );
 
     private async Task EnsureBucketExistsAsync()
     {
+#pragma warning disable CA2000 // dispose object
         var client = minioFixture.CreateClient();
+#pragma warning restore CA2000
         if (!await client.BucketExistsAsync(new BucketExistsArgs().WithBucket(BUCKET_NAME)).ConfigureAwait(false))
         {
             await client.MakeBucketAsync(new MakeBucketArgs().WithBucket(BUCKET_NAME)).ConfigureAwait(false);

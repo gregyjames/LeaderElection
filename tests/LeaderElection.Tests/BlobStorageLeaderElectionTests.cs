@@ -236,13 +236,11 @@ public sealed class BlobStorageLeaderElectionTests(AzuriteContainerFixture azuri
         var containerClient = _blobServiceClient.GetBlobContainerClient(containerName);
         await containerClient.CreateIfNotExistsAsync(cancellationToken: CancellationToken);
 
-#pragma warning disable CA2007
         await using var leaderElection = new BlobStorageLeaderElection(
             containerClient,
             options,
             NullLoggerFactory.Instance.CreateLogger<BlobStorageLeaderElection>()
         );
-#pragma warning restore CA2007
 
         await leaderElection.StartAsync(CancellationToken);
         await WaitForLeadershipChange(leaderElection, true, options.LeaseDuration);

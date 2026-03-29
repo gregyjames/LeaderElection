@@ -1,4 +1,4 @@
-using System.Diagnostics.CodeAnalysis;
+using System.Diagnostics;
 using Minio;
 using Testcontainers.Minio;
 
@@ -23,14 +23,16 @@ public sealed class MinioContainerFixture : IAsyncLifetime
     public static string SecretKey => "minioadmin";
     public string Endpoint => _minioContainer.GetConnectionString() ?? throw new InvalidOperationException("Minio container is not initialized.");
 
-    [SuppressMessage("Reliability", "CA2000:Dispose objects before losing scope")]
     public IMinioClient CreateClient()
     {
-        return new MinioClient()
+        var client = new MinioClient();
+        var iclient = client
             .WithEndpoint(_minioContainer.Hostname, _minioContainer.GetMappedPublicPort(9000))
             .WithCredentials(AccessKey, SecretKey)
             .WithSSL(false)
             .Build();
+        Debug.Assert(object.ReferenceEquals(iclient, client), "Build returns the disposable instance.");
+        return client;
     }
 
     public async ValueTask InitializeAsync()
