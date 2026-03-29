@@ -11,25 +11,23 @@ using Microsoft.Extensions.Hosting;
 using Minio;
 using StackExchange.Redis;
 using ZiggyCreatures.Caching.Fusion;
-// ReSharper disable NotResolvedInText
 
 var builder = Host.CreateApplicationBuilder(args);
 
-#pragma warning disable CA1308
 var leaderElectionType = ConfigurationBinder.GetValue(builder
         .Configuration, "LeaderElectionType", "Redis")
-    .ToLowerInvariant() switch
-#pragma warning restore CA1308
+    .ToUpperInvariant() switch
     {
-    "redis" => "Redis",
-    "distributedcache" or "dc" => "DistributedCache",
-    "fusioncache" or "fc" => "FusionCache",
-    "blobstorage" or "blob" => "BlobStorage",
-    "s3" => "S3",
-    "postgres" => "Postgres",
+    "REDIS" => "Redis",
+    "DISTRIBUTEDCACHE" or "DC" => "DistributedCache",
+    "FUSIONCACHE" or "FC" => "FusionCache",
+    "BLOBSTORAGE" or "BLOB" => "BlobStorage",
+    "S3" => "S3",
+    "POSTGRES" => "Postgres",
 #pragma warning disable CA2208
     _ => throw new ArgumentException(
         "Invalid LeaderElection type. Supported values are: Redis, DistributedCache (dc), FusionCache (fc), BlobStorage (blob), S3, Postgres.",
+        // ReSharper disable once NotResolvedInText
         "LeaderElectionType"
     ),
 #pragma warning restore CA2208
