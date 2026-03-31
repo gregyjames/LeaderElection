@@ -5,6 +5,7 @@ using LeaderElection.Postgres;
 using LeaderElection.Redis;
 using LeaderElection.S3;
 using LeaderElectionTester;
+using Microsoft.Extensions.Azure;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
@@ -77,9 +78,13 @@ if (leaderElectionType is "FusionCache")
 
 if (leaderElectionType is "BlobStorage")
 {
+    builder.Services.AddAzureClients(configure =>
+    {
+        // blob test using Azurite or Storage Emulator
+        configure.AddBlobServiceClient("UseDevelopmentStorage=true;");
+    });
     builder.Services.AddBlobStorageLeaderElection(options =>
     {
-        options.ConnectionString = "UseDevelopmentStorage=true";
         options.ContainerName = "leader-election";
         options.BlobName = "leader_election_tester";
         options.InstanceId = instanceId;
@@ -105,10 +110,12 @@ if (leaderElectionType is "S3")
 
 if (leaderElectionType is "Postgres")
 {
+    builder.Services.AddNpgsqlDataSource(
+        "Host=localhost;Database=mydb;Username=myuser;Password=mypassword"
+    );
+
     builder.Services.AddPostgresLeaderElection(options =>
     {
-        options.ConnectionString =
-            "Host=localhost;Database=mydb;Username=myuser;Password=mypassword";
         options.LockId = 1;
         options.InstanceId = instanceId;
     });
