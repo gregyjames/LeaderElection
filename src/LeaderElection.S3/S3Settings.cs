@@ -1,4 +1,5 @@
 using System.ComponentModel.DataAnnotations;
+using Minio;
 
 namespace LeaderElection.S3;
 
@@ -33,4 +34,25 @@ public class S3Settings : LeaderElectionSettingsBase
         nameof(S3SettingsValidator.ValidateLeaseDuration)
     )]
     public TimeSpan LeaseDuration { get; set; } = TimeSpan.FromSeconds(30);
+
+    /// <summary>
+    /// The Minio client factory to create IMinioClient instances. If not provided, the
+    /// S3LeaderElection will use the MinioClient registered in the DI container
+    /// (assuming the S3LeaderElection is created via DI).
+    /// </summary>
+    public Func<S3Settings, IMinioClient>? MinioClientFactory { get; set; }
+
+    /// <summary>
+    /// Copies the S3 settings from the source to the destination.
+    /// </summary>
+    public static void Copy(S3Settings src, S3Settings dst)
+    {
+        ArgumentNullException.ThrowIfNull(src);
+        ArgumentNullException.ThrowIfNull(dst);
+        LeaderElectionSettingsBase.Copy(src, dst);
+        dst.BucketName = src.BucketName;
+        dst.ObjectKey = src.ObjectKey;
+        dst.LeaseDuration = src.LeaseDuration;
+        dst.MinioClientFactory = src.MinioClientFactory;
+    }
 }
