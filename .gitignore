@@ -1,4 +1,6 @@
 /.DS_Store
+bin/
+obj/
 
 # Rider support
 !/.idea
