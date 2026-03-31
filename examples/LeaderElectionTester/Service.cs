@@ -77,6 +77,9 @@ internal sealed class Service : BackgroundService
 
     private void OnErrorOccurred(object? sender, LeadershipExceptionEventArgs leadershipException)
     {
-        _logger.LogError(leadershipException.LeadershipException, "Error occurred in leader election");
+        _logger.LogError(
+            leadershipException.LeadershipException,
+            "Error occurred in leader election"
+        );
     }
 }

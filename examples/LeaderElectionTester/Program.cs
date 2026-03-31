@@ -14,10 +14,10 @@ using ZiggyCreatures.Caching.Fusion;
 
 var builder = Host.CreateApplicationBuilder(args);
 
-var leaderElectionType = ConfigurationBinder.GetValue(builder
-        .Configuration, "LeaderElectionType", "Redis")
+var leaderElectionType = ConfigurationBinder
+    .GetValue(builder.Configuration, "LeaderElectionType", "Redis")
     .ToUpperInvariant() switch
-    {
+{
     "REDIS" => "Redis",
     "DISTRIBUTEDCACHE" or "DC" => "DistributedCache",
     "FUSIONCACHE" or "FC" => "FusionCache",
@@ -31,7 +31,7 @@ var leaderElectionType = ConfigurationBinder.GetValue(builder
         "LeaderElectionType"
     ),
 #pragma warning restore CA2208
-    };
+};
 
 // Get a unique ID for each running instance (e.g. in different terminals or machines).
 var instanceId = builder.Configuration.GetValue(

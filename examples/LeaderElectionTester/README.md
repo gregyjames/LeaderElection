@@ -1,6 +1,7 @@
 # LeaderElectionTester Example
 
-This example app demonstrates distributed leader election using the `LeaderElection` libraries in this repository.
+This example app demonstrates distributed leader election using the `LeaderElection` libraries in
+this repository.
 
 When you run multiple instances of the app:
 
@@ -56,7 +57,8 @@ docker run --name leader-election-azurite -p 10000:10000 -d mcr.microsoft.com/az
 docker run --name leader-election-minio -p 9000:9000 -p 9001:9001 -e MINIO_ROOT_USER=accessKey -e MINIO_ROOT_PASSWORD=secretKey -d minio/minio server /data --console-address ":9001"
 ```
 
-**Important:** Log into the MinIO console (<http://localhost:9001>) and create the `my-app-locks` bucket (or modify the example to use a existing bucket name).
+**Important:** Log into the MinIO console (<http://localhost:9001>) and create the `my-app-locks`
+bucket (or modify the example to use a existing bucket name).
 
 ### PostgreSQL (for Postgres)
 
@@ -113,8 +115,11 @@ dotnet run
 ## Notes
 
 - Logging is configured in `appsettings.json` and can be adjusted to show more or less details.
-- Each running instance is required to have a unique `InstanceId`, which is based on the app domain, machine name, and process ID. You can override this with the `InstanceId` argument, e.g., `dotnet run -- InstanceId=Joe`.
+- Each running instance is required to have a unique `InstanceId`, which is based on the app domain,
+  machine name, and process ID. You can override this with the `InstanceId` argument, e.g.,
+  `dotnet run -- InstanceId=Joe`.
 - `Redis`, `DistributedCache`, and `FusionCache` sample modes all use Redis at `localhost:6379`.
 - `BlobStorage` mode uses `UseDevelopmentStorage=true` (Azurite/storage emulator style connection).
 - `S3` mode uses MinIO at `localhost:9000` with `accessKey` / `secretKey` and `my-app-locks` bucket.
-- `Postgres` mode uses `Host=localhost;Database=mydb;Username=myuser;Password=mypassword` with advisory lock id `1`.
+- `Postgres` mode uses `Host=localhost;Database=mydb;Username=myuser;Password=mypassword` with
+  advisory lock id `1`.

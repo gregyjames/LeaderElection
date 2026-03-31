@@ -6,9 +6,11 @@ public static class FusionCacheServiceBuilderExtensions
 {
     public static IServiceCollection AddFusionCacheLeaderElection(
         this IServiceCollection services,
-        Action<FusionCacheSettings> configureOptions)
+        Action<FusionCacheSettings> configureOptions
+    )
     {
-        services.AddOptionsWithValidateOnStart<FusionCacheSettings, FusionCacheSettingsValidator>()
+        services
+            .AddOptionsWithValidateOnStart<FusionCacheSettings, FusionCacheSettingsValidator>()
             .Configure(configureOptions);
 
         services.AddSingleton<ILeaderElection, FusionCacheLeaderElection>();
@@ -17,7 +19,8 @@ public static class FusionCacheServiceBuilderExtensions
 
     public static IServiceCollection AddFusionCacheLeaderElection(
         this IServiceCollection services,
-        FusionCacheSettings options)
+        FusionCacheSettings options
+    )
     {
         services.AddFusionCacheLeaderElection(opt =>
         {
@@ -33,5 +36,3 @@ public static class FusionCacheServiceBuilderExtensions
         return services;
     }
 }
-
-

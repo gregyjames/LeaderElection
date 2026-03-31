@@ -11,12 +11,13 @@ public sealed partial class PostgresLeaderElection : LeaderElectionBase<Postgres
 
     public PostgresLeaderElection(
         IOptions<PostgresSettings> options,
-        ILogger<PostgresLeaderElection> logger)
-        : base(options?.Value ?? throw new ArgumentNullException(nameof(options)), logger)
-    {
-    }
+        ILogger<PostgresLeaderElection> logger
+    )
+        : base(options?.Value ?? throw new ArgumentNullException(nameof(options)), logger) { }
 
-    protected override async Task<bool> TryAcquireLeadershipInternalAsync(CancellationToken cancellationToken)
+    protected override async Task<bool> TryAcquireLeadershipInternalAsync(
+        CancellationToken cancellationToken
+    )
     {
         try
         {
@@ -49,7 +50,9 @@ public sealed partial class PostgresLeaderElection : LeaderElectionBase<Postgres
         }
     }
 
-    protected override async Task<bool> RenewLeadershipInternalAsync(CancellationToken cancellationToken)
+    protected override async Task<bool> RenewLeadershipInternalAsync(
+        CancellationToken cancellationToken
+    )
     {
         if (_activeConnection is not { State: ConnectionState.Open })
         {
@@ -86,7 +89,10 @@ public sealed partial class PostgresLeaderElection : LeaderElectionBase<Postgres
         {
             if (_activeConnection.State == ConnectionState.Open)
             {
-                using var cmd = new NpgsqlCommand("SELECT pg_advisory_unlock(@LockId);", _activeConnection);
+                using var cmd = new NpgsqlCommand(
+                    "SELECT pg_advisory_unlock(@LockId);",
+                    _activeConnection
+                );
                 cmd.Parameters.AddWithValue("LockId", _settings.LockId);
                 await cmd.ExecuteScalarAsync(CancellationToken.None).ConfigureAwait(false);
             }
@@ -119,10 +125,16 @@ public sealed partial class PostgresLeaderElection : LeaderElectionBase<Postgres
     static partial void LogErrorAcquiringPostgresqlLeadership(ILogger logger, Exception exception);
 
     [LoggerMessage(LogLevel.Error, "Error renewing PostgreSQL leadership; connection lost")]
-    static partial void LogErrorRenewingPostgresqlLeadershipConnectionLost(ILogger logger, Exception exception);
+    static partial void LogErrorRenewingPostgresqlLeadershipConnectionLost(
+        ILogger logger,
+        Exception exception
+    );
 
     [LoggerMessage(LogLevel.Information, "Leadership released for instance {instanceId}")]
-    static partial void LogLeadershipReleasedForInstanceInstanceId(ILogger logger, string instanceId);
+    static partial void LogLeadershipReleasedForInstanceInstanceId(
+        ILogger logger,
+        string instanceId
+    );
 
     [LoggerMessage(LogLevel.Error, "Error releasing PostgreSQL leadership")]
     static partial void LogErrorReleasingPostgresqlLeadership(ILogger logger, Exception exception);

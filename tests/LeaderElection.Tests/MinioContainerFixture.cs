@@ -21,7 +21,10 @@ public sealed class MinioContainerFixture : IAsyncLifetime
 
     public static string AccessKey => "minioadmin";
     public static string SecretKey => "minioadmin";
-    public string Endpoint => _minioContainer?.GetConnectionString() ?? throw new InvalidOperationException("Minio container is not initialized.");
+
+    public string Endpoint =>
+        _minioContainer?.GetConnectionString()
+        ?? throw new InvalidOperationException("Minio container is not initialized.");
 
     public IMinioClient CreateClient()
     {
@@ -36,7 +39,10 @@ public sealed class MinioContainerFixture : IAsyncLifetime
             .WithCredentials(AccessKey, SecretKey)
             .WithSSL(false)
             .Build();
-        Debug.Assert(object.ReferenceEquals(iclient, client), "Build returns the disposable instance.");
+        Debug.Assert(
+            object.ReferenceEquals(iclient, client),
+            "Build returns the disposable instance."
+        );
         return client;
     }
 

@@ -4,6 +4,7 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 
 namespace LeaderElection.BlobStorage;
+
 public partial class BlobStorageLeaderElection : LeaderElectionBase<BlobStorageSettings>
 {
     private readonly BlobContainerClient _containerClient;
@@ -13,7 +14,8 @@ public partial class BlobStorageLeaderElection : LeaderElectionBase<BlobStorageS
     public BlobStorageLeaderElection(
         BlobServiceClient blobServiceClient,
         IOptions<BlobStorageSettings> options,
-        ILogger<BlobStorageLeaderElection> logger)
+        ILogger<BlobStorageLeaderElection> logger
+    )
         : base(options?.Value ?? throw new ArgumentNullException(nameof(options)), logger)
     {
         _ = blobServiceClient ?? throw new ArgumentNullException(nameof(blobServiceClient));
@@ -25,7 +27,8 @@ public partial class BlobStorageLeaderElection : LeaderElectionBase<BlobStorageS
     public BlobStorageLeaderElection(
         BlobContainerClient client,
         BlobStorageSettings settings,
-        ILogger<BlobStorageLeaderElection> logger)
+        ILogger<BlobStorageLeaderElection> logger
+    )
         : base(settings ?? throw new ArgumentNullException(nameof(settings)), logger)
     {
         _containerClient = client ?? throw new ArgumentNullException(nameof(client));
@@ -33,7 +36,9 @@ public partial class BlobStorageLeaderElection : LeaderElectionBase<BlobStorageS
         _blobClient = _containerClient.GetBlobClient(_settings.BlobName);
     }
 
-    protected override async Task<bool> TryAcquireLeadershipInternalAsync(CancellationToken cancellationToken)
+    protected override async Task<bool> TryAcquireLeadershipInternalAsync(
+        CancellationToken cancellationToken
+    )
     {
         try
         {
@@ -43,7 +48,9 @@ public partial class BlobStorageLeaderElection : LeaderElectionBase<BlobStorageS
             }
 
             var leaseClient = _blobClient.GetBlobLeaseClient();
-            var leaseResponse = await leaseClient.AcquireAsync(_settings.LeaseDuration, cancellationToken: cancellationToken).ConfigureAwait(false);
+            var leaseResponse = await leaseClient
+                .AcquireAsync(_settings.LeaseDuration, cancellationToken: cancellationToken)
+                .ConfigureAwait(false);
 
             if (leaseResponse?.Value?.LeaseId != null)
             {
@@ -66,7 +73,9 @@ public partial class BlobStorageLeaderElection : LeaderElectionBase<BlobStorageS
         }
     }
 
-    protected override async Task<bool> RenewLeadershipInternalAsync(CancellationToken cancellationToken)
+    protected override async Task<bool> RenewLeadershipInternalAsync(
+        CancellationToken cancellationToken
+    )
     {
         if (string.IsNullOrEmpty(_currentLeaseId))
         {
@@ -77,7 +86,9 @@ public partial class BlobStorageLeaderElection : LeaderElectionBase<BlobStorageS
         try
         {
             var leaseClient = _blobClient.GetBlobLeaseClient(_currentLeaseId);
-            var leaseResponse = await leaseClient.RenewAsync(cancellationToken: cancellationToken).ConfigureAwait(false);
+            var leaseResponse = await leaseClient
+                .RenewAsync(cancellationToken: cancellationToken)
+                .ConfigureAwait(false);
 
             if (leaseResponse?.Value?.LeaseId != null)
             {
@@ -140,11 +151,15 @@ public partial class BlobStorageLeaderElection : LeaderElectionBase<BlobStorageS
         {
             if (_containerClient != null)
             {
-                var containerExists = await _containerClient.ExistsAsync(cancellationToken).ConfigureAwait(false);
+                var containerExists = await _containerClient
+                    .ExistsAsync(cancellationToken)
+                    .ConfigureAwait(false);
                 if (!containerExists.Value && _settings.CreateContainerIfNotExists)
                 {
                     LogCreatingLeaderElectionContainer(_logger);
-                    await _containerClient.CreateIfNotExistsAsync(cancellationToken: cancellationToken).ConfigureAwait(false);
+                    await _containerClient
+                        .CreateIfNotExistsAsync(cancellationToken: cancellationToken)
+                        .ConfigureAwait(false);
                 }
             }
 
@@ -154,7 +169,13 @@ public partial class BlobStorageLeaderElection : LeaderElectionBase<BlobStorageS
                 if (!exists.Value)
                 {
                     LogCreatingLeaderElectionBlob(_logger);
-                    await _blobClient.UploadAsync(new BinaryData(_settings.InstanceId), overwrite: true, cancellationToken: cancellationToken).ConfigureAwait(false);
+                    await _blobClient
+                        .UploadAsync(
+                            new BinaryData(_settings.InstanceId),
+                            overwrite: true,
+                            cancellationToken: cancellationToken
+                        )
+                        .ConfigureAwait(false);
                 }
             }
         }
@@ -192,7 +213,10 @@ public partial class BlobStorageLeaderElection : LeaderElectionBase<BlobStorageS
     static partial void LogNoLeaseIdToRelease(ILogger logger);
 
     [LoggerMessage(LogLevel.Information, "Leadership released for instance {instanceId}")]
-    static partial void LogLeadershipReleasedForInstanceInstanceId(ILogger logger, string instanceId);
+    static partial void LogLeadershipReleasedForInstanceInstanceId(
+        ILogger logger,
+        string instanceId
+    );
 
     [LoggerMessage(LogLevel.Debug, "Blob not found during lease release")]
     static partial void LogBlobNotFoundDuringLeaseRelease(ILogger logger);

@@ -14,7 +14,7 @@ public class PostgresSettingsValidatorTests
             ConnectionString = "Host=localhost;Database=test",
             InstanceId = "test-instance",
             LockId = 12345,
-            RetryInterval = TimeSpan.FromSeconds(5)
+            RetryInterval = TimeSpan.FromSeconds(5),
         };
 
         var result = _validator.Validate(null, settings);
@@ -32,7 +32,7 @@ public class PostgresSettingsValidatorTests
         {
             ConnectionString = connectionString!,
             InstanceId = "test-instance",
-            LockId = 12345
+            LockId = 12345,
         };
 
         var result = _validator.Validate(null, settings);
@@ -51,7 +51,7 @@ public class PostgresSettingsValidatorTests
         {
             ConnectionString = "Host=localhost",
             InstanceId = instanceId!,
-            LockId = 12345
+            LockId = 12345,
         };
 
         var result = _validator.Validate(null, settings);
@@ -68,7 +68,7 @@ public class PostgresSettingsValidatorTests
             ConnectionString = "Host=localhost",
             InstanceId = "test-instance",
             LockId = 12345,
-            RetryInterval = TimeSpan.FromSeconds(-1)
+            RetryInterval = TimeSpan.FromSeconds(-1),
         };
 
         var result = _validator.Validate(null, settings);

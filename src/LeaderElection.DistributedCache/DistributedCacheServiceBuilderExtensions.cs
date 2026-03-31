@@ -12,9 +12,14 @@ public static class DistributedCacheServiceBuilderExtensions
     /// <returns>The service collection for chaining</returns>
     public static IServiceCollection AddDistributedCacheLeaderElection(
         this IServiceCollection services,
-        Action<DistributedCacheSettings> configureOptions)
+        Action<DistributedCacheSettings> configureOptions
+    )
     {
-        services.AddOptionsWithValidateOnStart<DistributedCacheSettings, DistributedCacheSettingsValidator>()
+        services
+            .AddOptionsWithValidateOnStart<
+                DistributedCacheSettings,
+                DistributedCacheSettingsValidator
+            >()
             .Configure(configureOptions);
 
         services.AddSingleton<ILeaderElection, DistributedCacheLeaderElection>();
@@ -23,7 +28,8 @@ public static class DistributedCacheServiceBuilderExtensions
 
     public static IServiceCollection AddDistributedCacheLeaderElection(
         this IServiceCollection services,
-        DistributedCacheSettings options)
+        DistributedCacheSettings options
+    )
     {
         services.AddDistributedCacheLeaderElection(opt =>
         {
