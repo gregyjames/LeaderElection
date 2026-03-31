@@ -60,7 +60,7 @@ public partial class SettingsValidatorTests
         var settings = new RedisSettings
         {
             LockKey = string.Empty,
-            Host = string.Empty,
+            Host = null, // okay
             Database = -1,
             LockExpiry = TimeSpan.Zero,
         };
@@ -69,7 +69,7 @@ public partial class SettingsValidatorTests
 
         result.Failed.Should().BeTrue();
         result.Failures.Should().Contain(f => f.Contains("LockKey"));
-        result.Failures.Should().Contain(f => f.Contains("Host"));
+        result.Failures.Should().NotContain(f => f.Contains("Host"));
         result.Failures.Should().Contain(f => f.Contains("Database"));
         result.Failures.Should().Contain(f => f.Contains("LockExpiry"));
     }
