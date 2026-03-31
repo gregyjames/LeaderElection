@@ -33,10 +33,7 @@ public sealed class PostgresLeaderElectionTests(PostgresContainerFixture postgre
         };
 
     private static PostgresLeaderElection CreateSut(PostgresSettings options) =>
-        new(
-            Options.Create(options),
-            NullLoggerFactory.Instance.CreateLogger<PostgresLeaderElection>()
-        );
+        new(options, NullLoggerFactory.Instance.CreateLogger<PostgresLeaderElection>());
 
     [Fact]
     public async Task ShouldAcquireLeadershipWhenNoOtherInstanceExists()

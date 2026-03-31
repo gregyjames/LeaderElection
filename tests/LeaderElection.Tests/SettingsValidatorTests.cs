@@ -131,12 +131,12 @@ public partial class SettingsValidatorTests
     public void PostgresSettingsValidatorShouldValidateCorrectly()
     {
         var validator = new PostgresSettingsValidator();
-        var settings = new PostgresSettings { ConnectionString = string.Empty, LockId = 0 };
+        var settings = new PostgresSettings { InstanceId = "", LockId = 0 };
 
         var result = validator.Validate(null, settings);
 
         result.Failed.Should().BeTrue();
-        result.Failures.Should().Contain(f => f.Contains("ConnectionString"));
+        result.Failures.Should().Contain(f => f.Contains("InstanceId"));
         result.Failures.Should().NotContain(f => f.Contains("LockId"));
     }
 }
