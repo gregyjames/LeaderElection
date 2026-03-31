@@ -6,8 +6,7 @@ namespace LeaderElection.Tests;
 public class LeaderElectionBaseTests
 {
     private sealed class MockLeaderElection(LeaderElectionSettingsBase settings, ILogger logger)
-        : LeaderElectionBase<LeaderElectionSettingsBase>(settings, logger),
-            IDisposable
+        : LeaderElectionBase<LeaderElectionSettingsBase>(settings, logger)
     {
         public int TryAcquireCalls { get; private set; }
         public int RenewCalls { get; private set; }
@@ -44,20 +43,6 @@ public class LeaderElectionBaseTests
         }
 
         protected override TimeSpan GetNextDelay(int retryCount) => TimeSpan.FromMilliseconds(50);
-
-        private static void Dispose(bool disposing)
-        {
-            if (disposing)
-            {
-                // TODO release managed resources here
-            }
-        }
-
-        public void Dispose()
-        {
-            Dispose(true);
-            GC.SuppressFinalize(this);
-        }
     }
 
     [Fact]
@@ -68,7 +53,7 @@ public class LeaderElectionBaseTests
             RenewInterval = TimeSpan.FromMilliseconds(50),
             RetryInterval = TimeSpan.FromMilliseconds(50),
         };
-        using var sut = new MockLeaderElection(settings, NullLogger.Instance);
+        await using var sut = new MockLeaderElection(settings, NullLogger.Instance);
         sut.TryAcquireResult = _ => Task.FromResult(true);
 
         await sut.StartAsync(TestContext.Current.CancellationToken);
@@ -90,7 +75,7 @@ public class LeaderElectionBaseTests
             RetryInterval = TimeSpan.FromMilliseconds(50),
             MaxRetryAttempts = 1,
         };
-        using var sut = new MockLeaderElection(settings, NullLogger.Instance);
+        await using var sut = new MockLeaderElection(settings, NullLogger.Instance);
         var calls = 0;
         sut.TryAcquireResult = _ => Task.FromResult(++calls > 1);
 
@@ -112,7 +97,7 @@ public class LeaderElectionBaseTests
             RenewInterval = TimeSpan.FromMilliseconds(20),
             RetryInterval = TimeSpan.FromMilliseconds(20),
         };
-        using var sut = new MockLeaderElection(settings, NullLogger.Instance);
+        await using var sut = new MockLeaderElection(settings, NullLogger.Instance);
 
         await sut.StartAsync(TestContext.Current.CancellationToken);
 
@@ -134,7 +119,7 @@ public class LeaderElectionBaseTests
             RetryInterval = TimeSpan.FromMilliseconds(50),
             MaxRetryAttempts = 1,
         };
-        using var sut = new MockLeaderElection(settings, NullLogger.Instance);
+        await using var sut = new MockLeaderElection(settings, NullLogger.Instance);
         var tcs = new TaskCompletionSource<bool>();
         sut.LeadershipChanged += (_, leaderShipChanged) =>
         {
@@ -160,7 +145,7 @@ public class LeaderElectionBaseTests
     public async Task RunTaskIfLeaderAsyncShouldOnlyRunWhenLeader()
     {
         var settings = new LeaderElectionSettingsBase();
-        using var sut = new MockLeaderElection(settings, NullLogger.Instance);
+        await using var sut = new MockLeaderElection(settings, NullLogger.Instance);
         var taskExecuted = false;
 
         await sut.RunTaskIfLeaderAsync(
@@ -181,7 +166,7 @@ public class LeaderElectionBaseTests
     public async Task StopAsyncShouldReleaseLeadershipWhenEnabled()
     {
         var settings = new LeaderElectionSettingsBase { EnableGracefulShutdown = true };
-        using var sut = new MockLeaderElection(settings, NullLogger.Instance);
+        await using var sut = new MockLeaderElection(settings, NullLogger.Instance);
 
         await sut.StartAsync(TestContext.Current.CancellationToken);
         await WaitUntilLeader(sut, true, TimeSpan.FromSeconds(5));
@@ -196,7 +181,7 @@ public class LeaderElectionBaseTests
     public async Task DisposeAsyncShouldStopCorrectly()
     {
         var settings = new LeaderElectionSettingsBase();
-        var sut = new MockLeaderElection(settings, NullLogger.Instance);
+        await using var sut = new MockLeaderElection(settings, NullLogger.Instance);
 
         await sut.StartAsync(TestContext.Current.CancellationToken);
         await WaitUntilLeader(sut, true, TimeSpan.FromSeconds(5));
