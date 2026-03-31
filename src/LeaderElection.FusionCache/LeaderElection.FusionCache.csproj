@@ -6,6 +6,7 @@
 
   <ItemGroup>
     <PackageReference Include="ZiggyCreatures.FusionCache" />
+    <PackageReference Include="Microsoft.Extensions.Configuration.Binder" />
     <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" />
     <PackageReference Include="Microsoft.Extensions.Options" />
   </ItemGroup>
