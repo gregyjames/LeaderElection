@@ -1,7 +1,5 @@
 using LeaderElection.Redis;
-using Microsoft.Extensions.Logging;
-using Microsoft.Extensions.Logging.Abstractions;
-using Microsoft.Extensions.Options;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace LeaderElection.Tests;
 
@@ -21,6 +19,7 @@ public sealed class RedisLeaderElectionTests(RedisContainerFixture redisFixture)
     ) =>
         new()
         {
+            Host = "", // Host is not used when ConnectionMultiplexer is provided
             LockKey = lockKey,
             InstanceId = instanceId,
             LockExpiry = lockExpiry ?? TimeSpan.FromSeconds(10),
@@ -30,12 +29,16 @@ public sealed class RedisLeaderElectionTests(RedisContainerFixture redisFixture)
             EnableGracefulShutdown = enableGracefulShutdown,
         };
 
-    private RedisLeaderElection CreateSut(RedisSettings options) =>
-        new(
-            redisFixture.ConnectionMultiplexer,
-            Options.Create(options),
-            NullLoggerFactory.Instance.CreateLogger<RedisLeaderElection>()
-        );
+    private RedisLeaderElection CreateSut(RedisSettings settings) =>
+        new ServiceCollection()
+            .AddLogging()
+            .AddRedisLeaderElection(builder =>
+                builder
+                    .WithSettings(settings)
+                    .WithConnectionMultiplexer(redisFixture.ConnectionMultiplexer)
+            )
+            .BuildServiceProvider()
+            .GetRequiredService<RedisLeaderElection>();
 
     [Fact]
     public async Task ShouldAcquireLeadershipWhenNoOtherInstanceExists()

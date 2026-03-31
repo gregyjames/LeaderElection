@@ -1,44 +1,264 @@
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Options;
+using StackExchange.Redis;
 
 namespace LeaderElection.Redis;
 
+public sealed record ServiceBuilder(
+    IServiceCollection Services,
+    string? ServiceKey,
+    OptionsBuilder<RedisSettings> OptionsBuilder
+);
+
 public static class RedisServiceBuilderExtensions
 {
+    /// <inheritdoc cref="AddRedisLeaderElectionInternal" />
+    /// <remarks>
+    /// This overload registers an unnamed ILeaderElection service which uses the
+    /// default Redis connection multiplexer factory (uses the host/port setting
+    /// if specified, otherwise it will use the registered IConnectionMultiplexer).
+    /// </remarks>
+    /// <param name="configureOptions">An action to configure the <see cref="RedisSettings"/>
+    /// used by the Leader Election.</param>
     public static IServiceCollection AddRedisLeaderElection(
         this IServiceCollection services,
         Action<RedisSettings> configureOptions
-    )
-    {
-        services
-            .AddOptionsWithValidateOnStart<RedisSettings, RedisSettingsValidator>()
-            .Configure(configureOptions);
+    ) => services.AddRedisLeaderElection(builder => builder.WithSettings(configureOptions));
 
-        services.AddSingleton<RedisLeaderElection>();
-        services.AddSingleton<ILeaderElection>(sp => sp.GetRequiredService<RedisLeaderElection>());
-
-        return services;
-    }
-
+    /// <inheritdoc cref="AddRedisLeaderElectionInternal" />
+    /// <remarks>
+    /// This overload registers an unnamed ILeaderElection service which uses the
+    /// default Redis connection multiplexer factory (uses the host/port setting
+    /// if specified, otherwise it will use the registered IConnectionMultiplexer).
+    /// </remarks>
+    /// <param name="options">The <see cref="RedisSettings"/> used by the Leader Election.</param>
     public static IServiceCollection AddRedisLeaderElection(
         this IServiceCollection services,
         RedisSettings options
+    ) => services.AddRedisLeaderElection(builder => builder.WithSettings(options));
+
+    /// <inheritdoc cref="AddRedisLeaderElectionInternal" />
+    public static IServiceCollection AddRedisLeaderElection(
+        this IServiceCollection services,
+        Action<ServiceBuilder> builder,
+        string? serviceKey = null
+    ) => AddRedisLeaderElectionInternal(services, builder, serviceKey);
+
+    /// <summary>
+    /// Adds Redis based leader election services to the specified
+    /// <see cref="IServiceCollection"/>.
+    /// </summary>
+    /// <param name="services">The service collection to add the services to.</param>
+    /// <param name="builder">An action used to configure the settings and Redis
+    /// connection multiplexer factory.</param>
+    /// <param name="serviceKey">An optional key to register the services and settings
+    /// with. This allows for multiple leader election registrations in the same
+    /// application. If not provided, the services and settings will be registered
+    /// without a key.</param>
+    /// <returns>The updated service collection.</returns>
+    public static IServiceCollection AddRedisLeaderElectionInternal(
+        IServiceCollection services,
+        Action<ServiceBuilder> builder,
+        string? serviceKey = null
     )
     {
-        services.AddRedisLeaderElection(opt =>
-        {
-            opt.Host = options.Host;
-            opt.Port = options.Port;
-            opt.Password = options.Password;
-            opt.Database = options.Database;
-            opt.LockKey = options.LockKey;
-            opt.InstanceId = options.InstanceId;
-            opt.LockExpiry = options.LockExpiry;
-            opt.RenewInterval = options.RenewInterval;
-            opt.RetryInterval = options.RetryInterval;
-            opt.MaxRetryAttempts = options.MaxRetryAttempts;
-            opt.EnableGracefulShutdown = options.EnableGracefulShutdown;
-        });
+        ArgumentNullException.ThrowIfNull(services);
+        ArgumentNullException.ThrowIfNull(builder);
+
+        // Register options and leader election services with the specified service key
+        // (or no key if serviceKey is null)
+        var optionsBuilder = services.AddOptionsWithValidateOnStart<
+            RedisSettings,
+            RedisSettingsValidator
+        >(serviceKey);
+
+        // Register the RedisLeaderElection as a keyed singleton. The factory
+        // creates a new instance of the RedisLeaderElection for each unique
+        // service key, using the corresponding settings and Redis connection multiplexer.
+        // Note: AddKeyedSingleton(serviceKey: null) is the same as AddSingleton().
+        services.AddKeyedSingleton(
+            serviceKey,
+            static (sp, key) =>
+            {
+                // get keyed settings
+                var settings = sp.GetRequiredService<IOptionsMonitor<RedisSettings>>()
+                    .Get(key as string);
+
+                // create a new instance...
+                return ActivatorUtilities.CreateInstance<RedisLeaderElection>(sp, settings);
+            }
+        );
+
+        services.AddKeyedSingleton<ILeaderElection>(
+            serviceKey,
+            static (sp, key) => sp.GetRequiredKeyedService<RedisLeaderElection>(key)
+        );
+
+        // Invoke builder action to allow user to specify a connection multiplexer
+        // factory and settings
+        builder(new ServiceBuilder(services, serviceKey, optionsBuilder));
+
+        // Ensure a default connection multiplexer factory is specified...
+        optionsBuilder.PostConfigure<IServiceProvider>(
+            (opts, sp) =>
+            {
+                if (string.IsNullOrWhiteSpace(opts.Host))
+                {
+                    opts.ConnectionMultiplexerFactory ??= (_, _) =>
+                        Task.FromResult(GetConnectionMultiplexer(sp, serviceKey));
+                }
+            }
+        );
 
         return services;
     }
+
+    //
+    // Extension methods for specifying the RedisClient factory for the
+    // RedisLeaderElection builder
+    //
+
+    /// <summary>
+    /// Specifies a Configuration section to bind to the default
+    /// <see cref="RedisSettings"/> used by the Leader Election.
+    /// </summary>
+    public static ServiceBuilder WithConfiguration(
+        this ServiceBuilder builder,
+        IConfiguration configureSection
+    )
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+        ArgumentNullException.ThrowIfNull(configureSection);
+        builder.OptionsBuilder.Configure(configureSection.Bind);
+        return builder;
+    }
+
+    /// <summary>
+    /// Specifies a Configuration section name to bind to the default
+    /// <see cref="RedisSettings"/> used by the Leader Election.
+    /// </summary>
+    public static ServiceBuilder WithConfiguration(
+        this ServiceBuilder builder,
+        string configurationSectionName
+    )
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+        ArgumentNullException.ThrowIfNull(configurationSectionName);
+        builder.OptionsBuilder.Configure<IConfiguration>(
+            (opts, configuration) => configuration.GetSection(configurationSectionName).Bind(opts)
+        );
+        return builder;
+    }
+
+    /// <summary>
+    /// Specifies an action to configure the <see cref="RedisSettings"/>
+    /// used by the Leader Election.
+    /// </summary>
+    public static ServiceBuilder WithSettings(
+        this ServiceBuilder builder,
+        Action<RedisSettings> configureOptions
+    )
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+        ArgumentNullException.ThrowIfNull(configureOptions);
+        builder.OptionsBuilder.Configure(configureOptions);
+        return builder;
+    }
+
+    /// <summary>
+    /// Specifies the <see cref="RedisSettings"/> used by the Leader Election.
+    /// </summary>
+    public static ServiceBuilder WithSettings(this ServiceBuilder builder, RedisSettings settings)
+    {
+        ArgumentNullException.ThrowIfNull(settings);
+        return builder.WithSettings(opts => RedisSettings.Copy(settings, opts));
+    }
+
+    /// <summary>
+    /// Configures the leader election settings using a configuration action which receives
+    /// the service provider and the optional service key.
+    /// </summary>
+    /// <remarks>
+    /// This is the most flexible configuration method, allowing for complex scenarios such as:
+    /// - Resolving different cache instances based on the service key
+    /// - Accessing other services from the service provider to configure the settings
+    /// - Dynamically determining configuration values at runtime
+    /// </remarks>
+    public static ServiceBuilder WithSettings(
+        this ServiceBuilder builder,
+        Action<RedisSettings, IServiceProvider, string?> configAction
+    )
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+        ArgumentNullException.ThrowIfNull(configAction);
+        builder.OptionsBuilder.Configure<IServiceProvider>(
+            (opts, sp) => configAction(opts, sp, builder.ServiceKey)
+        );
+        return builder;
+    }
+
+    /// <summary>
+    /// Specifies the instance ID to use for the Leader Election.
+    /// </summary>
+    /// <param name="builder"></param>
+    /// <param name="instanceId"></param>
+    /// <returns></returns>
+    public static ServiceBuilder WithInstanceId(this ServiceBuilder builder, string instanceId)
+    {
+        ArgumentNullException.ThrowIfNullOrEmpty(instanceId);
+        return builder.WithSettings(options => options.InstanceId = instanceId);
+    }
+
+    /// <summary>
+    /// Configures the leader election to use the connection multiplexer registered
+    /// in the service provider.
+    /// </summary>
+    public static ServiceBuilder WithRegisteredCache(this ServiceBuilder builder) =>
+        builder.WithSettings(
+            (opts, sp, key) =>
+                opts.ConnectionMultiplexerFactory = (_, _) =>
+                    Task.FromResult(GetConnectionMultiplexer(sp, key))
+        );
+
+    /// <summary>
+    /// Specifies the connection multiplexer factory to use with the Leader Election.
+    /// </summary>
+    public static ServiceBuilder WithConnectionMultiplexer(
+        this ServiceBuilder builder,
+        IConnectionMultiplexer connectionMultiplexer
+    )
+    {
+        ArgumentNullException.ThrowIfNull(connectionMultiplexer);
+        return builder.WithConnectionMultiplexerFactory(
+            (_, _, _) => Task.FromResult(connectionMultiplexer)
+        );
+    }
+
+    /// <summary>
+    /// Specifies the connection multiplexer factory to use with the Leader Election.
+    /// </summary>
+    public static ServiceBuilder WithConnectionMultiplexerFactory(
+        this ServiceBuilder builder,
+        Func<
+            IServiceProvider,
+            RedisSettings,
+            CancellationToken,
+            Task<IConnectionMultiplexer>
+        > factoryFunc
+    )
+    {
+        ArgumentNullException.ThrowIfNull(factoryFunc);
+        return builder.WithSettings(
+            (opts, sp, _) =>
+                opts.ConnectionMultiplexerFactory = (settings, ct) => factoryFunc(sp, settings, ct)
+        );
+    }
+
+    private static IConnectionMultiplexer GetConnectionMultiplexer(
+        IServiceProvider sp,
+        string? serviceKey
+    ) =>
+        sp.GetKeyedService<IConnectionMultiplexer>(serviceKey)
+        ?? sp.GetRequiredService<IConnectionMultiplexer>();
 }
