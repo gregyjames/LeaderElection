@@ -42,8 +42,8 @@ public class PostgresServiceBuilderExtensionsTests
 
         services.AddPostgresLeaderElection(options =>
         {
-            // Specifically leave ConnectionString empty
-            options.ConnectionString = string.Empty;
+            // Specifically leave InstanceId empty
+            options.InstanceId = string.Empty;
             options.LockId = 12345;
         });
 
@@ -58,7 +58,7 @@ public class PostgresServiceBuilderExtensionsTests
         act.Should()
             .Throw<OptionsValidationException>()
             .And.Failures.Should()
-            .Contain(f => f.Contains("ConnectionString"));
+            .Contain(f => f.Contains("InstanceId"));
     }
 
     [Fact]
