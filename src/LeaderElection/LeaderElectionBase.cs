@@ -14,8 +14,10 @@ public abstract partial class LeaderElectionBase<TSettings> : ILeaderElection
 
     protected LeaderElectionBase(TSettings settings, ILogger logger)
     {
-        _settings = settings ?? throw new ArgumentNullException(nameof(settings));
-        _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+        ArgumentNullException.ThrowIfNull(settings);
+        ArgumentNullException.ThrowIfNull(logger);
+        this._settings = settings;
+        this._logger = logger;
     }
 
     private readonly SemaphoreSlim _leadershipSemaphore = new(1, 1);
@@ -25,7 +27,6 @@ public abstract partial class LeaderElectionBase<TSettings> : ILeaderElection
     private int _disposedValue;
     private Task? _leadershipLoopTask;
     private DateTime _lastLeadershipRenewalTime = DateTime.MinValue;
-
     public event EventHandler<LeadershipChangedEventArgs>? LeadershipChanged;
     public event EventHandler<LeadershipExceptionEventArgs>? ErrorOccurred;
 
@@ -76,6 +77,7 @@ public abstract partial class LeaderElectionBase<TSettings> : ILeaderElection
                     }
                     else
                     {
+                        // Very common that leadership acquisition fails because another instance holds the leadership - log at debug level in that case and avoid log noise
                         LogFailedToAcquireLeadershipWillRetry();
                         retryCount++;
                     }
@@ -138,6 +140,11 @@ public abstract partial class LeaderElectionBase<TSettings> : ILeaderElection
 
     private async Task InternalStopAsync(CancellationToken cancellationToken = default)
     {
+        if (!_isLeader)
+        {
+            return;
+        }
+
         LogStoppingLeaderElectionForInstanceInstanceid(_settings.InstanceId);
 
         if (_leadershipLoopCancellationTokenSource != null)
@@ -211,7 +218,7 @@ public abstract partial class LeaderElectionBase<TSettings> : ILeaderElection
     }
 
     public async Task RunTaskIfLeaderAsync(
-        Func<Task>? task,
+        Func<Task> task,
         CancellationToken cancellationToken = default
     )
     {
