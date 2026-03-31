@@ -1,6 +1,7 @@
 using Azure.Storage.Blobs;
 using Azure.Storage.Blobs.Specialized;
 using LeaderElection.BlobStorage;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
@@ -41,12 +42,14 @@ public sealed class BlobStorageLeaderElectionTests(AzuriteContainerFixture azuri
             CreateContainerIfNotExists = createContainerIfNotExists,
         };
 
-    private BlobStorageLeaderElection CreateSut(BlobStorageSettings options) =>
-        new(
-            _blobServiceClient,
-            Options.Create(options),
-            NullLoggerFactory.Instance.CreateLogger<BlobStorageLeaderElection>()
-        );
+    private BlobStorageLeaderElection CreateSut(BlobStorageSettings settings) =>
+        new ServiceCollection()
+            .AddLogging()
+            .AddBlobStorageLeaderElection(builder =>
+                builder.WithSettings(settings).WithBlobServiceClient(_blobServiceClient)
+            )
+            .BuildServiceProvider()
+            .GetRequiredService<BlobStorageLeaderElection>();
 
     [Fact]
     public async Task ShouldAcquireLeadershipWhenNoOtherInstanceExists()
@@ -227,27 +230,6 @@ public sealed class BlobStorageLeaderElectionTests(AzuriteContainerFixture azuri
         var blobExists = await blobClient.ExistsAsync(CancellationToken);
         blobExists.Value.Should().BeTrue();
 
-        await leaderElection.StopAsync(CancellationToken);
-    }
-
-    [Fact]
-    public async Task ShouldWorkWithSecondConstructor()
-    {
-        var containerName = "test-second-constructor";
-        var options = CreateSettings(containerName);
-        var containerClient = _blobServiceClient.GetBlobContainerClient(containerName);
-        await containerClient.CreateIfNotExistsAsync(cancellationToken: CancellationToken);
-
-        await using var leaderElection = new BlobStorageLeaderElection(
-            containerClient,
-            options,
-            NullLoggerFactory.Instance.CreateLogger<BlobStorageLeaderElection>()
-        );
-
-        await leaderElection.StartAsync(CancellationToken);
-        await WaitForLeadershipChange(leaderElection, true, options.LeaseDuration);
-
-        leaderElection.IsLeader.Should().BeTrue();
         await leaderElection.StopAsync(CancellationToken);
     }
 

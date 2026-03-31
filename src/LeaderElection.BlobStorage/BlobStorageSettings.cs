@@ -1,4 +1,5 @@
 using System.ComponentModel.DataAnnotations;
+using Azure.Storage.Blobs;
 
 namespace LeaderElection.BlobStorage;
 
@@ -7,10 +8,24 @@ public class BlobStorageSettings : LeaderElectionSettingsBase
     /// <summary>
     /// The connection string for the Azure Blob Storage account.
     /// <para/>
-    /// Ignored when using the constructor that accepts a BlobContainerClient.
+    /// Ignored when <see cref="BlobClientFactory"/> is set.
     /// </summary>
-    [Required(AllowEmptyStrings = true)]
-    public string ConnectionString { get; set; } = string.Empty;
+    public string? ConnectionString { get; set; }
+
+    /// <summary>
+    /// An optional factory function to create a <see cref="BlobClient"/> instance for leader election.
+    /// <para/>
+    /// If set, this factory will be used to get a <see cref="BlobClient"/> instead of using
+    /// the <see cref="ConnectionString"/> setting.
+    /// <para/>
+    /// If neither <see cref="BlobClientFactory"/> nor <see cref="ConnectionString"/>
+    /// are set, a <see cref="BlobClientService"/> will be resolved from the DI container.
+    /// </summary>
+    public Func<
+        BlobStorageSettings,
+        CancellationToken,
+        Task<BlobClient>
+    >? BlobClientFactory { get; set; }
 
     /// <summary>
     /// The name of the blob container to use for leader election.
@@ -18,7 +33,7 @@ public class BlobStorageSettings : LeaderElectionSettingsBase
     /// Must be a valid Azure Blob Storage container name.
     /// Default is "leader-election-lock".
     /// <para/>
-    /// Ignored when using the constructor that accepts a BlobContainerClient.
+    /// Ignored when <see cref="BlobClientFactory"/> is set.
     /// </summary>
     [Required]
     public string ContainerName { get; set; } = "leader-election";
@@ -28,6 +43,8 @@ public class BlobStorageSettings : LeaderElectionSettingsBase
     /// <para/>
     /// Must be a valid Azure Blob Storage blob name.
     /// Default is "leader-election-lock".
+    /// <para/>
+    /// Ignored when <see cref="BlobClientFactory"/> is set.
     /// </summary>
     [Required]
     public string BlobName { get; set; } = "leader-election-lock";
@@ -51,4 +68,20 @@ public class BlobStorageSettings : LeaderElectionSettingsBase
     /// Default is true.
     /// </summary>
     public bool CreateContainerIfNotExists { get; set; } = true;
+
+    /// <summary>
+    /// Copies the BlobStorage settings from the source to the destination.
+    /// </summary>
+    public static void Copy(BlobStorageSettings src, BlobStorageSettings dst)
+    {
+        ArgumentNullException.ThrowIfNull(src);
+        ArgumentNullException.ThrowIfNull(dst);
+        LeaderElectionSettingsBase.Copy(src, dst);
+        dst.ConnectionString = src.ConnectionString;
+        dst.BlobClientFactory = src.BlobClientFactory;
+        dst.ContainerName = src.ContainerName;
+        dst.BlobName = src.BlobName;
+        dst.LeaseDuration = src.LeaseDuration;
+        dst.CreateContainerIfNotExists = src.CreateContainerIfNotExists;
+    }
 }
