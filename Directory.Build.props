@@ -44,11 +44,10 @@
   <PropertyGroup>
     <InitHusky Condition="'$(InitHusky)' == '' AND ('$(HUSKY)' == '0' OR '$(HUSKY)' == 'false')">false</InitHusky>
     <InitHusky Condition="'$(InitHusky)' == '' AND '$(CI)' != ''">false</InitHusky>
-    <InitHusky Condition="'$(InitHusky)' == '' AND Exists('$(MSBuildThisFileDirectory).husky/_/husky.sh')">false</InitHusky>
     <InitHusky Condition="'$(InitHusky)' == ''">true</InitHusky>
   </PropertyGroup>
-  <Target Name="husky" BeforeTargets="Restore;CollectPackageReferences" Condition="'$(InitHusky)' == 'true'">
-    <Exec Command="dotnet tool restore" StandardOutputImportance="Low" StandardErrorImportance="High" />
+  <Target Name="husky" BeforeTargets="Restore;CollectPackageReferences" Condition="'$(InitHusky)' == 'true' AND Exists('$(MSBuildThisFileDirectory).git')" Inputs="$(MSBuildThisFileDirectory).config/dotnet-tools.json" Outputs="$(MSBuildThisFileDirectory).husky/_/husky.sh">
+    <Exec Command="dotnet tool restore" StandardOutputImportance="Low" StandardErrorImportance="High" WorkingDirectory="$(MSBuildThisFileDirectory)" />
     <Exec Command="dotnet husky install" StandardOutputImportance="Low" StandardErrorImportance="High" WorkingDirectory="$(MSBuildThisFileDirectory)" />
   </Target>
 </Project>
