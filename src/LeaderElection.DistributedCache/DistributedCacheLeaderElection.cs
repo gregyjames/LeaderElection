@@ -1,6 +1,5 @@
 using System.Diagnostics.CodeAnalysis;
 using Microsoft.Extensions.Caching.Distributed;
-using Microsoft.Extensions.Internal;
 using Microsoft.Extensions.Logging;
 
 namespace LeaderElection.DistributedCache;
@@ -8,19 +7,18 @@ namespace LeaderElection.DistributedCache;
 public partial class DistributedCacheLeaderElection : LeaderElectionBase<DistributedCacheSettings>
 {
     private readonly IDistributedCache _cache;
-    private readonly ISystemClock _systemClock;
     private DateTimeOffset? _lockOwnedUntil;
 
     [MemberNotNullWhen(true, nameof(_lockOwnedUntil))]
     private bool IsLockOwner =>
-        _lockOwnedUntil.HasValue && _systemClock.UtcNow < _lockOwnedUntil.Value;
+        _lockOwnedUntil.HasValue && _timeProvider.GetUtcNow() < _lockOwnedUntil.Value;
 
     public DistributedCacheLeaderElection(
         DistributedCacheSettings settings,
-        ILogger<DistributedCacheLeaderElection> logger,
-        ISystemClock? systemClock = null
+        ILogger<DistributedCacheLeaderElection>? logger = null,
+        TimeProvider? timeProvider = null
     )
-        : base(settings ?? throw new ArgumentNullException(nameof(settings)), logger)
+        : base(settings ?? throw new ArgumentNullException(nameof(settings)), logger, timeProvider)
     {
         _ =
             settings.CacheFactory
@@ -29,8 +27,6 @@ public partial class DistributedCacheLeaderElection : LeaderElectionBase<Distrib
         _cache =
             settings.CacheFactory.Invoke(settings)
             ?? throw new InvalidOperationException("CacheFactory returned null.");
-
-        _systemClock = systemClock ?? new SystemClock();
     }
 
     protected override async Task<bool> TryAcquireLeadershipInternalAsync(
@@ -187,7 +183,7 @@ public partial class DistributedCacheLeaderElection : LeaderElectionBase<Distrib
                 // This also avoids unnecessary cache operations when we're about to lose the
                 // lock anyway.
                 var quietPeriod = TimeSpan.FromMilliseconds(50);
-                if (_systemClock.UtcNow + quietPeriod < _lockOwnedUntil)
+                if (_timeProvider.GetUtcNow() + quietPeriod < _lockOwnedUntil)
                 {
                     await ReleaseOwnershipAsync().ConfigureAwait(false);
                 }
@@ -245,7 +241,7 @@ public partial class DistributedCacheLeaderElection : LeaderElectionBase<Distrib
 
     private async Task<DateTimeOffset> TakeOwnershipAsync(CancellationToken cancellationToken)
     {
-        var expiresAt = _systemClock.UtcNow + _settings.LockExpiry;
+        var expiresAt = _timeProvider.GetUtcNow() + _settings.LockExpiry;
         await _cache
             .SetStringAsync(
                 _settings.LockKey,

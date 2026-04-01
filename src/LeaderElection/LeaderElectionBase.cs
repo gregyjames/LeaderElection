@@ -1,5 +1,6 @@
 using System.Diagnostics.CodeAnalysis;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 
 namespace LeaderElection;
 
@@ -12,12 +13,19 @@ public abstract partial class LeaderElectionBase<TSettings> : ILeaderElection
     [SuppressMessage("Design", "CA1051", Justification = "Field readonly to derived types")]
     protected readonly ILogger _logger;
 
-    protected LeaderElectionBase(TSettings settings, ILogger logger)
+    [SuppressMessage("Design", "CA1051", Justification = "Field readonly to derived types")]
+    protected readonly TimeProvider _timeProvider;
+
+    protected LeaderElectionBase(
+        TSettings settings,
+        ILogger? logger = null,
+        TimeProvider? timeProvider = null
+    )
     {
         ArgumentNullException.ThrowIfNull(settings);
-        ArgumentNullException.ThrowIfNull(logger);
-        this._settings = settings;
-        this._logger = logger;
+        _settings = settings;
+        _logger = logger ?? NullLogger.Instance;
+        _timeProvider = timeProvider ?? TimeProvider.System;
     }
 
     private readonly SemaphoreSlim _leadershipSemaphore = new(1, 1);
@@ -26,13 +34,13 @@ public abstract partial class LeaderElectionBase<TSettings> : ILeaderElection
     private volatile bool _isLeader;
     private int _disposedValue;
     private Task? _leadershipLoopTask;
-    private DateTime _lastLeadershipRenewalTime = DateTime.MinValue;
+    private DateTimeOffset _lastLeadershipRenewalTime = DateTimeOffset.MinValue;
     public event EventHandler<LeadershipChangedEventArgs>? LeadershipChanged;
     public event EventHandler<LeadershipExceptionEventArgs>? ErrorOccurred;
 
     private bool IsDisposed => Volatile.Read(ref _disposedValue) == 1;
     public bool IsLeader => _isLeader && !IsDisposed;
-    public DateTime LastLeadershipRenewal => _lastLeadershipRenewalTime;
+    public DateTime LastLeadershipRenewal => _lastLeadershipRenewalTime.UtcDateTime;
 
     public async Task StartAsync(CancellationToken cancellationToken = default)
     {
@@ -93,13 +101,13 @@ public abstract partial class LeaderElectionBase<TSettings> : ILeaderElection
                     else
                     {
                         LogLeadershipRenewedSuccessfully();
-                        _lastLeadershipRenewalTime = DateTime.UtcNow;
+                        _lastLeadershipRenewalTime = _timeProvider.GetUtcNow();
                         retryCount = 0;
                     }
                 }
 
                 var delay = GetNextDelay(retryCount);
-                await Task.Delay(delay, token).ConfigureAwait(false);
+                await _timeProvider.Delay(delay, token).ConfigureAwait(false);
             }
             catch (OperationCanceledException)
             {
@@ -113,7 +121,7 @@ public abstract partial class LeaderElectionBase<TSettings> : ILeaderElection
 
                 try
                 {
-                    await Task.Delay(_settings.RetryInterval, token).ConfigureAwait(false);
+                    await _timeProvider.Delay(_settings.RetryInterval, token).ConfigureAwait(false);
                 }
                 catch (OperationCanceledException)
                 {
@@ -193,7 +201,9 @@ public abstract partial class LeaderElectionBase<TSettings> : ILeaderElection
         if (_isLeader != isLeader)
         {
             _isLeader = isLeader;
-            _lastLeadershipRenewalTime = isLeader ? DateTime.UtcNow : DateTime.MinValue;
+            _lastLeadershipRenewalTime = isLeader
+                ? _timeProvider.GetUtcNow()
+                : DateTimeOffset.MinValue;
             LeadershipChanged?.Invoke(this, new(isLeader));
         }
     }

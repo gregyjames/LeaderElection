@@ -1,12 +1,9 @@
-using Microsoft.Extensions.Logging;
-using Microsoft.Extensions.Logging.Abstractions;
-
 namespace LeaderElection.Tests;
 
 public class LeaderElectionBaseTests
 {
-    private sealed class MockLeaderElection(LeaderElectionSettingsBase settings, ILogger logger)
-        : LeaderElectionBase<LeaderElectionSettingsBase>(settings, logger)
+    private sealed class MockLeaderElection(LeaderElectionSettingsBase settings)
+        : LeaderElectionBase<LeaderElectionSettingsBase>(settings)
     {
         public int TryAcquireCalls { get; private set; }
         public int RenewCalls { get; private set; }
@@ -53,7 +50,7 @@ public class LeaderElectionBaseTests
             RenewInterval = TimeSpan.FromMilliseconds(50),
             RetryInterval = TimeSpan.FromMilliseconds(50),
         };
-        await using var sut = new MockLeaderElection(settings, NullLogger.Instance);
+        await using var sut = new MockLeaderElection(settings);
         sut.TryAcquireResult = _ => Task.FromResult(true);
 
         await sut.StartAsync(TestContext.Current.CancellationToken);
@@ -75,7 +72,7 @@ public class LeaderElectionBaseTests
             RetryInterval = TimeSpan.FromMilliseconds(50),
             MaxRetryAttempts = 1,
         };
-        await using var sut = new MockLeaderElection(settings, NullLogger.Instance);
+        await using var sut = new MockLeaderElection(settings);
         var calls = 0;
         sut.TryAcquireResult = _ => Task.FromResult(++calls > 1);
 
@@ -97,7 +94,7 @@ public class LeaderElectionBaseTests
             RenewInterval = TimeSpan.FromMilliseconds(20),
             RetryInterval = TimeSpan.FromMilliseconds(20),
         };
-        await using var sut = new MockLeaderElection(settings, NullLogger.Instance);
+        await using var sut = new MockLeaderElection(settings);
 
         await sut.StartAsync(TestContext.Current.CancellationToken);
 
@@ -119,7 +116,7 @@ public class LeaderElectionBaseTests
             RetryInterval = TimeSpan.FromMilliseconds(50),
             MaxRetryAttempts = 1,
         };
-        await using var sut = new MockLeaderElection(settings, NullLogger.Instance);
+        await using var sut = new MockLeaderElection(settings);
         var tcs = new TaskCompletionSource<bool>();
         sut.LeadershipChanged += (_, leaderShipChanged) =>
         {
@@ -145,7 +142,7 @@ public class LeaderElectionBaseTests
     public async Task RunTaskIfLeaderAsyncShouldOnlyRunWhenLeader()
     {
         var settings = new LeaderElectionSettingsBase();
-        await using var sut = new MockLeaderElection(settings, NullLogger.Instance);
+        await using var sut = new MockLeaderElection(settings);
         var taskExecuted = false;
 
         await sut.RunTaskIfLeaderAsync(
@@ -166,7 +163,7 @@ public class LeaderElectionBaseTests
     public async Task StopAsyncShouldReleaseLeadershipWhenEnabled()
     {
         var settings = new LeaderElectionSettingsBase { EnableGracefulShutdown = true };
-        await using var sut = new MockLeaderElection(settings, NullLogger.Instance);
+        await using var sut = new MockLeaderElection(settings);
 
         await sut.StartAsync(TestContext.Current.CancellationToken);
         await WaitUntilLeader(sut, true, TimeSpan.FromSeconds(5));
@@ -181,7 +178,7 @@ public class LeaderElectionBaseTests
     public async Task DisposeAsyncShouldStopCorrectly()
     {
         var settings = new LeaderElectionSettingsBase();
-        await using var sut = new MockLeaderElection(settings, NullLogger.Instance);
+        await using var sut = new MockLeaderElection(settings);
 
         await sut.StartAsync(TestContext.Current.CancellationToken);
         await WaitUntilLeader(sut, true, TimeSpan.FromSeconds(5));

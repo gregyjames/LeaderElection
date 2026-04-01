@@ -10,6 +10,14 @@ public abstract class TestBase
     /// </summary>
     protected static CancellationToken CancellationToken => TestContext.Current.CancellationToken;
 
+    /// <summary>
+    /// The <see cref="TimeProvider"/> used to control time in tests.
+    /// Tests can use <see cref="FakeTimeProvider"/> to simulate time passage and test
+    /// time-dependent behavior without real delays.
+    /// Defaults to <see cref="TimeProvider.System"/> (real time) if not provided.
+    /// </summary>
+    protected TimeProvider TimeProvider { get; init; } = TimeProvider.System;
+
     protected static async Task WaitForLeadershipChange(
         ILeaderElection leaderElection,
         bool expectedLeadership,
@@ -104,7 +112,7 @@ public abstract class TestBase
     /// <param name="timeout">The maximum time to wait for a renewal.</param>
     /// <param name="pollInterval">The interval at which to check for leadership renewal.</param>
     /// <returns>True if a renewal was observed within the timeout period; otherwise, false.</returns>
-    protected static async Task<bool> WaitForLeadershipRenewal(
+    protected async Task<bool> WaitForLeadershipRenewal(
         ILeaderElection leaderElection,
         TimeSpan? timeout = null,
         TimeSpan? pollInterval = null
@@ -117,10 +125,10 @@ public abstract class TestBase
         leaderElection.IsLeader.Should().BeTrue("Expected to be leader before waiting for renewal");
         var lastKnownRenewal = leaderElection.LastLeadershipRenewal;
 
-        var stopTime = DateTime.UtcNow + timeout.Value;
-        while (DateTime.UtcNow < stopTime)
+        var stopTime = TimeProvider.GetUtcNow() + timeout.Value;
+        while (TimeProvider.GetUtcNow() < stopTime)
         {
-            await Task.Delay(pollInterval.Value, CancellationToken).ConfigureAwait(false);
+            await TimeProvider.Delay(pollInterval.Value, CancellationToken).ConfigureAwait(false);
 
             if (!leaderElection.IsLeader)
             {
@@ -136,7 +144,7 @@ public abstract class TestBase
         return false; // Timeout reached without observing renewal
     }
 
-    protected static async Task TestShouldRetainLeadershipAfterAtLeastOneRenewalCycle(
+    protected async Task TestShouldRetainLeadershipAfterAtLeastOneRenewalCycle(
         ILeaderElection leaderElection,
         LeaderElectionSettingsBase settings
     )

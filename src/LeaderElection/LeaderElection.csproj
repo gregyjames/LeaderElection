@@ -2,6 +2,7 @@
   <!-- Inherits settings from Directory.Build.props -->
 
   <ItemGroup>
+    <PackageReference Include="Microsoft.Bcl.TimeProvider" />
     <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" />
     <PackageReference Include="Microsoft.Extensions.Options" />
     <PackageReference Include="Microsoft.Extensions.Options.DataAnnotations" />
