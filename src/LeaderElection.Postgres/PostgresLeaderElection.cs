@@ -8,8 +8,13 @@ public sealed partial class PostgresLeaderElection : LeaderElectionBase<Postgres
 {
     private NpgsqlConnection? _activeConnection;
 
-    public PostgresLeaderElection(PostgresSettings options, ILogger<PostgresLeaderElection> logger)
-        : base(options ?? throw new ArgumentNullException(nameof(options)), logger) { }
+    public PostgresLeaderElection(
+        PostgresSettings options,
+        ILogger<PostgresLeaderElection>? logger = null,
+        TimeProvider? timeProvider = null
+    )
+        : base(options ?? throw new ArgumentNullException(nameof(options)), logger, timeProvider)
+    { }
 
     protected override async Task<bool> TryAcquireLeadershipInternalAsync(
         CancellationToken cancellationToken

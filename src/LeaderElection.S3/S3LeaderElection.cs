@@ -12,8 +12,12 @@ public sealed partial class S3LeaderElection : LeaderElectionBase<S3Settings>
     private readonly JsonSerializerOptions _jsonOptions = new(JsonSerializerDefaults.Web);
     private string? _lastEtag;
 
-    public S3LeaderElection(S3Settings settings, ILogger<S3LeaderElection> logger)
-        : base(settings, logger)
+    public S3LeaderElection(
+        S3Settings settings,
+        ILogger<S3LeaderElection>? logger = null,
+        TimeProvider? timeProvider = null
+    )
+        : base(settings ?? throw new ArgumentNullException(nameof(settings)), logger, timeProvider)
     {
         if (_settings.MinioClientFactory == null)
         {
@@ -42,7 +46,7 @@ public sealed partial class S3LeaderElection : LeaderElectionBase<S3Settings>
         var (currentEtag, currentLease) = await TryReadLeaseAsync(cancellationToken)
             .ConfigureAwait(false);
 
-        var now = DateTime.UtcNow;
+        var now = _timeProvider.GetUtcNow();
         if (
             currentLease != null
             && currentLease.LeaseUntilUtc > now
@@ -121,7 +125,7 @@ public sealed partial class S3LeaderElection : LeaderElectionBase<S3Settings>
         // renew; if it's a transient error, someone will become the leader when the lease
         // naturally expires.
         var success = false;
-        var now = DateTime.UtcNow;
+        var now = _timeProvider.GetUtcNow();
         var leaseRecord = new LeaseRecord
         {
             HolderId = _settings.InstanceId,
