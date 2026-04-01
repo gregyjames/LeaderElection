@@ -54,7 +54,7 @@ public abstract class TestBase
             );
             linkedCts.Token.Register(() => tcs.TrySetCanceled());
 
-            await tcs.Task.ConfigureAwait(false);
+            await tcs.Task;
         }
         finally
         {
@@ -87,7 +87,7 @@ public abstract class TestBase
             );
             linkedCts.Token.Register(() => tcs.TrySetCanceled());
 
-            await tcs.Task.ConfigureAwait(false);
+            await tcs.Task;
         }
         finally
         {
@@ -128,7 +128,7 @@ public abstract class TestBase
         var stopTime = TimeProvider.GetUtcNow() + timeout.Value;
         while (TimeProvider.GetUtcNow() < stopTime)
         {
-            await TimeProvider.Delay(pollInterval.Value, CancellationToken).ConfigureAwait(false);
+            await TimeProvider.Delay(pollInterval.Value, CancellationToken);
 
             if (!leaderElection.IsLeader)
             {
@@ -151,19 +151,18 @@ public abstract class TestBase
     {
         // Act
         Debug.Assert(leaderElection != null, nameof(leaderElection) + " != null");
-        await leaderElection.StartAsync(CancellationToken).ConfigureAwait(false);
-        await WaitForLeadershipChange(leaderElection, true).ConfigureAwait(false);
+        await leaderElection.StartAsync(CancellationToken);
+        await WaitForLeadershipChange(leaderElection, true);
 
         Debug.Assert(settings != null, nameof(settings) + " != null");
         var renewalObserved = await WaitForLeadershipRenewal(
-                leaderElection,
-                settings.RenewInterval + TimeSpan.FromSeconds(0.5) // Add a buffer to avoid timing issues
-            )
-            .ConfigureAwait(false);
+            leaderElection,
+            settings.RenewInterval + TimeSpan.FromSeconds(0.5) // Add a buffer to avoid timing issues
+        );
 
         // Assert
         renewalObserved.Should().BeTrue();
 
-        await leaderElection.StopAsync(CancellationToken).ConfigureAwait(false);
+        await leaderElection.StopAsync(CancellationToken);
     }
 }

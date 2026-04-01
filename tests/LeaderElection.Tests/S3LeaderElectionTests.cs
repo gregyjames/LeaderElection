@@ -41,15 +41,9 @@ public sealed class S3LeaderElectionTests(MinioContainerFixture minioFixture) : 
 #pragma warning disable CA2000 // dispose object
         var client = minioFixture.CreateClient();
 #pragma warning restore CA2000
-        if (
-            !await client
-                .BucketExistsAsync(new BucketExistsArgs().WithBucket(BUCKET_NAME))
-                .ConfigureAwait(false)
-        )
+        if (!await client.BucketExistsAsync(new BucketExistsArgs().WithBucket(BUCKET_NAME)))
         {
-            await client
-                .MakeBucketAsync(new MakeBucketArgs().WithBucket(BUCKET_NAME))
-                .ConfigureAwait(false);
+            await client.MakeBucketAsync(new MakeBucketArgs().WithBucket(BUCKET_NAME));
         }
     }
 
