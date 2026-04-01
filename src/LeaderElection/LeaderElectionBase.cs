@@ -44,14 +44,8 @@ public abstract partial class LeaderElectionBase<TSettings> : ILeaderElection
 
     public async Task StartAsync(CancellationToken cancellationToken = default)
     {
-#if NET6_0_OR_GREATER
-        ObjectDisposedException.ThrowIf(IsDisposed, this);
-#else
-        if (IsDisposed)
-        {
-            throw new ObjectDisposedException(GetType().Name);
-        }
-#endif
+        ThrowIfDisposed();
+
         if (_leadershipLoopTask is { IsCompleted: false })
         {
             LogLeaderElectionIsAlreadyRunning();
@@ -70,6 +64,8 @@ public abstract partial class LeaderElectionBase<TSettings> : ILeaderElection
 
     private async Task RunLeaderLoopAsync(CancellationToken token)
     {
+        ThrowIfDisposed();
+
         var retryCount = 0;
 
         while (!token.IsCancellationRequested)
@@ -143,8 +139,11 @@ public abstract partial class LeaderElectionBase<TSettings> : ILeaderElection
         );
     }
 
-    public virtual Task StopAsync(CancellationToken cancellationToken = default) =>
-        IsDisposed ? Task.CompletedTask : InternalStopAsync(cancellationToken);
+    public virtual Task StopAsync(CancellationToken cancellationToken = default)
+    {
+        ThrowIfDisposed();
+        return InternalStopAsync(cancellationToken);
+    }
 
     private async Task InternalStopAsync(CancellationToken cancellationToken = default)
     {
@@ -165,10 +164,6 @@ public abstract partial class LeaderElectionBase<TSettings> : ILeaderElection
             try
             {
                 await _leadershipLoopTask.WaitAsync(cancellationToken).ConfigureAwait(false);
-            }
-            catch (OperationCanceledException)
-            {
-                LogLeaderLoopCancellationWasExpected();
             }
             finally
             {
@@ -210,8 +205,7 @@ public abstract partial class LeaderElectionBase<TSettings> : ILeaderElection
 
     public async Task<bool> TryAcquireLeadershipAsync(CancellationToken cancellationToken = default)
     {
-        if (IsDisposed)
-            return false;
+        ThrowIfDisposed();
 
         await _leadershipSemaphore.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
@@ -232,6 +226,8 @@ public abstract partial class LeaderElectionBase<TSettings> : ILeaderElection
         CancellationToken cancellationToken = default
     )
     {
+        ThrowIfDisposed();
+
         if (!IsLeader)
         {
             LogNotTheLeaderSkippingTaskExecution();
@@ -285,6 +281,18 @@ public abstract partial class LeaderElectionBase<TSettings> : ILeaderElection
 
         _leadershipLoopCancellationTokenSource?.Dispose();
         _leadershipSemaphore.Dispose();
+    }
+
+    private void ThrowIfDisposed()
+    {
+#if NET6_0_OR_GREATER
+        ObjectDisposedException.ThrowIf(IsDisposed, this);
+#else
+        if (IsDisposed)
+        {
+            throw new ObjectDisposedException(GetType().Name);
+        }
+#endif
     }
 
     [LoggerMessage(LogLevel.Warning, "Leader election is already running")]
