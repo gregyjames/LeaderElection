@@ -1,5 +1,4 @@
 using System.Diagnostics.CodeAnalysis;
-using Microsoft.Extensions.Internal;
 using Microsoft.Extensions.Logging;
 using ZiggyCreatures.Caching.Fusion;
 
@@ -8,19 +7,18 @@ namespace LeaderElection.FusionCache;
 public partial class FusionCacheLeaderElection : LeaderElectionBase<FusionCacheSettings>
 {
     private readonly IFusionCache _cache;
-    private readonly ISystemClock _systemClock;
     private DateTimeOffset? _lockOwnedUntil;
 
     [MemberNotNullWhen(true, nameof(_lockOwnedUntil))]
     private bool IsLockOwner =>
-        _lockOwnedUntil.HasValue && _systemClock.UtcNow < _lockOwnedUntil.Value;
+        _lockOwnedUntil.HasValue && _timeProvider.GetUtcNow() < _lockOwnedUntil.Value;
 
     public FusionCacheLeaderElection(
         FusionCacheSettings settings,
-        ILogger<FusionCacheLeaderElection> logger,
-        ISystemClock? systemClock = null
+        ILogger<FusionCacheLeaderElection>? logger = null,
+        TimeProvider? timeProvider = null
     )
-        : base(settings ?? throw new ArgumentNullException(nameof(settings)), logger)
+        : base(settings ?? throw new ArgumentNullException(nameof(settings)), logger, timeProvider)
     {
         _ =
             settings.CacheFactory
@@ -29,8 +27,6 @@ public partial class FusionCacheLeaderElection : LeaderElectionBase<FusionCacheS
         _cache =
             settings.CacheFactory.Invoke(settings)
             ?? throw new InvalidOperationException("CacheFactory returned null.");
-
-        _systemClock = systemClock ?? new SystemClock();
     }
 
     protected override async Task<bool> TryAcquireLeadershipInternalAsync(
@@ -196,7 +192,7 @@ public partial class FusionCacheLeaderElection : LeaderElectionBase<FusionCacheS
                 // This also avoids unnecessary cache operations when we're about to lose the
                 // lock anyway.
                 var quietPeriod = TimeSpan.FromMilliseconds(50);
-                if (_systemClock.UtcNow + quietPeriod < _lockOwnedUntil)
+                if (_timeProvider.GetUtcNow() + quietPeriod < _lockOwnedUntil)
                 {
                     await ReleaseOwnershipAsync(entryOptions).ConfigureAwait(false);
                 }
@@ -267,7 +263,7 @@ public partial class FusionCacheLeaderElection : LeaderElectionBase<FusionCacheS
     )
     {
         var updatedKey = false;
-        var expiresAt = _systemClock.UtcNow + entryOptions.Duration;
+        var expiresAt = _timeProvider.GetUtcNow() + entryOptions.Duration;
         var currentOwner = await _cache
             .GetOrSetAsync<string>(
                 _settings.LockKey,
@@ -288,7 +284,7 @@ public partial class FusionCacheLeaderElection : LeaderElectionBase<FusionCacheS
         CancellationToken cancellationToken
     )
     {
-        var expiresAt = _systemClock.UtcNow + entryOptions.Duration;
+        var expiresAt = _timeProvider.GetUtcNow() + entryOptions.Duration;
         await _cache
             .SetAsync(_settings.LockKey, _settings.InstanceId, entryOptions, cancellationToken)
             .ConfigureAwait(false);

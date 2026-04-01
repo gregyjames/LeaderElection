@@ -24,9 +24,11 @@ public partial class BlobStorageLeaderElection : LeaderElectionBase<BlobStorageS
 
     public BlobStorageLeaderElection(
         BlobStorageSettings settings,
-        ILogger<BlobStorageLeaderElection> logger
+        ILogger<BlobStorageLeaderElection>? logger = null,
+        TimeProvider? timeProvider = null
     )
-        : base(settings ?? throw new ArgumentNullException(nameof(settings)), logger) { }
+        : base(settings ?? throw new ArgumentNullException(nameof(settings)), logger, timeProvider)
+    { }
 
     protected override async Task<bool> TryAcquireLeadershipInternalAsync(
         CancellationToken cancellationToken

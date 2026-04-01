@@ -12,8 +12,13 @@ public partial class RedisLeaderElection : LeaderElectionBase<RedisSettings>
 {
     private IDatabase? _redis;
 
-    public RedisLeaderElection(RedisSettings options, ILogger<RedisLeaderElection> logger)
-        : base(options ?? throw new ArgumentNullException(nameof(options)), logger) { }
+    public RedisLeaderElection(
+        RedisSettings options,
+        ILogger<RedisLeaderElection>? logger = null,
+        TimeProvider? timeProvider = null
+    )
+        : base(options ?? throw new ArgumentNullException(nameof(options)), logger, timeProvider)
+    { }
 
     protected override async Task<bool> TryAcquireLeadershipInternalAsync(
         CancellationToken cancellationToken

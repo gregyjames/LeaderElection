@@ -2,9 +2,6 @@ using Azure.Storage.Blobs;
 using Azure.Storage.Blobs.Specialized;
 using LeaderElection.BlobStorage;
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Logging;
-using Microsoft.Extensions.Logging.Abstractions;
-using Microsoft.Extensions.Options;
 
 namespace LeaderElection.Tests;
 
@@ -95,7 +92,7 @@ public sealed class BlobStorageLeaderElectionTests(AzuriteContainerFixture azuri
         await WaitForLeadershipChange(leaderElection1, true, TimeSpan.FromSeconds(15));
 
         await leaderElection2.StartAsync(CancellationToken);
-        await Task.Delay(TimeSpan.FromSeconds(5), CancellationToken); // Give time for second instance to try
+        await TimeProvider.Delay(TimeSpan.FromSeconds(5), CancellationToken); // Give time for second instance to try
 
         // Assert
         leaderElection1.IsLeader.Should().BeTrue();
