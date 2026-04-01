@@ -19,7 +19,12 @@ public partial class SettingsValidatorTests
     public void BaseSettingsValidatorShouldFailWhenDefaultSettings()
     {
         var validator = new TestSettingsValidator();
-        var settings = new TestSettings { InstanceId = string.Empty, RenewInterval = TimeSpan.Zero, RetryInterval = TimeSpan.Zero };
+        var settings = new TestSettings
+        {
+            InstanceId = string.Empty,
+            RenewInterval = TimeSpan.Zero,
+            RetryInterval = TimeSpan.Zero,
+        };
 
         var result = validator.Validate(null, settings);
 
@@ -37,7 +42,7 @@ public partial class SettingsValidatorTests
         {
             BucketName = string.Empty,
             ObjectKey = string.Empty,
-            LeaseDuration = TimeSpan.Zero
+            LeaseDuration = TimeSpan.Zero,
         };
 
         var result = validator.Validate(null, settings);
@@ -57,7 +62,7 @@ public partial class SettingsValidatorTests
             LockKey = string.Empty,
             Host = string.Empty,
             Database = -1,
-            LockExpiry = TimeSpan.Zero
+            LockExpiry = TimeSpan.Zero,
         };
 
         var result = validator.Validate(null, settings);
@@ -77,7 +82,7 @@ public partial class SettingsValidatorTests
         {
             BlobName = string.Empty,
             ContainerName = string.Empty,
-            LeaseDuration = TimeSpan.FromSeconds(5)
+            LeaseDuration = TimeSpan.FromSeconds(5),
         };
 
         var result = validator.Validate(null, settings);
@@ -95,7 +100,7 @@ public partial class SettingsValidatorTests
         var settings = new DistributedCacheSettings
         {
             LockKey = string.Empty,
-            LockExpiry = TimeSpan.FromSeconds(-1)
+            LockExpiry = TimeSpan.FromSeconds(-1),
         };
 
         var result = validator.Validate(null, settings);
@@ -112,7 +117,7 @@ public partial class SettingsValidatorTests
         var settings = new FusionCacheSettings
         {
             LockKey = string.Empty,
-            LockExpiry = TimeSpan.FromSeconds(-1)
+            LockExpiry = TimeSpan.FromSeconds(-1),
         };
 
         var result = validator.Validate(null, settings);
@@ -126,11 +131,7 @@ public partial class SettingsValidatorTests
     public void PostgresSettingsValidatorShouldValidateCorrectly()
     {
         var validator = new PostgresSettingsValidator();
-        var settings = new PostgresSettings
-        {
-            ConnectionString = string.Empty,
-            LockId = 0
-        };
+        var settings = new PostgresSettings { ConnectionString = string.Empty, LockId = 0 };
 
         var result = validator.Validate(null, settings);
 

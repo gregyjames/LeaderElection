@@ -6,20 +6,25 @@ public static class PostgresServiceBuilderExtensions
 {
     public static IServiceCollection AddPostgresLeaderElection(
         this IServiceCollection services,
-        Action<PostgresSettings> configureOptions)
+        Action<PostgresSettings> configureOptions
+    )
     {
-        services.AddOptionsWithValidateOnStart<PostgresSettings, PostgresSettingsValidator>()
+        services
+            .AddOptionsWithValidateOnStart<PostgresSettings, PostgresSettingsValidator>()
             .Configure(configureOptions);
 
         services.AddSingleton<PostgresLeaderElection>();
-        services.AddSingleton<ILeaderElection>(sp => sp.GetRequiredService<PostgresLeaderElection>());
+        services.AddSingleton<ILeaderElection>(sp =>
+            sp.GetRequiredService<PostgresLeaderElection>()
+        );
 
         return services;
     }
 
     public static IServiceCollection AddPostgresLeaderElection(
         this IServiceCollection services,
-        PostgresSettings options)
+        PostgresSettings options
+    )
     {
         services.AddPostgresLeaderElection(opt =>
         {

@@ -54,14 +54,18 @@ public abstract class TestBase
         }
     }
 
-    protected static async Task WaitForError(ILeaderElection leaderElection, TimeSpan timeout = default)
+    protected static async Task WaitForError(
+        ILeaderElection leaderElection,
+        TimeSpan timeout = default
+    )
     {
         if (timeout == TimeSpan.Zero)
             timeout = TimeSpan.FromSeconds(30);
 
         var tcs = new TaskCompletionSource<Exception>();
 
-        void Handler(object? sender, LeadershipExceptionEventArgs args) => tcs.TrySetResult(args.LeadershipException);
+        void Handler(object? sender, LeadershipExceptionEventArgs args) =>
+            tcs.TrySetResult(args.LeadershipException);
 
         Debug.Assert(leaderElection != null, nameof(leaderElection) + " != null");
         leaderElection.ErrorOccurred += Handler;
@@ -128,6 +132,7 @@ public abstract class TestBase
                 return true; // Renewal observed
             }
         }
+
         return false; // Timeout reached without observing renewal
     }
 
@@ -143,9 +148,10 @@ public abstract class TestBase
 
         Debug.Assert(settings != null, nameof(settings) + " != null");
         var renewalObserved = await WaitForLeadershipRenewal(
-            leaderElection,
-            settings.RenewInterval + TimeSpan.FromSeconds(0.5) // Add a buffer to avoid timing issues
-        ).ConfigureAwait(false);
+                leaderElection,
+                settings.RenewInterval + TimeSpan.FromSeconds(0.5) // Add a buffer to avoid timing issues
+            )
+            .ConfigureAwait(false);
 
         // Assert
         renewalObserved.Should().BeTrue();

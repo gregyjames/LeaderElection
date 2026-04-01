@@ -22,6 +22,7 @@ dotnet add package LeaderElection.Redis
 ```
 
 ### 2. Configure Services
+
 Look in LeaderElectionTester for a full example.
 
 ```csharp
@@ -112,8 +113,10 @@ public class MyService : BackgroundService
 - `StartAsync(CancellationToken)` - Start the leader election process
 - `StopAsync(CancellationToken)` - Stop the leader election process
 - `TryAcquireLeadershipAsync(CancellationToken)` - Manually attempt to acquire leadership
-- `RunTaskIfLeaderAsync(Func<Task>, CancellationToken)` - Execute a task only if this instance is the leader
-- `RunTaskIfLeaderAsync(Action, CancellationToken)` - Execute a synchronous task only if this instance is the leader
+- `RunTaskIfLeaderAsync(Func<Task>, CancellationToken)` - Execute a task only if this instance is
+  the leader
+- `RunTaskIfLeaderAsync(Action, CancellationToken)` - Execute a synchronous task only if this
+  instance is the leader
 
 ### Properties
 
@@ -139,23 +142,23 @@ MIT License
 
 Copyright (c) 2025 Greg James
 
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
+Permission is hereby granted, free of charge, to any person obtaining a copy of this software and
+associated documentation files (the "Software"), to deal in the Software without restriction,
+including without limitation the rights to use, copy, modify, merge, publish, distribute,
+sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is
 furnished to do so, subject to the following conditions:
 
-The above copyright notice and this permission notice shall be included in all
-copies or substantial portions of the Software.
+The above copyright notice and this permission notice shall be included in all copies or substantial
+portions of the Software.
 
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-SOFTWARE.
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT
+NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
+NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES
+OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
+CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ## Icon
-["Business icon pack leader icon"](https://cdn0.iconfinder.com/data/icons/business-1797/32/19-512.png) by [mr icons](https://www.iconfinder.com/mr-icons-1) is licensed under [CC BY 4.0](http://creativecommons.org/licenses/by/4.0)
+
+["Business icon pack leader icon"](https://cdn0.iconfinder.com/data/icons/business-1797/32/19-512.png)
+by [mr icons](https://www.iconfinder.com/mr-icons-1) is licensed under
+[CC BY 4.0](http://creativecommons.org/licenses/by/4.0)

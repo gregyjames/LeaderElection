@@ -6,9 +6,11 @@ public static class S3ServiceBuilderExtensions
 {
     public static IServiceCollection AddS3LeaderElection(
         this IServiceCollection services,
-        Action<S3Settings> configureOptions)
+        Action<S3Settings> configureOptions
+    )
     {
-        services.AddOptionsWithValidateOnStart<S3Settings, S3SettingsValidator>()
+        services
+            .AddOptionsWithValidateOnStart<S3Settings, S3SettingsValidator>()
             .Configure(configureOptions);
 
         services.AddSingleton<S3LeaderElection>();
@@ -19,7 +21,8 @@ public static class S3ServiceBuilderExtensions
 
     public static IServiceCollection AddS3LeaderElection(
         this IServiceCollection services,
-        S3Settings options)
+        S3Settings options
+    )
     {
         services.AddS3LeaderElection(opt =>
         {

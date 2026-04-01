@@ -8,6 +8,7 @@ public abstract partial class LeaderElectionBase<TSettings> : ILeaderElection
 {
     [SuppressMessage("Design", "CA1051", Justification = "Field readonly to derived types")]
     protected readonly TSettings _settings;
+
     [SuppressMessage("Design", "CA1051", Justification = "Field readonly to derived types")]
     protected readonly ILogger _logger;
 
@@ -17,7 +18,7 @@ public abstract partial class LeaderElectionBase<TSettings> : ILeaderElection
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }
 
-    private readonly SemaphoreSlim _leadershipSemaphore = new(1,1);
+    private readonly SemaphoreSlim _leadershipSemaphore = new(1, 1);
     private CancellationTokenSource? _leadershipLoopCancellationTokenSource = new();
 
     private volatile bool _isLeader;
@@ -31,15 +32,17 @@ public abstract partial class LeaderElectionBase<TSettings> : ILeaderElection
     private bool IsDisposed => Volatile.Read(ref _disposedValue) == 1;
     public bool IsLeader => _isLeader && !IsDisposed;
     public DateTime LastLeadershipRenewal => _lastLeadershipRenewalTime;
+
     public async Task StartAsync(CancellationToken cancellationToken = default)
     {
-        #if NET6_0_OR_GREATER
-            ObjectDisposedException.ThrowIf(IsDisposed, this);
-        #else
-            if (IsDisposed){
-                throw new ObjectDisposedException(GetType().Name);
-            }
-        #endif
+#if NET6_0_OR_GREATER
+        ObjectDisposedException.ThrowIf(IsDisposed, this);
+#else
+        if (IsDisposed)
+        {
+            throw new ObjectDisposedException(GetType().Name);
+        }
+#endif
         if (_leadershipLoopTask is { IsCompleted: false })
         {
             LogLeaderElectionIsAlreadyRunning();
@@ -48,7 +51,9 @@ public abstract partial class LeaderElectionBase<TSettings> : ILeaderElection
 
         LogStartingLeaderElectionForInstanceInstanceid(_settings.InstanceId);
 
-        _leadershipLoopCancellationTokenSource = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        _leadershipLoopCancellationTokenSource = CancellationTokenSource.CreateLinkedTokenSource(
+            cancellationToken
+        );
         _leadershipLoopTask = RunLeaderLoopAsync(_leadershipLoopCancellationTokenSource.Token);
 
         await Task.CompletedTask.ConfigureAwait(false);
@@ -123,10 +128,14 @@ public abstract partial class LeaderElectionBase<TSettings> : ILeaderElection
             return _settings.RenewInterval;
         }
 
-        return TimeSpan.FromSeconds(Math.Min(Math.Pow(2, Math.Min(retryCount, _settings.MaxRetryAttempts)), 60));
+        return TimeSpan.FromSeconds(
+            Math.Min(Math.Pow(2, Math.Min(retryCount, _settings.MaxRetryAttempts)), 60)
+        );
     }
 
-    public virtual Task StopAsync(CancellationToken cancellationToken = default) => IsDisposed ? Task.CompletedTask : InternalStopAsync(cancellationToken);
+    public virtual Task StopAsync(CancellationToken cancellationToken = default) =>
+        IsDisposed ? Task.CompletedTask : InternalStopAsync(cancellationToken);
+
     private async Task InternalStopAsync(CancellationToken cancellationToken = default)
     {
         LogStoppingLeaderElectionForInstanceInstanceid(_settings.InstanceId);
@@ -165,7 +174,10 @@ public abstract partial class LeaderElectionBase<TSettings> : ILeaderElection
         }
     }
 
-    protected abstract Task<bool> TryAcquireLeadershipInternalAsync(CancellationToken cancellationToken);
+    protected abstract Task<bool> TryAcquireLeadershipInternalAsync(
+        CancellationToken cancellationToken
+    );
+
     protected abstract Task<bool> RenewLeadershipInternalAsync(CancellationToken cancellationToken);
     protected abstract Task ReleaseLeadershipAsync();
 
@@ -187,7 +199,8 @@ public abstract partial class LeaderElectionBase<TSettings> : ILeaderElection
         await _leadershipSemaphore.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {
-            var acquired = await TryAcquireLeadershipInternalAsync(cancellationToken).ConfigureAwait(false);
+            var acquired = await TryAcquireLeadershipInternalAsync(cancellationToken)
+                .ConfigureAwait(false);
             SetLeadership(acquired);
             return acquired;
         }
@@ -197,7 +210,10 @@ public abstract partial class LeaderElectionBase<TSettings> : ILeaderElection
         }
     }
 
-    public async Task RunTaskIfLeaderAsync(Func<Task>? task, CancellationToken cancellationToken = default)
+    public async Task RunTaskIfLeaderAsync(
+        Func<Task>? task,
+        CancellationToken cancellationToken = default
+    )
     {
         if (!IsLeader)
         {
@@ -221,9 +237,13 @@ public abstract partial class LeaderElectionBase<TSettings> : ILeaderElection
         }
     }
 
-    public async Task RunTaskIfLeaderAsync(Action task, CancellationToken cancellationToken = default)
+    public async Task RunTaskIfLeaderAsync(
+        Action task,
+        CancellationToken cancellationToken = default
+    )
     {
-        await RunTaskIfLeaderAsync(() => Task.Run(task, cancellationToken), cancellationToken).ConfigureAwait(false);
+        await RunTaskIfLeaderAsync(() => Task.Run(task, cancellationToken), cancellationToken)
+            .ConfigureAwait(false);
     }
 
     public async ValueTask DisposeAsync()

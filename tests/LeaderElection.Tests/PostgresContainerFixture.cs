@@ -7,7 +7,8 @@ namespace LeaderElection.Tests;
 /// across all tests that require it.
 /// </summary>
 [CollectionDefinition("PostgreSQL Container")]
-public sealed class PostgresContainerCollectionFixture : ICollectionFixture<PostgresContainerFixture> { }
+public sealed class PostgresContainerCollectionFixture
+    : ICollectionFixture<PostgresContainerFixture> { }
 
 /// <summary>
 /// An Xunit fixture that manages the lifecycle of a temporary PostgreSQL container for
@@ -28,8 +29,7 @@ public sealed class PostgresContainerFixture : IAsyncLifetime
 
     public async ValueTask InitializeAsync()
     {
-        _postgresContainer = new PostgreSqlBuilder(image: "postgres:15-alpine")
-            .Build();
+        _postgresContainer = new PostgreSqlBuilder(image: "postgres:15-alpine").Build();
 
         await _postgresContainer.StartAsync().ConfigureAwait(false);
     }

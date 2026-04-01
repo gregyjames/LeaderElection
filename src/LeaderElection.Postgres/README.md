@@ -1,6 +1,8 @@
 # LeaderElection.Postgres
 
-A PostgreSQL-backed implementation of the distributed leader election pattern for .NET. This implementation uses extremely fast, native PostgreSQL "Advisory Locks" (`pg_try_advisory_lock`) to ensure safe, atomic leadership acquisition tied directly to the lifetime of the database connection.
+A PostgreSQL-backed implementation of the distributed leader election pattern for .NET. This
+implementation uses extremely fast, native PostgreSQL "Advisory Locks" (`pg_try_advisory_lock`) to
+ensure safe, atomic leadership acquisition tied directly to the lifetime of the database connection.
 
 ## Features
 
@@ -10,7 +12,8 @@ A PostgreSQL-backed implementation of the distributed leader election pattern fo
 - **Configuration Options**: Flexible configuration through options pattern
 - **Event-Driven**: Leadership change and error events for reactive programming
 - **Graceful Shutdown**: Proper cleanup and resource disposal
-- **Session-Level Locks**: Fully avoids row-level contention and deadlocks by locking in shared memory
+- **Session-Level Locks**: Fully avoids row-level contention and deadlocks by locking in shared
+  memory
 
 ## Quick Start
 
@@ -73,21 +76,27 @@ public class Worker : BackgroundService
 
 ## Configuration (PostgresSettings)
 
-| Property | Default | Description |
-| :--- | :--- | :--- |
-| `ConnectionString` | `(required)` | The connection string for the PostgreSQL database. |
-| `LockId` | `(required)` | The unique 64-bit advisory lock key to use for leader election. |
-| `InstanceId` | `Environment.MachineName` | Unique ID for this node. |
-| `RetryInterval` | `5s` | The interval to wait before retrying a failed leadership acquisition. |
-| `EnableGracefulShutdown`| `true` | If true, explicitly unlocks via `pg_advisory_unlock` on stop. |
+| Property                 | Default                   | Description                                                           |
+| :----------------------- | :------------------------ | :-------------------------------------------------------------------- |
+| `ConnectionString`       | `(required)`              | The connection string for the PostgreSQL database.                    |
+| `LockId`                 | `(required)`              | The unique 64-bit advisory lock key to use for leader election.       |
+| `InstanceId`             | `Environment.MachineName` | Unique ID for this node.                                              |
+| `RetryInterval`          | `5s`                      | The interval to wait before retrying a failed leadership acquisition. |
+| `EnableGracefulShutdown` | `true`                    | If true, explicitly unlocks via `pg_advisory_unlock` on stop.         |
 
 ## PostgreSQL Specifics
 
-Instead of executing slow `UPDATE` queries on rows with expiration timestamps, this package executes `SELECT pg_try_advisory_lock(@LockId);` under the hood. 
+Instead of executing slow `UPDATE` queries on rows with expiration timestamps, this package executes
+`SELECT pg_try_advisory_lock(@LockId);` under the hood.
 
-This requests a **session-level lock** from PostgreSQL itself. If the application crashes, the host node dies, or the network connection drops, PostgreSQL instantly cleans up the connection and drops the lock. This allows other backup nodes to acquire leadership immediately without having to wait for traditional polling or lease-expiration timers.
+This requests a **session-level lock** from PostgreSQL itself. If the application crashes, the host
+node dies, or the network connection drops, PostgreSQL instantly cleans up the connection and drops
+the lock. This allows other backup nodes to acquire leadership immediately without having to wait
+for traditional polling or lease-expiration timers.
 
-Additionally, to prevent silent network partitions from locking up the system, the leader election class periodically executes a lightweight `SELECT 1;` to verify the physical connection is still healthy and the lock holds true.
+Additionally, to prevent silent network partitions from locking up the system, the leader election
+class periodically executes a lightweight `SELECT 1;` to verify the physical connection is still
+healthy and the lock holds true.
 
 ## Contributing
 
@@ -103,23 +112,23 @@ MIT License
 
 Copyright (c) 2025 Greg James
 
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
+Permission is hereby granted, free of charge, to any person obtaining a copy of this software and
+associated documentation files (the "Software"), to deal in the Software without restriction,
+including without limitation the rights to use, copy, modify, merge, publish, distribute,
+sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is
 furnished to do so, subject to the following conditions:
 
-The above copyright notice and this permission notice shall be included in all
-copies or substantial portions of the Software.
+The above copyright notice and this permission notice shall be included in all copies or substantial
+portions of the Software.
 
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-SOFTWARE.
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT
+NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
+NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES
+OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
+CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ## Icon
-["Business icon pack leader icon"](https://cdn0.iconfinder.com/data/icons/business-1797/32/19-512.png) by [mr icons](https://www.iconfinder.com/mr-icons-1) is licensed under [CC BY 4.0](http://creativecommons.org/licenses/by/4.0)
+
+["Business icon pack leader icon"](https://cdn0.iconfinder.com/data/icons/business-1797/32/19-512.png)
+by [mr icons](https://www.iconfinder.com/mr-icons-1) is licensed under
+[CC BY 4.0](http://creativecommons.org/licenses/by/4.0)
