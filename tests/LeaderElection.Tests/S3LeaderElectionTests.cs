@@ -1,9 +1,5 @@
-using System.Text.Json;
 using LeaderElection.S3;
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Logging;
-using Microsoft.Extensions.Logging.Abstractions;
-using Microsoft.Extensions.Options;
 using Minio.DataModel.Args;
 
 namespace LeaderElection.Tests;
@@ -101,7 +97,7 @@ public sealed class S3LeaderElectionTests(MinioContainerFixture minioFixture) : 
         await WaitForLeadershipChange(leaderElection1, true, TimeSpan.FromSeconds(15));
 
         await leaderElection2.StartAsync(CancellationToken);
-        await Task.Delay(TimeSpan.FromSeconds(5), CancellationToken);
+        await TimeProvider.Delay(TimeSpan.FromSeconds(5), CancellationToken);
 
         // Assert
         leaderElection1.IsLeader.Should().BeTrue();

@@ -81,7 +81,7 @@ public sealed class RedisLeaderElectionTests(RedisContainerFixture redisFixture)
         await WaitForLeadershipChange(leaderElection1, true, TimeSpan.FromSeconds(10));
 
         await leaderElection2.StartAsync(CancellationToken);
-        await Task.Delay(TimeSpan.FromSeconds(5), CancellationToken); // Give time for second instance to try
+        await TimeProvider.Delay(TimeSpan.FromSeconds(5), CancellationToken); // Give time for second instance to try
 
         // Assert
         leaderElection1.IsLeader.Should().BeTrue();

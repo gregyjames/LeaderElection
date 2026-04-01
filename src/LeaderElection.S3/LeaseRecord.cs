@@ -8,5 +8,5 @@ internal sealed class LeaseRecord
     public string HolderId { get; init; } = "";
 
     [JsonPropertyName("leaseUntilUtc")]
-    public DateTime LeaseUntilUtc { get; init; }
+    public DateTimeOffset LeaseUntilUtc { get; init; }
 }
