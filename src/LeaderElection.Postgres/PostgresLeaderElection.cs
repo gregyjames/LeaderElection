@@ -43,7 +43,7 @@ public sealed partial class PostgresLeaderElection : LeaderElectionBase<Postgres
             {
                 success = true;
                 _activeConnection = connection;
-                LogAcquiredLock(_settings.LockId, _settings.InstanceId);
+                LogAcquiredLock(_settings.LockId);
             }
             else
             {
@@ -97,7 +97,7 @@ public sealed partial class PostgresLeaderElection : LeaderElectionBase<Postgres
             await cmd.ExecuteScalarAsync(cancellationToken).ConfigureAwait(false);
 
             success = true;
-            LogRenewedLock(_settings.LockId, _settings.InstanceId);
+            LogRenewedLock(_settings.LockId);
         }
         catch (PostgresException ex)
         {
@@ -206,8 +206,8 @@ public sealed partial class PostgresLeaderElection : LeaderElectionBase<Postgres
     [LoggerMessage(LogLevel.Information, "Lock already acquired: {lockId}.")]
     partial void LogLockAlreadyAcquired(long lockId);
 
-    [LoggerMessage(LogLevel.Debug, "Acquired lock {lockId} for instance {instanceId}.")]
-    partial void LogAcquiredLock(long lockId, string instanceId);
+    [LoggerMessage(LogLevel.Debug, "Acquired lock {lockId}.")]
+    partial void LogAcquiredLock(long lockId);
 
     [LoggerMessage("Failure acquiring lock {lockId}: {Reason}.")]
     partial void LogFailureAcquiringLock(
@@ -220,8 +220,8 @@ public sealed partial class PostgresLeaderElection : LeaderElectionBase<Postgres
     [LoggerMessage(LogLevel.Information, "No active lock to renew.")]
     partial void LogNoActiveLockToRenew();
 
-    [LoggerMessage(LogLevel.Debug, "Renewed lock {lockId} for instance {instanceId}.")]
-    partial void LogRenewedLock(long lockId, string instanceId);
+    [LoggerMessage(LogLevel.Debug, "Renewed lock {lockId}.")]
+    partial void LogRenewedLock(long lockId);
 
     [LoggerMessage("Failure renewing lock {lockId}: {Reason}.")]
     partial void LogFailureRenewingLock(
