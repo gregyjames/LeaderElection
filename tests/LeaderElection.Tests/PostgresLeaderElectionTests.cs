@@ -133,6 +133,8 @@ public sealed class PostgresLeaderElectionTests(PostgresContainerFixture postgre
         var options = CreateSettings();
 
         await using var leaderElection = CreateSut(options);
+        await leaderElection.StartAsync(CancellationToken);
+        await WaitForLeadershipChange(leaderElection, true);
 
         var result = await leaderElection.TryAcquireLeadershipAsync(CancellationToken);
 

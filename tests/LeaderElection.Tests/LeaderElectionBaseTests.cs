@@ -12,8 +12,18 @@ public class LeaderElectionBaseTests
     // Helper method to fast forward time and allow any released tasks to run
     async Task FastForward(TimeSpan timeSpan)
     {
+        // small delay to ensure OS has time to unblock any tasks waiting for
+        // the Leader Loop semaphore before advancing time
+        await Task.Delay(5);
         _fakeTimeProvider.Advance(timeSpan);
-        await Task.Yield(); // allow any released tasks to run
+        // allow any released tasks to update state before assertions.
+        await Task.Delay(1);
+    }
+
+    async Task StartAsync(FakeLeaderElection sut)
+    {
+        await sut.StartAsync(TestContext.Current.CancellationToken);
+        await FastForward(TimeSpan.Zero);
     }
 
     [Fact]
@@ -23,8 +33,7 @@ public class LeaderElectionBaseTests
         await using var sut = CreateSut();
 
         // Act
-        await sut.StartAsync(TestContext.Current.CancellationToken);
-        await FastForward(TimeSpan.Zero);
+        await StartAsync(sut);
 
         // Assert
         sut.IsLeader.Should().BeTrue();
@@ -34,7 +43,7 @@ public class LeaderElectionBaseTests
         sut.Settings.ErrorCount.Should().Be(0);
 
         // Call StartAsync again should be no-op
-        await sut.StartAsync(TestContext.Current.CancellationToken);
+        await StartAsync(sut);
         sut.IsLeader.Should().BeTrue();
         sut.Settings.TryAcquireCount.Should().Be(1);
         sut.Settings.LeadershipChangedCount.Should().Be(1);
@@ -48,8 +57,7 @@ public class LeaderElectionBaseTests
         await using var sut = CreateSut();
 
         sut.Settings.AcquireResult = () => false;
-        await sut.StartAsync(TestContext.Current.CancellationToken);
-        await FastForward(TimeSpan.Zero);
+        await StartAsync(sut);
         sut.IsLeader.Should().BeFalse();
         sut.Settings.TryAcquireCount.Should().Be(1);
         sut.Settings.LeadershipChangedCount.Should().Be(0);
@@ -75,8 +83,7 @@ public class LeaderElectionBaseTests
 
         // Act
         sut.Settings.AcquireResult = () => throw new InvalidOperationException("Test exception");
-        await sut.StartAsync(TestContext.Current.CancellationToken);
-        await FastForward(TimeSpan.Zero);
+        await StartAsync(sut);
 
         // Assert - Should have reported the error
         sut.IsLeader.Should().BeFalse();
@@ -96,7 +103,7 @@ public class LeaderElectionBaseTests
     }
 
     [Fact]
-    public async Task LeaderLoopShouldCancelOnRequest()
+    public async Task StartAsyncCancellationTokenShouldHaveNoEffectOnLeaderLoop()
     {
         // Arrange
         await using var sut = CreateSut();
@@ -107,16 +114,22 @@ public class LeaderElectionBaseTests
         sut.Settings.AcquireResult = () =>
         {
             cts.Cancel();
-            cts.Token.ThrowIfCancellationRequested();
             return true;
         };
 
         // Act
         await sut.StartAsync(cts.Token);
         await FastForward(TimeSpan.Zero);
-        sut.IsLeader.Should().BeFalse();
+
+        // Assert - Should have acquired leadership and not been cancelled
+        cts.IsCancellationRequested.Should().BeTrue();
+        sut.IsLeader.Should().BeTrue();
         sut.Settings.TryAcquireCount.Should().Be(1);
         sut.Settings.ErrorCount.Should().Be(0);
+
+        await FastForward(sut.Settings.RenewInterval);
+        sut.Settings.ErrorCount.Should().Be(0);
+        sut.Settings.TryRenewCount.Should().Be(1);
     }
 
     [Fact]
@@ -125,8 +138,7 @@ public class LeaderElectionBaseTests
         // Arrange
         await using var sut = CreateSut();
 
-        await sut.StartAsync(TestContext.Current.CancellationToken);
-        await FastForward(TimeSpan.Zero);
+        await StartAsync(sut);
         sut.IsLeader.Should().BeTrue();
         sut.Settings.LeadershipChangedCount.Should().Be(1);
 
@@ -151,8 +163,7 @@ public class LeaderElectionBaseTests
         await using var sut = CreateSut();
 
         // acquire leadership first
-        await sut.StartAsync(TestContext.Current.CancellationToken);
-        await FastForward(TimeSpan.Zero);
+        await StartAsync(sut);
         sut.IsLeader.Should().BeTrue();
         sut.Settings.TryRenewCount.Should().Be(0);
         sut.Settings.LeadershipChangedCount.Should().Be(1);
@@ -180,6 +191,109 @@ public class LeaderElectionBaseTests
     }
 
     [Fact]
+    public async Task TryAcquireLeadershipAsyncShouldThrowWhenLeaderLoopNotRunning()
+    {
+        // Arrange
+        await using var sut = CreateSut();
+        sut.LeaderLoopRunning.Should().BeFalse();
+
+        // Act & Assert
+        await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            sut.TryAcquireLeadershipAsync(TestContext.Current.CancellationToken)
+        );
+    }
+
+    [Fact]
+    public async Task TryAcquireLeadershipAsyncShouldReturnFalseWhenNotLeader()
+    {
+        // Arrange
+        await using var sut = CreateSut();
+        sut.Settings.AcquireResult = () => false; // ensure we don't acquire leadership
+        await StartAsync(sut);
+
+        sut.LeaderLoopRunning.Should().BeTrue();
+        sut.IsLeader.Should().BeFalse();
+
+        // Act
+        var result = await sut.TryAcquireLeadershipAsync(TestContext.Current.CancellationToken);
+
+        // Assert
+        result.Should().BeFalse();
+        sut.IsLeader.Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task TryAcquireLeadershipAsyncShouldReturnTrueWhenAlreadyLeader()
+    {
+        // Arrange
+        await using var sut = CreateSut();
+        await StartAsync(sut);
+        sut.IsLeader.Should().BeTrue();
+
+        // Act
+        var result = await sut.TryAcquireLeadershipAsync(TestContext.Current.CancellationToken);
+
+        // Assert
+        result.Should().BeTrue();
+        sut.IsLeader.Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task TryAcquireLeadershipAsyncShouldAcquireLeadershipWhenNotLeader()
+    {
+        // Arrange
+        await using var sut = CreateSut();
+        sut.Settings.AcquireResult = () => false; // ensure we don't acquire leadership
+        await StartAsync(sut);
+        sut.LeaderLoopRunning.Should().BeTrue();
+        sut.IsLeader.Should().BeFalse();
+
+        sut.Settings.AcquireResult = () => true; // ensure we can acquire leadership
+
+        // Act
+        var result = await sut.TryAcquireLeadershipAsync(TestContext.Current.CancellationToken);
+
+        // Assert
+        result.Should().BeTrue();
+        sut.IsLeader.Should().BeTrue();
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task TryAcquireLeadershipAsyncDoesNotThrowWhenAcquireThrows(bool cancel)
+    {
+        // Arrange
+        await using var sut = CreateSut();
+        sut.Settings.AcquireResult = () => false; // ensure we don't acquire leadership
+        await StartAsync(sut);
+        sut.LeaderLoopRunning.Should().BeTrue();
+        sut.IsLeader.Should().BeFalse();
+
+        using var cts = CancellationTokenSource.CreateLinkedTokenSource(
+            TestContext.Current.CancellationToken
+        );
+
+        sut.Settings.AcquireResult = () =>
+        {
+            if (cancel)
+            {
+                cts.Cancel();
+                cts.Token.ThrowIfCancellationRequested();
+            }
+            throw new InvalidOperationException("Test exception");
+        };
+
+        // Act
+        var result = await sut.TryAcquireLeadershipAsync(cts.Token);
+
+        // Assert
+        result.Should().BeFalse();
+        sut.IsLeader.Should().BeFalse();
+        sut.Settings.ErrorCount.Should().Be(1);
+    }
+
+    [Fact]
     public async Task RunTaskIfLeaderAsyncShouldNotRunWhenNotStarted()
     {
         // Arrange
@@ -204,8 +318,7 @@ public class LeaderElectionBaseTests
 
         // start without leadership
         sut.Settings.AcquireResult = () => false;
-        await sut.StartAsync(TestContext.Current.CancellationToken);
-        await FastForward(TimeSpan.Zero);
+        await StartAsync(sut);
         sut.IsLeader.Should().BeFalse();
 
         // Act
@@ -226,8 +339,7 @@ public class LeaderElectionBaseTests
         await using var sut = CreateSut();
 
         // start with leadership
-        await sut.StartAsync(TestContext.Current.CancellationToken);
-        await FastForward(TimeSpan.Zero);
+        await StartAsync(sut);
         sut.IsLeader.Should().BeTrue();
 
         // Act
@@ -242,15 +354,14 @@ public class LeaderElectionBaseTests
     }
 
     [Fact]
-    public async Task RunTaskIfLeaderAsyncShouldReportErrorOnException()
+    public async Task RunTaskIfLeaderAsyncShouldNotReportErrorOnException()
     {
         // Arrange
         await using var sut = CreateSut();
 
         // start with leadership
         sut.Settings.AcquireResult = () => true;
-        await sut.StartAsync(TestContext.Current.CancellationToken);
-        await FastForward(TimeSpan.Zero);
+        await StartAsync(sut);
         sut.IsLeader.Should().BeTrue();
         sut.Settings.ErrorCount.Should().Be(0);
 
@@ -263,20 +374,19 @@ public class LeaderElectionBaseTests
         );
 
         // Assert
-        sut.Settings.ErrorCount.Should().Be(1);
+        sut.Settings.ErrorCount.Should().Be(0);
     }
 
     [Theory]
     [InlineData(true)]
     [InlineData(false)]
-    public async Task StopAsyncShouldReleaseLeadership(bool gracefulShutdown)
+    public async Task StopAsyncShouldAlwaysReleaseLeadership(bool gracefulShutdown)
     {
         // Arrange
         await using var sut = CreateSut();
         sut.Settings.EnableGracefulShutdown = gracefulShutdown;
 
-        await sut.StartAsync(TestContext.Current.CancellationToken);
-        await FastForward(TimeSpan.Zero);
+        await StartAsync(sut);
         sut.IsLeader.Should().BeTrue();
 
         // Act
@@ -284,20 +394,44 @@ public class LeaderElectionBaseTests
 
         // Assert
         sut.IsLeader.Should().BeFalse(); // because stopped
-        sut.Settings.TryReleaseCount.Should().Be(gracefulShutdown ? 1 : 0);
+        sut.LeaderLoopRunning.Should().BeFalse();
+        // should always release on stop, regardless of graceful shutdown setting
+        sut.Settings.TryReleaseCount.Should().Be(1);
+        sut.Settings.ErrorCount.Should().Be(0);
+    }
+
+    [Fact]
+    public async Task StopAsyncShouldNotThrowReleaseException()
+    {
+        // Arrange
+        await using var sut = CreateSut();
+        await StartAsync(sut);
+        sut.IsLeader.Should().BeTrue();
+
+        sut.Settings.ReleaseAction = () => throw new InvalidOperationException("Test exception");
+
+        // Act
+        await sut.StopAsync(TestContext.Current.CancellationToken);
+
+        // Assert
+        sut.IsLeader.Should().BeFalse(); // stopped
+        sut.LeaderLoopRunning.Should().BeFalse();
+        sut.Settings.TryReleaseCount.Should().Be(1);
+        sut.Settings.ErrorCount.Should().Be(1);
     }
 
     [Theory]
     [InlineData(true)]
     [InlineData(false)]
-    public async Task DisposeAsyncShouldReleaseLeadership(bool gracefulShutdown)
+    public async Task DisposeAsyncShouldReleaseLeadershipWhenGracefulShutdownEnabled(
+        bool gracefulShutdown
+    )
     {
         // Arrange
         await using var sut = CreateSut();
         sut.Settings.EnableGracefulShutdown = gracefulShutdown;
 
-        await sut.StartAsync(TestContext.Current.CancellationToken);
-        await FastForward(TimeSpan.Zero);
+        await StartAsync(sut);
         sut.IsLeader.Should().BeTrue();
 
         // Act
@@ -305,7 +439,9 @@ public class LeaderElectionBaseTests
 
         // Assert
         sut.IsLeader.Should().BeFalse(); // because disposed/stopped
+        sut.LeaderLoopRunning.Should().BeFalse();
         sut.Settings.TryReleaseCount.Should().Be(gracefulShutdown ? 1 : 0);
+        sut.Settings.ErrorCount.Should().Be(0);
     }
 
     [Fact]
@@ -347,16 +483,16 @@ public class LeaderElectionBaseTests
         // Arrange
         await using var sut = CreateSut();
         sut.Settings.EnableGracefulShutdown = true;
-        sut.Settings.ReleaseAction = () => throw new InvalidOperationException("Release failed");
+        sut.LeadershipChanged += (_, _) => throw new InvalidOperationException("Client exception");
 
-        await sut.StartAsync(TestContext.Current.CancellationToken);
-        await FastForward(TimeSpan.Zero);
+        await StartAsync(sut);
         sut.IsLeader.Should().BeTrue();
 
         // Act
         await sut.DisposeAsync();
 
         // Assert
+        sut.IsLeader.Should().BeFalse(); // because disposed/stopped
         sut.Settings.TryReleaseCount.Should().Be(1);
         sut.Settings.ErrorCount.Should().Be(0);
     }
