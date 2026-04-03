@@ -38,9 +38,6 @@ internal sealed class FakeLeaderElection : LeaderElectionBase<FakeLeaderElection
         };
     }
 
-    // Use a fixed retry for easier testing
-    protected override TimeSpan GetNextDelay(int retryCount) => _settings.RetryInterval;
-
     protected override Task<bool> TryAcquireLeadershipInternalAsync(
         CancellationToken cancellationToken
     )
