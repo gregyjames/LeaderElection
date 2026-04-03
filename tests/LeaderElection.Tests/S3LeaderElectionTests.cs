@@ -170,6 +170,8 @@ public sealed class S3LeaderElectionTests(MinioContainerFixture minioFixture) : 
         var options = CreateSettings("test-leader-election-manual");
 
         await using var leaderElection = CreateSut(options);
+        await leaderElection.StartAsync(CancellationToken);
+        await WaitForLeadershipChange(leaderElection, true);
 
         // Act
         var result = await leaderElection.TryAcquireLeadershipAsync(CancellationToken);

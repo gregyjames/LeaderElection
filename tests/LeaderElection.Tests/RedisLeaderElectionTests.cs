@@ -176,6 +176,8 @@ public sealed class RedisLeaderElectionTests(RedisContainerFixture redisFixture)
         var options = CreateSettings("test-leader-election-manual");
 
         await using var leaderElection = CreateSut(options);
+        await leaderElection.StartAsync(CancellationToken);
+        await WaitForLeadershipChange(leaderElection, true);
 
         // Act
         var result = await leaderElection.TryAcquireLeadershipAsync(CancellationToken);
