@@ -70,7 +70,7 @@ public sealed partial class S3LeaderElection : LeaderElectionBase<S3Settings>
                 .ConfigureAwait(false);
 
             // success!
-            LogAcquiredLease(_settings.BucketName, _settings.ObjectKey, _settings.InstanceId);
+            LogAcquiredLease(_settings.BucketName, _settings.ObjectKey);
             return true;
         }
         catch (PreconditionFailedException)
@@ -130,7 +130,7 @@ public sealed partial class S3LeaderElection : LeaderElectionBase<S3Settings>
                 .ConfigureAwait(false);
 
             success = true;
-            LogLeaseRenewed(_settings.BucketName, _settings.ObjectKey, _settings.InstanceId);
+            LogLeaseRenewed(_settings.BucketName, _settings.ObjectKey);
         }
         catch (PreconditionFailedException)
         {
@@ -192,7 +192,7 @@ public sealed partial class S3LeaderElection : LeaderElectionBase<S3Settings>
                 .ConfigureAwait(false);
 
             _lastEtag = null;
-            LogLeaseReleased(_settings.BucketName, _settings.ObjectKey, _settings.InstanceId);
+            LogLeaseReleased(_settings.BucketName, _settings.ObjectKey);
         }
         catch (ObjectNotFoundException)
         {
@@ -363,11 +363,8 @@ public sealed partial class S3LeaderElection : LeaderElectionBase<S3Settings>
     [LoggerMessage(LogLevel.Information, "Lease already acquired for {BucketName}/{ObjectKey}.")]
     partial void LogLeaseAlreadyAcquired(string bucketName, string objectKey);
 
-    [LoggerMessage(
-        LogLevel.Debug,
-        "Lease acquired on {BucketName}/{ObjectKey} by instance {InstanceId}."
-    )]
-    partial void LogAcquiredLease(string bucketName, string objectKey, string instanceId);
+    [LoggerMessage(LogLevel.Debug, "Lease acquired on {BucketName}/{ObjectKey}.")]
+    partial void LogAcquiredLease(string bucketName, string objectKey);
 
     [LoggerMessage("Failure acquiring lease on {BucketName}/{ObjectKey}: {Reason}")]
     partial void LogFailureAcquiringLease(
@@ -380,11 +377,8 @@ public sealed partial class S3LeaderElection : LeaderElectionBase<S3Settings>
     [LoggerMessage(LogLevel.Information, "No current lease to renew.")]
     partial void LogNoCurrentLeaseToRenew();
 
-    [LoggerMessage(
-        LogLevel.Debug,
-        "Lease renewed on {BucketName}/{ObjectKey} by instance {InstanceId}."
-    )]
-    partial void LogLeaseRenewed(string bucketName, string objectKey, string instanceId);
+    [LoggerMessage(LogLevel.Debug, "Lease renewed on {BucketName}/{ObjectKey}.")]
+    partial void LogLeaseRenewed(string bucketName, string objectKey);
 
     [LoggerMessage("Failure renewing lease for {BucketName}/{ObjectKey}: {Reason}")]
     partial void LogFailureRenewingLease(
@@ -397,11 +391,8 @@ public sealed partial class S3LeaderElection : LeaderElectionBase<S3Settings>
     [LoggerMessage(LogLevel.Information, "No current lease to release.")]
     partial void LogNoCurrentLeaseToRelease();
 
-    [LoggerMessage(
-        LogLevel.Debug,
-        "Lease released for {BucketName}/{ObjectKey} by instance {InstanceId}."
-    )]
-    partial void LogLeaseReleased(string bucketName, string objectKey, string instanceId);
+    [LoggerMessage(LogLevel.Debug, "Lease released for {BucketName}/{ObjectKey}.")]
+    partial void LogLeaseReleased(string bucketName, string objectKey);
 
     [LoggerMessage("Failure releasing lease for {BucketName}/{ObjectKey}: {Reason}")]
     partial void LogFailureReleasingLease(

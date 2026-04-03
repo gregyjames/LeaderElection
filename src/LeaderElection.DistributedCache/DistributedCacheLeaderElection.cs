@@ -68,7 +68,7 @@ public partial class DistributedCacheLeaderElection : LeaderElectionBase<Distrib
             if (updatedKey)
             {
                 _lockOwnedUntil = expiresAt;
-                LogLockAcquired(_settings.LockKey, _settings.InstanceId);
+                LogLockAcquired(_settings.LockKey);
                 return true;
             }
             else
@@ -131,7 +131,7 @@ public partial class DistributedCacheLeaderElection : LeaderElectionBase<Distrib
             {
                 success = true;
                 _lockOwnedUntil = expiresAt;
-                LogLockRenewed(_settings.LockKey, _settings.InstanceId);
+                LogLockRenewed(_settings.LockKey);
             }
             else
             {
@@ -184,7 +184,7 @@ public partial class DistributedCacheLeaderElection : LeaderElectionBase<Distrib
                     await ReleaseOwnershipAsync().ConfigureAwait(false);
                 }
 
-                LogLockReleased(_settings.LockKey, _settings.InstanceId);
+                LogLockReleased(_settings.LockKey);
             }
             else if (string.IsNullOrEmpty(currentOwner))
             {
@@ -258,8 +258,8 @@ public partial class DistributedCacheLeaderElection : LeaderElectionBase<Distrib
     [LoggerMessage(LogLevel.Information, "Lock already acquired for key {LockKey}.")]
     partial void LogLockAlreadyAcquired(string lockKey);
 
-    [LoggerMessage(LogLevel.Debug, "Acquired lock for key {LockKey} by instance {InstanceId}.")]
-    partial void LogLockAcquired(string lockKey, string instanceId);
+    [LoggerMessage(LogLevel.Debug, "Acquired lock for key {LockKey}.")]
+    partial void LogLockAcquired(string lockKey);
 
     [LoggerMessage("Failure acquiring lock for key {LockKey}: {Reason}")]
     partial void LogFailureAcquiringLock(LogLevel logLevel, string lockKey, string reason);
@@ -267,8 +267,8 @@ public partial class DistributedCacheLeaderElection : LeaderElectionBase<Distrib
     [LoggerMessage(LogLevel.Information, "No active lock to renew for key {LockKey}.")]
     partial void LogNoActiveLockToRenew(string lockKey);
 
-    [LoggerMessage(LogLevel.Debug, "Lock renewed for key {LockKey} by instance {InstanceId}.")]
-    partial void LogLockRenewed(string lockKey, string instanceId);
+    [LoggerMessage(LogLevel.Debug, "Lock renewed for key {LockKey}.")]
+    partial void LogLockRenewed(string lockKey);
 
     [LoggerMessage("Failure renewing lock for key {LockKey}: {Reason}")]
     partial void LogFailureRenewingLock(LogLevel logLevel, string lockKey, string reason);
@@ -276,8 +276,8 @@ public partial class DistributedCacheLeaderElection : LeaderElectionBase<Distrib
     [LoggerMessage(LogLevel.Information, "No active lock to release for key {LockKey}.")]
     partial void LogNoActiveLockToRelease(string lockKey);
 
-    [LoggerMessage(LogLevel.Debug, "Lock released for key {LockKey} by instance {InstanceId}.")]
-    partial void LogLockReleased(string lockKey, string instanceId);
+    [LoggerMessage(LogLevel.Debug, "Lock released for key {LockKey}.")]
+    partial void LogLockReleased(string lockKey);
 
     [LoggerMessage("Failure releasing lock for key {LockKey}: {Reason}")]
     partial void LogFailureReleasingLock(LogLevel logLevel, string lockKey, string reason);
