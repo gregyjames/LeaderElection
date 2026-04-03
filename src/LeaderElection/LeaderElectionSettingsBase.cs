@@ -15,7 +15,7 @@ public class LeaderElectionSettingsBase
     public string InstanceId { get; set; } = Guid.NewGuid().ToString();
 
     /// <summary>
-    /// The interval at which the leader will attempt to renew its leadership.
+    /// The interval at which non-leader instances will attempt to acquire leadership.
     /// <para/>
     /// Must be greater than or equal to zero.
     /// Default is 5 seconds.
