@@ -1,4 +1,4 @@
-using System.Diagnostics;
+using Microsoft.Extensions.Time.Testing;
 
 namespace LeaderElection.Tests;
 
@@ -18,43 +18,81 @@ public abstract class TestBase
     /// </summary>
     protected TimeProvider TimeProvider { get; init; } = TimeProvider.System;
 
-    protected static async Task WaitForLeadershipChange(
+    /// <summary>
+    /// Advances time by the specified <see cref="TimeSpan"/> using the configured
+    /// <see cref="TimeProvider"/>. This is a helper method to simulate time passage
+    /// in tests that use a <see cref="FakeTimeProvider"/>.
+    /// </summary>
+    /// <param name="timeSpan">The amount of time to advance/wait.</param>
+    protected async Task AdvanceTime(TimeSpan timeSpan)
+    {
+        if (TimeProvider is FakeTimeProvider fakeTimeProvider)
+        {
+            // small delay to ensure OS has time to unblock any tasks waiting for
+            // the Leader Loop semaphore before advancing time
+            await Task.Delay(5, CancellationToken);
+            fakeTimeProvider.Advance(timeSpan);
+            // allow any released tasks to update state before assertions.
+            await Task.Delay(1, CancellationToken);
+        }
+        else
+        {
+            await TimeProvider.Delay(timeSpan, CancellationToken);
+        }
+    }
+
+    /// <summary>
+    /// Waits for the specified leader election instance to change to the expected
+    /// leadership status.
+    /// </summary>
+    /// <param name="leaderElection">The leader election instance to monitor for leadership changes.</param>
+    /// <param name="expectedLeadership">The expected leadership status to wait for.</param>
+    /// <param name="timeout">The maximum time to wait for the leadership change. Defaults to 30 seconds.</param>
+    /// <returns>A task that completes when the desired leadership state is reached.</returns>
+    /// <exception cref="ArgumentNullException">Thrown if <paramref name="leaderElection"/> is null.</exception>
+    /// <exception cref="InvalidOperationException">Thrown if the leader election instance is not currently the leader.</exception>
+    /// <exception cref="TimeoutException">Thrown if the operation does not complete within the specified timeout.</exception>
+    /// <exception cref="OperationCanceledException">Thrown if the operation is canceled via the <see cref="CancellationToken"/>.</exception>
+    protected async Task WaitForLeadershipChange(
         ILeaderElection leaderElection,
         bool expectedLeadership,
-        TimeSpan timeout = default
+        TimeSpan? timeout = default
     )
     {
-        if (timeout == TimeSpan.Zero)
-            timeout = TimeSpan.FromSeconds(30);
+        timeout ??= TimeSpan.FromSeconds(30);
 
-        var tcs = new TaskCompletionSource<bool>();
+        ArgumentNullException.ThrowIfNull(leaderElection);
+        if (!leaderElection.LeaderLoopRunning)
+        {
+            throw new InvalidOperationException("Leader loop is not running.");
+        }
+
+        if (leaderElection.IsLeader == expectedLeadership)
+        {
+            return; // Already in expected state, no need to wait
+        }
+
+        var tcs = new TaskCompletionSource();
 
         void Handler(object? sender, LeadershipChangedEventArgs leadership)
         {
             if (leadership.IsLeader == expectedLeadership)
             {
-                tcs.TrySetResult(true);
+                tcs.SetResult();
             }
         }
 
-        Debug.Assert(leaderElection != null, nameof(leaderElection) + " != null");
         leaderElection.LeadershipChanged += Handler;
         try
         {
-            // Check if already in the expected state
+            // Now that we've hooked up the event handler, check if already
+            // in the expected state...
             if (leaderElection.IsLeader == expectedLeadership)
             {
-                tcs.TrySetResult(true);
+                return; // Already in expected state, no need to wait
             }
 
-            using var timeoutCts = new CancellationTokenSource(timeout);
-            using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(
-                timeoutCts.Token,
-                CancellationToken
-            );
-            linkedCts.Token.Register(() => tcs.TrySetCanceled());
-
-            await tcs.Task;
+            await tcs.Task.WaitAsync(timeout.Value, TimeProvider, CancellationToken);
         }
         finally
         {
@@ -62,32 +100,39 @@ public abstract class TestBase
         }
     }
 
-    protected static async Task WaitForError(
+    /// <summary>
+    /// Waits for an error to be raised by the leader election instance.
+    /// </summary>
+    /// <param name="leaderElection">The leader election instance to monitor for errors.</param>
+    /// <param name="timeout">The maximum time to wait for an error. Defaults to 30 seconds.</param>
+    /// <returns>The <see cref="Exception"/> raised by the leader election instance if an error
+    /// occurs within the timeout period.</returns>
+    /// <exception cref="ArgumentNullException">Thrown if <paramref name="leaderElection"/> is null.</exception>
+    /// <exception cref="InvalidOperationException">Thrown if the leader election instance is not currently the leader.</exception>
+    /// <exception cref="TimeoutException">Thrown if the operation does not complete within the specified timeout.</exception>
+    /// <exception cref="OperationCanceledException">Thrown if the operation is canceled via the <see cref="CancellationToken"/>.</exception>
+    protected async Task<Exception> WaitForError(
         ILeaderElection leaderElection,
-        TimeSpan timeout = default
+        TimeSpan? timeout = default
     )
     {
-        if (timeout == TimeSpan.Zero)
-            timeout = TimeSpan.FromSeconds(30);
+        timeout ??= TimeSpan.FromSeconds(30);
+
+        ArgumentNullException.ThrowIfNull(leaderElection);
+        if (!leaderElection.LeaderLoopRunning)
+        {
+            throw new InvalidOperationException("Leader loop is not running.");
+        }
 
         var tcs = new TaskCompletionSource<Exception>();
 
         void Handler(object? sender, LeadershipExceptionEventArgs args) =>
             tcs.TrySetResult(args.LeadershipException);
 
-        Debug.Assert(leaderElection != null, nameof(leaderElection) + " != null");
         leaderElection.ErrorOccurred += Handler;
-
         try
         {
-            using var timeoutCts = new CancellationTokenSource(timeout);
-            using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(
-                timeoutCts.Token,
-                CancellationToken
-            );
-            linkedCts.Token.Register(() => tcs.TrySetCanceled());
-
-            await tcs.Task;
+            return await tcs.Task.WaitAsync(timeout.Value, TimeProvider, CancellationToken);
         }
         finally
         {
@@ -109,9 +154,13 @@ public abstract class TestBase
     /// also return false.
     /// </remarks>
     /// <param name="leaderElection">The leader election instance to monitor.</param>
-    /// <param name="timeout">The maximum time to wait for a renewal.</param>
-    /// <param name="pollInterval">The interval at which to check for leadership renewal.</param>
+    /// <param name="timeout">The maximum time to wait for a renewal. Defaults to 30 seconds.</param>
+    /// <param name="pollInterval">The interval at which to check for leadership renewal. Defaults to 100ms.</param>
     /// <returns>True if a renewal was observed within the timeout period; otherwise, false.</returns>
+    /// <exception cref="ArgumentNullException">Thrown if <paramref name="leaderElection"/> is null.</exception>
+    /// <exception cref="InvalidOperationException">Thrown if the leader election instance is not currently the leader.</exception>
+    /// <exception cref="TimeoutException">Thrown if the operation does not complete within the specified timeout.</exception>
+    /// <exception cref="OperationCanceledException">Thrown if the operation is canceled via the <see cref="CancellationToken"/>.</exception>
     protected async Task<bool> WaitForLeadershipRenewal(
         ILeaderElection leaderElection,
         TimeSpan? timeout = null,
@@ -119,16 +168,21 @@ public abstract class TestBase
     )
     {
         timeout ??= TimeSpan.FromSeconds(30);
-        pollInterval ??= TimeSpan.FromMilliseconds(50);
+        pollInterval ??= TimeSpan.FromMilliseconds(100);
 
-        Debug.Assert(leaderElection != null, nameof(leaderElection) + " != null");
-        leaderElection.IsLeader.Should().BeTrue("Expected to be leader before waiting for renewal");
+        ArgumentNullException.ThrowIfNull(leaderElection);
+
         var lastKnownRenewal = leaderElection.LastLeadershipRenewal;
+        if (!leaderElection.IsLeader)
+        {
+            throw new InvalidOperationException("Expected to be leader before waiting for renewal");
+        }
+        lastKnownRenewal.Should().BeAfter(DateTime.MinValue);
 
         var stopTime = TimeProvider.GetUtcNow() + timeout.Value;
         while (TimeProvider.GetUtcNow() < stopTime)
         {
-            await TimeProvider.Delay(pollInterval.Value, CancellationToken);
+            await AdvanceTime(pollInterval.Value);
 
             if (!leaderElection.IsLeader)
             {
@@ -141,7 +195,10 @@ public abstract class TestBase
             }
         }
 
-        return false; // Timeout reached without observing renewal
+        // Timeout reached without observing renewal
+        throw new TimeoutException(
+            $"Did not observe leadership renewal within the expected timeout of {timeout.Value}."
+        );
     }
 
     protected async Task TestShouldRetainLeadershipAfterAtLeastOneRenewalCycle(
@@ -149,15 +206,16 @@ public abstract class TestBase
         LeaderElectionSettingsBase settings
     )
     {
+        ArgumentNullException.ThrowIfNull(leaderElection);
+        ArgumentNullException.ThrowIfNull(settings);
+
         // Act
-        Debug.Assert(leaderElection != null, nameof(leaderElection) + " != null");
         await leaderElection.StartAsync(CancellationToken);
         await WaitForLeadershipChange(leaderElection, true);
 
-        Debug.Assert(settings != null, nameof(settings) + " != null");
         var renewalObserved = await WaitForLeadershipRenewal(
             leaderElection,
-            settings.RenewInterval + TimeSpan.FromSeconds(0.5) // Add a buffer to avoid timing issues
+            settings.RenewInterval * 2 // double to avoid timing issues
         );
 
         // Assert
