@@ -139,7 +139,7 @@ public sealed partial class S3LeaderElection : LeaderElectionBase<S3Settings>
             // This should not normally happen since the lease record should only be
             // modified by the current holder, but we handle it just in case.
             LogFailureRenewingLease(
-                LogLevel.Information,
+                LogLevel.Warning,
                 _settings.BucketName,
                 _settings.ObjectKey,
                 "ETag mismatch, likely due to another instance acquiring leadership concurrently."
@@ -196,8 +196,10 @@ public sealed partial class S3LeaderElection : LeaderElectionBase<S3Settings>
         }
         catch (ObjectNotFoundException)
         {
+            // this is unexpected since we should own the lease.
+            // Log as a warning and give up our leadership.
             LogFailureReleasingLease(
-                LogLevel.Information,
+                LogLevel.Warning,
                 _settings.BucketName,
                 _settings.ObjectKey,
                 "Object not found, likely deleted."
@@ -205,9 +207,10 @@ public sealed partial class S3LeaderElection : LeaderElectionBase<S3Settings>
         }
         catch (PreconditionFailedException)
         {
-            // This should not normally happen, but not a problem if it does.
+            // this is unexpected since we should own the lease.
+            // Log as a warning and give up our leadership.
             LogFailureReleasingLease(
-                LogLevel.Information,
+                LogLevel.Warning,
                 _settings.BucketName,
                 _settings.ObjectKey,
                 "ETag mismatch, likely due to another instance acquiring leadership concurrently."
