@@ -73,6 +73,11 @@ public static class RedisServiceBuilderExtensions
             RedisSettingsValidator
         >(serviceKey);
 
+        // Register a factory for creating and disposing a Redis connection multiplexer
+        // when the host/port settings are used. This is needed to ensure the connection
+        // multiplexer is disposed.
+        services.AddTransient<ConnectionMultiplexerCreator>();
+
         // Register the RedisLeaderElection as a keyed singleton. The factory
         // creates a new instance of the RedisLeaderElection for each unique
         // service key, using the corresponding settings and Redis connection multiplexer.
@@ -81,12 +86,30 @@ public static class RedisServiceBuilderExtensions
             serviceKey,
             static (sp, key) =>
             {
-                // get keyed settings
+                // get settings
                 var settings = sp.GetRequiredService<IOptionsMonitor<RedisSettings>>()
                     .Get(key as string);
 
+                // Note: We must resolve the connection multiplexer here. If we don't do it now
+                // and the factory resolves it from DI, then the connection multiplexer will be
+                // disposed before the LeaderElection resulting in a crash.
+                var connectionMultiplexer =
+                    (
+                        settings.ConnectionMultiplexerFactory
+                        ?? throw new InvalidOperationException(
+                            "ConnectionMultiplexerFactory must be specified in settings."
+                        )
+                    ).Invoke(settings)
+                    ?? throw new InvalidOperationException(
+                        "ConnectionMultiplexerFactory returned null."
+                    );
+
                 // create a new instance...
-                return ActivatorUtilities.CreateInstance<RedisLeaderElection>(sp, settings);
+                return ActivatorUtilities.CreateInstance<RedisLeaderElection>(
+                    sp,
+                    settings,
+                    connectionMultiplexer
+                );
             }
         );
 
@@ -103,11 +126,8 @@ public static class RedisServiceBuilderExtensions
         optionsBuilder.PostConfigure<IServiceProvider>(
             (opts, sp) =>
             {
-                if (string.IsNullOrWhiteSpace(opts.Host))
-                {
-                    opts.ConnectionMultiplexerFactory ??= (_, _) =>
-                        Task.FromResult(GetConnectionMultiplexer(sp, serviceKey));
-                }
+                opts.ConnectionMultiplexerFactory ??= settings =>
+                    GetDefaultConnectionMultiplexer(settings, sp, serviceKey);
             }
         );
 
@@ -217,22 +237,23 @@ public static class RedisServiceBuilderExtensions
     public static ServiceBuilder WithRegisteredCache(this ServiceBuilder builder) =>
         builder.WithSettings(
             (opts, sp, key) =>
-                opts.ConnectionMultiplexerFactory = (_, _) =>
-                    Task.FromResult(GetConnectionMultiplexer(sp, key))
+                opts.ConnectionMultiplexerFactory = _ => GetRegisteredConnectionMultiplexer(sp, key)
         );
 
     /// <summary>
     /// Specifies the connection multiplexer factory to use with the Leader Election.
     /// </summary>
+    /// <remarks>
+    /// This caller is responsible for ensuring the connection multiplexer is properly
+    /// disposed since it will be resolved from the factory and not tracked by the DI container.
+    /// </remarks>
     public static ServiceBuilder WithConnectionMultiplexer(
         this ServiceBuilder builder,
         IConnectionMultiplexer connectionMultiplexer
     )
     {
         ArgumentNullException.ThrowIfNull(connectionMultiplexer);
-        return builder.WithConnectionMultiplexerFactory(
-            (_, _, _) => Task.FromResult(connectionMultiplexer)
-        );
+        return builder.WithConnectionMultiplexerFactory((_, _) => connectionMultiplexer);
     }
 
     /// <summary>
@@ -240,22 +261,63 @@ public static class RedisServiceBuilderExtensions
     /// </summary>
     public static ServiceBuilder WithConnectionMultiplexerFactory(
         this ServiceBuilder builder,
-        Func<
-            IServiceProvider,
-            RedisSettings,
-            CancellationToken,
-            Task<IConnectionMultiplexer>
-        > factoryFunc
+        Func<IServiceProvider, RedisSettings, IConnectionMultiplexer> factoryFunc
     )
     {
         ArgumentNullException.ThrowIfNull(factoryFunc);
         return builder.WithSettings(
             (opts, sp, _) =>
-                opts.ConnectionMultiplexerFactory = (settings, ct) => factoryFunc(sp, settings, ct)
+                opts.ConnectionMultiplexerFactory = settings => factoryFunc(sp, settings)
         );
     }
 
-    private static IConnectionMultiplexer GetConnectionMultiplexer(
+    // A private class used to create and dispose a Redis connection multiplexer when the
+    // host/port settings are used.
+    private class ConnectionMultiplexerCreator : IDisposable
+    {
+        public ConnectionMultiplexer? _connectionMultiplexer;
+
+        public ConnectionMultiplexer CreateMultiplexer(RedisSettings settings)
+        {
+            ArgumentNullException.ThrowIfNull(settings);
+            if (string.IsNullOrWhiteSpace(settings.Host))
+            {
+                throw new InvalidOperationException(
+                    "Host must be specified in settings to use the default ConnectionMultiplexer factory."
+                );
+            }
+
+            _connectionMultiplexer = ConnectionMultiplexer.Connect(
+                new ConfigurationOptions
+                {
+                    EndPoints = { { settings.Host, settings.Port } },
+                    Password = settings.Password,
+                    DefaultDatabase = settings.Database,
+                }
+            );
+            return _connectionMultiplexer;
+        }
+
+        public void Dispose() => _connectionMultiplexer?.Dispose();
+    }
+
+    private static IConnectionMultiplexer GetDefaultConnectionMultiplexer(
+        RedisSettings settings,
+        IServiceProvider sp,
+        string? serviceKey
+    )
+    {
+        // If host is specified, use the default factory which creates a new connection multiplexer
+        if (!string.IsNullOrWhiteSpace(settings.Host))
+        {
+            return sp.GetRequiredService<ConnectionMultiplexerCreator>()
+                .CreateMultiplexer(settings);
+        }
+
+        return GetRegisteredConnectionMultiplexer(sp, serviceKey);
+    }
+
+    private static IConnectionMultiplexer GetRegisteredConnectionMultiplexer(
         IServiceProvider sp,
         string? serviceKey
     ) =>

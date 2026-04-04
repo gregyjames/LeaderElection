@@ -14,22 +14,14 @@ public sealed partial class S3LeaderElection : LeaderElectionBase<S3Settings>
 
     public S3LeaderElection(
         S3Settings settings,
+        IMinioClient client,
         ILogger<S3LeaderElection>? logger = null,
         TimeProvider? timeProvider = null
     )
         : base(settings ?? throw new ArgumentNullException(nameof(settings)), logger, timeProvider)
     {
-        if (_settings.MinioClientFactory == null)
-        {
-            throw new ArgumentException(
-                "MinioClientFactory must be provided in S3Settings.",
-                nameof(settings)
-            );
-        }
-
-        _client =
-            _settings.MinioClientFactory(_settings)
-            ?? throw new InvalidOperationException("MinioClientFactory returned null.");
+        ArgumentNullException.ThrowIfNull(client);
+        _client = client;
     }
 
     protected override async Task<bool> TryAcquireLeadershipInternalAsync(

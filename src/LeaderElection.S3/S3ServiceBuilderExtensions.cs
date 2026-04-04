@@ -70,11 +70,27 @@ public static class S3ServiceBuilderExtensions
             serviceKey,
             static (sp, key) =>
             {
-                // get keyed settings
+                // get settings
                 var settings = sp.GetRequiredService<IOptionsSnapshot<S3Settings>>()
                     .Get(key as string);
 
-                return ActivatorUtilities.CreateInstance<S3LeaderElection>(sp, settings);
+                // Note: We must resolve the Minio client here. If we don't do it now
+                // and the factory resolves it from DI, then the Minio client (or its dependencies)
+                // may be disposed before the LeaderElection resulting in a crash.
+                var minioClient =
+                    (
+                        settings.MinioClientFactory
+                        ?? throw new InvalidOperationException(
+                            "MinioClientFactory must be specified in settings."
+                        )
+                    ).Invoke(settings)
+                    ?? throw new InvalidOperationException("MinioClientFactory returned null.");
+
+                return ActivatorUtilities.CreateInstance<S3LeaderElection>(
+                    sp,
+                    settings,
+                    minioClient
+                );
             }
         );
 
@@ -90,7 +106,7 @@ public static class S3ServiceBuilderExtensions
         // Ensure the MinioClientFactory is set. If not, configure
         // it using DI, first trying to resolve a keyed instance.
         optionsBuilder.PostConfigure<IServiceProvider>(
-            (opts, sp) => opts.MinioClientFactory ??= _ => GetMinioClient(serviceKey, sp)
+            (opts, sp) => opts.MinioClientFactory ??= _ => GetRegisteredMinioClient(sp, serviceKey)
         );
 
         return services;
@@ -228,11 +244,11 @@ public static class S3ServiceBuilderExtensions
     {
         return builder.WithSettings(
             static (opts, sp, serviceKey) =>
-                opts.MinioClientFactory = _ => GetMinioClient(serviceKey, sp)
+                opts.MinioClientFactory = _ => GetRegisteredMinioClient(sp, serviceKey)
         );
     }
 
-    private static IMinioClient GetMinioClient(string? serviceKey, IServiceProvider sp)
+    private static IMinioClient GetRegisteredMinioClient(IServiceProvider sp, string? serviceKey)
     {
         return sp.GetKeyedService<IMinioClient>(serviceKey)
             ?? sp.GetRequiredService<IMinioClient>();

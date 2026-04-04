@@ -6,33 +6,37 @@ using Npgsql;
 
 public sealed partial class PostgresLeaderElection : LeaderElectionBase<PostgresSettings>
 {
-    private NpgsqlConnection? _activeConnection;
+    private readonly NpgsqlConnection _connection;
+    private bool _ownsLock;
 
     public PostgresLeaderElection(
         PostgresSettings options,
+        NpgsqlConnection connection,
         ILogger<PostgresLeaderElection>? logger = null,
         TimeProvider? timeProvider = null
     )
         : base(options ?? throw new ArgumentNullException(nameof(options)), logger, timeProvider)
-    { }
+    {
+        ArgumentNullException.ThrowIfNull(connection);
+        _connection = connection;
+    }
 
     protected override async Task<bool> TryAcquireLeadershipInternalAsync(
         CancellationToken cancellationToken
     )
     {
-        if (_activeConnection != null)
+        if (_ownsLock)
         {
             LogLockAlreadyAcquired(_settings.LockId);
             return false;
         }
 
         var success = false;
-        var connection = GetConnection();
         try
         {
-            await connection.OpenAsync(cancellationToken).ConfigureAwait(false);
+            await _connection.OpenAsync(cancellationToken).ConfigureAwait(false);
 
-            using var cmd = new NpgsqlCommand("SELECT pg_try_advisory_lock(@LockId);", connection);
+            using var cmd = new NpgsqlCommand("SELECT pg_try_advisory_lock(@LockId);", _connection);
             cmd.Parameters.AddWithValue("LockId", _settings.LockId);
 
             var acquired =
@@ -42,7 +46,7 @@ public sealed partial class PostgresLeaderElection : LeaderElectionBase<Postgres
             if (acquired)
             {
                 success = true;
-                _activeConnection = connection;
+                _ownsLock = true;
                 LogAcquiredLock(_settings.LockId, _settings.InstanceId);
             }
             else
@@ -72,7 +76,8 @@ public sealed partial class PostgresLeaderElection : LeaderElectionBase<Postgres
         {
             if (!success)
             {
-                await connection.DisposeAsync().ConfigureAwait(false);
+                // assume we lost the lock. Abandon it to clean up our state
+                await AbandonLockAsync().ConfigureAwait(false);
             }
         }
 
@@ -83,7 +88,7 @@ public sealed partial class PostgresLeaderElection : LeaderElectionBase<Postgres
         CancellationToken cancellationToken
     )
     {
-        if (_activeConnection == null)
+        if (!_ownsLock)
         {
             LogNoActiveLockToRenew();
             return false;
@@ -93,7 +98,7 @@ public sealed partial class PostgresLeaderElection : LeaderElectionBase<Postgres
         try
         {
             // The advisory lock is held as long as the connection is open; this is just a heartbeat.
-            using var cmd = new NpgsqlCommand("SELECT 1;", _activeConnection);
+            using var cmd = new NpgsqlCommand("SELECT 1;", _connection);
             await cmd.ExecuteScalarAsync(cancellationToken).ConfigureAwait(false);
 
             success = true;
@@ -101,8 +106,10 @@ public sealed partial class PostgresLeaderElection : LeaderElectionBase<Postgres
         }
         catch (PostgresException ex)
         {
+            // this is unexpected since we should have the lock.
+            // Log as a warning and give up our leadership.
             LogFailureRenewingLock(
-                LogLevel.Information,
+                LogLevel.Warning,
                 ex,
                 _settings.LockId,
                 ex.SqlState + ": " + ex.MessageText
@@ -110,15 +117,14 @@ public sealed partial class PostgresLeaderElection : LeaderElectionBase<Postgres
         }
         catch (NpgsqlException ex)
         {
-            LogFailureRenewingLock(LogLevel.Information, ex, _settings.LockId, ex.Message);
+            LogFailureRenewingLock(LogLevel.Error, ex, _settings.LockId, ex.Message);
         }
         finally
         {
             if (!success)
             {
-                // Dispose the connection to release the lock if we failed to renew it
-                await _activeConnection.DisposeAsync().ConfigureAwait(false);
-                _activeConnection = null;
+                // assume we lost the lock. Abandon it to clean up our state
+                await AbandonLockAsync().ConfigureAwait(false);
             }
         }
 
@@ -127,7 +133,7 @@ public sealed partial class PostgresLeaderElection : LeaderElectionBase<Postgres
 
     protected override async Task ReleaseLeadershipAsync()
     {
-        if (_activeConnection == null)
+        if (!_ownsLock)
         {
             LogNoActiveLockToRelease();
             return;
@@ -135,11 +141,11 @@ public sealed partial class PostgresLeaderElection : LeaderElectionBase<Postgres
 
         try
         {
-            if (_activeConnection.State == ConnectionState.Open)
+            if (_connection.State == ConnectionState.Open)
             {
                 using var cmd = new NpgsqlCommand(
                     "SELECT pg_advisory_unlock(@LockId);",
-                    _activeConnection
+                    _connection
                 );
                 cmd.Parameters.AddWithValue("LockId", _settings.LockId);
                 await cmd.ExecuteScalarAsync(default).ConfigureAwait(false);
@@ -162,45 +168,16 @@ public sealed partial class PostgresLeaderElection : LeaderElectionBase<Postgres
         }
         finally
         {
-            // Dispose the connection to ensure the lock is released even if the unlock
-            // command failed.
-            await _activeConnection.DisposeAsync().ConfigureAwait(false);
-            _activeConnection = null;
+            // always assume we lost the lock, even if there was an error
+            // releasing it in Postgres.
+            await AbandonLockAsync().ConfigureAwait(false);
         }
     }
 
-    protected override async ValueTask DisposeAsyncCore()
+    async Task AbandonLockAsync()
     {
-        await base.DisposeAsyncCore().ConfigureAwait(false);
-
-        if (_activeConnection != null)
-        {
-            await _activeConnection.DisposeAsync().ConfigureAwait(false);
-            _activeConnection = null;
-        }
-    }
-
-    private NpgsqlConnection GetConnection()
-    {
-        if (_settings.ConnectionFactory != null)
-        {
-            if (!string.IsNullOrWhiteSpace(_settings.ConnectionString))
-            {
-                LogIgnoringConnectionStringBecauseFactoryIsSet();
-            }
-
-            return _settings.ConnectionFactory(_settings)
-                ?? throw new InvalidOperationException("ConnectionFactory returned null.");
-        }
-
-        if (!string.IsNullOrWhiteSpace(_settings.ConnectionString))
-        {
-            return new NpgsqlConnection(_settings.ConnectionString);
-        }
-
-        throw new InvalidOperationException(
-            "Either ConnectionFactory must be provided or ConnectionString must be non-empty."
-        );
+        _ownsLock = false;
+        await _connection.CloseAsync().ConfigureAwait(false);
     }
 
     [LoggerMessage(LogLevel.Information, "Lock already acquired: {lockId}.")]
@@ -244,7 +221,4 @@ public sealed partial class PostgresLeaderElection : LeaderElectionBase<Postgres
         long lockId,
         string reason
     );
-
-    [LoggerMessage(LogLevel.Warning, "Ignoring ConnectionString because ConnectionFactory is set.")]
-    partial void LogIgnoringConnectionStringBecauseFactoryIsSet();
 }
