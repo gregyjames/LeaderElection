@@ -106,7 +106,7 @@ public static class BlobStorageServiceBuilderExtensions
             serviceKey,
             static (sp, key) =>
             {
-                // get [keyed] settings
+                // get settings
                 var settings = sp.GetRequiredService<IOptionsSnapshot<BlobStorageSettings>>()
                     .Get(key as string);
 

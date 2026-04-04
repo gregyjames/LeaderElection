@@ -66,14 +66,27 @@ public static class DistributedCacheServiceBuilderExtensions
             serviceKey,
             static (sp, key) =>
             {
-                // get keyed options
-                var options = sp.GetRequiredService<IOptionsMonitor<DistributedCacheSettings>>()
+                // get settings
+                var settings = sp.GetRequiredService<IOptionsMonitor<DistributedCacheSettings>>()
                     .Get(key as string);
+
+                // Note: We must resolve the cache here. If we don't do it now
+                // and the factory resolves it from DI, then the cache (or its dependencies)
+                // may be disposed before the LeaderElection resulting in a crash.
+                var cache =
+                    (
+                        settings.CacheFactory
+                        ?? throw new InvalidOperationException(
+                            "CacheFactory must be specified in settings."
+                        )
+                    ).Invoke(settings)
+                    ?? throw new InvalidOperationException("CacheFactory returned null.");
 
                 // create instance
                 return ActivatorUtilities.CreateInstance<DistributedCacheLeaderElection>(
                     sp,
-                    options
+                    settings,
+                    cache
                 );
             }
         );

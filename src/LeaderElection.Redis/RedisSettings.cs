@@ -71,11 +71,7 @@ public class RedisSettings : LeaderElectionSettingsBase
     /// If neither <see cref="ConnectionMultiplexerFactory"/> nor <see cref="Host"/>
     /// are set, the leader election will resolve a ConnectionMultiplexer from the DI container.
     /// </summary>
-    public Func<
-        RedisSettings,
-        CancellationToken,
-        Task<IConnectionMultiplexer>
-    >? ConnectionMultiplexerFactory { get; set; }
+    public Func<RedisSettings, IConnectionMultiplexer>? ConnectionMultiplexerFactory { get; set; }
 
     /// <summary>
     /// Copies the Redis settings from the source to the destination.

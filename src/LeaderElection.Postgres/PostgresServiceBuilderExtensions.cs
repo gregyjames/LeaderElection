@@ -58,16 +58,34 @@ public static class PostgresServiceBuilderExtensions
             PostgresSettingsValidator
         >(serviceKey);
 
+        services.AddTransient<ConnectionCreator>();
+
         services.AddKeyedSingleton<PostgresLeaderElection>(
             serviceKey,
             static (sp, key) =>
             {
-                // get options
-                var options = sp.GetRequiredService<IOptionsMonitor<PostgresSettings>>()
+                // get settings
+                var settings = sp.GetRequiredService<IOptionsMonitor<PostgresSettings>>()
                     .Get(key as string);
 
+                // Note: We must resolve the connection here. If we don't do it now
+                // and the factory resolves it from DI, then the connection (or its dependencies)
+                // may be disposed before the LeaderElection resulting in a crash.
+                var connection =
+                    (
+                        settings.ConnectionFactory
+                        ?? throw new InvalidOperationException(
+                            "ConnectionFactory must be specified in settings."
+                        )
+                    ).Invoke(settings)
+                    ?? throw new InvalidOperationException("ConnectionFactory returned null.");
+
                 // create instance
-                return ActivatorUtilities.CreateInstance<PostgresLeaderElection>(sp, options);
+                return ActivatorUtilities.CreateInstance<PostgresLeaderElection>(
+                    sp,
+                    settings,
+                    connection
+                );
             }
         );
 
@@ -81,12 +99,18 @@ public static class PostgresServiceBuilderExtensions
         // resolve the connection from DI if a ConnectionFactory or ConnectionString is not set
         configBuilder.PostConfigure<IServiceProvider>(
             (opts, sp) =>
-            {
-                if (opts.ConnectionFactory is null && string.IsNullOrEmpty(opts.ConnectionString))
+                opts.ConnectionFactory ??= settings =>
                 {
-                    opts.ConnectionFactory = _ => GetRegisteredConnection(sp, serviceKey);
+                    // If a ConnectionString is provided, use the default factory which creates
+                    // and disposes the connection for each instance.
+                    if (!string.IsNullOrEmpty(settings.ConnectionString))
+                    {
+                        return sp.GetRequiredService<ConnectionCreator>()
+                            .CreateConnection(settings);
+                    }
+
+                    return GetRegisteredConnection(sp, serviceKey);
                 }
-            }
         );
 
         return services;
@@ -172,18 +196,6 @@ public static class PostgresServiceBuilderExtensions
     }
 
     /// <summary>
-    /// Configures the leader election to use the specified connection factory.
-    /// </summary>
-    public static ServiceBuilder WithConnectionFactory(
-        this ServiceBuilder builder,
-        Func<PostgresSettings, NpgsqlConnection> connectionFactory
-    )
-    {
-        ArgumentNullException.ThrowIfNull(connectionFactory);
-        return builder.WithSettings(opts => opts.ConnectionFactory = connectionFactory);
-    }
-
-    /// <summary>
     /// Configures the leader election settings using a configuration action which receives
     /// the service provider and the optional service key.
     /// </summary>
@@ -213,5 +225,28 @@ public static class PostgresServiceBuilderExtensions
     {
         return sp.GetKeyedService<NpgsqlConnection>(serviceKey)
             ?? sp.GetRequiredService<NpgsqlConnection>();
+    }
+
+    // A private class used to create and dispose a connection when the
+    // connection string settings are used.
+    private class ConnectionCreator : IAsyncDisposable
+    {
+        public NpgsqlConnection? _connection;
+
+        public NpgsqlConnection CreateConnection(PostgresSettings settings)
+        {
+            ArgumentNullException.ThrowIfNull(settings);
+            if (string.IsNullOrWhiteSpace(settings.ConnectionString))
+            {
+                throw new InvalidOperationException(
+                    "ConnectionString must be specified in settings to use the default Connection factory."
+                );
+            }
+
+            _connection = new NpgsqlConnection(settings.ConnectionString);
+            return _connection;
+        }
+
+        public ValueTask DisposeAsync() => _connection?.DisposeAsync() ?? new ValueTask();
     }
 }

@@ -40,6 +40,8 @@ public sealed class RedisServiceBuilderExtensionsTests
         // Assert
         var actualSettings = sp.GetRequiredService<IOptionsMonitor<RedisSettings>>()
             .Get(serviceKey);
+        actualSettings.ConnectionMultiplexerFactory.Should().NotBeNull();
+        actualSettings.ConnectionMultiplexerFactory = null;
         actualSettings.Should().BeEquivalentTo(settings);
     }
 
@@ -88,6 +90,8 @@ public sealed class RedisServiceBuilderExtensionsTests
         // Assert
         var actualSettings = sp.GetRequiredService<IOptionsSnapshot<RedisSettings>>()
             .Get(serviceKey);
+        actualSettings.ConnectionMultiplexerFactory.Should().NotBeNull();
+        actualSettings.ConnectionMultiplexerFactory = null;
         actualSettings.Should().BeEquivalentTo(settings);
     }
 
@@ -118,10 +122,7 @@ public sealed class RedisServiceBuilderExtensionsTests
         // Assert
         var options = sp.GetRequiredService<IOptionsMonitor<RedisSettings>>().Get(serviceKey);
         options.ConnectionMultiplexerFactory.Should().NotBeNull();
-        var actualCM = await options.ConnectionMultiplexerFactory(
-            noHostSettings,
-            TestContext.Current.CancellationToken
-        );
+        var actualCM = options.ConnectionMultiplexerFactory(noHostSettings);
         actualCM.Should().BeSameAs(mockCM);
 
         var leaderElection = sp.GetRequiredKeyedService<RedisLeaderElection>(serviceKey);
@@ -156,15 +157,12 @@ public sealed class RedisServiceBuilderExtensionsTests
         // Assert
         var options = sp.GetRequiredService<IOptionsMonitor<RedisSettings>>().Get(serviceKey);
         options.ConnectionMultiplexerFactory.Should().NotBeNull();
-        var actualCM = await options.ConnectionMultiplexerFactory(
-            settings,
-            TestContext.Current.CancellationToken
-        );
+        var actualCM = options.ConnectionMultiplexerFactory(settings);
         actualCM.Should().BeSameAs(mockCM);
     }
 
     [Fact]
-    public async Task ShouldNotSetDefaultConnectionMultiplexerFactoryWhenHostIsSpecified()
+    public async Task ShouldSetDefaultConnectionMultiplexerFactoryWhenHostIsSpecified()
     {
         // Arrange
         settings.Host.Should().NotBeNullOrWhiteSpace();
@@ -177,7 +175,7 @@ public sealed class RedisServiceBuilderExtensionsTests
 
         // Assert
         var options = sp.GetRequiredService<IOptions<RedisSettings>>().Value;
-        options.ConnectionMultiplexerFactory.Should().BeNull();
+        options.ConnectionMultiplexerFactory.Should().NotBeNull();
     }
 
     [Theory]
@@ -200,10 +198,7 @@ public sealed class RedisServiceBuilderExtensionsTests
         // Assert
         var options = sp.GetRequiredService<IOptionsMonitor<RedisSettings>>().Get(serviceKey);
         options.ConnectionMultiplexerFactory.Should().NotBeNull();
-        var actualCM = await options.ConnectionMultiplexerFactory(
-            settings,
-            TestContext.Current.CancellationToken
-        );
+        var actualCM = options.ConnectionMultiplexerFactory(settings);
         actualCM.Should().BeSameAs(mockCM);
 
         var leaderElection = sp.GetRequiredKeyedService<RedisLeaderElection>(serviceKey);
@@ -223,8 +218,7 @@ public sealed class RedisServiceBuilderExtensionsTests
         await using var sp = new ServiceCollection()
             .AddLogging()
             .AddRedisLeaderElection(
-                builder =>
-                    builder.WithConnectionMultiplexerFactory((_, _, _) => Task.FromResult(mockCM)),
+                builder => builder.WithConnectionMultiplexerFactory((_, _) => mockCM),
                 serviceKey
             )
             .BuildServiceProvider();
@@ -233,10 +227,7 @@ public sealed class RedisServiceBuilderExtensionsTests
         // Assert
         var options = sp.GetRequiredService<IOptionsMonitor<RedisSettings>>().Get(serviceKey);
         options.ConnectionMultiplexerFactory.Should().NotBeNull();
-        var actualCM = await options.ConnectionMultiplexerFactory(
-            settings,
-            TestContext.Current.CancellationToken
-        );
+        var actualCM = options.ConnectionMultiplexerFactory(settings);
         actualCM.Should().BeSameAs(mockCM);
 
         var leaderElection = sp.GetRequiredKeyedService<RedisLeaderElection>(serviceKey);

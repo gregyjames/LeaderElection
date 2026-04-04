@@ -15,18 +15,14 @@ public partial class FusionCacheLeaderElection : LeaderElectionBase<FusionCacheS
 
     public FusionCacheLeaderElection(
         FusionCacheSettings settings,
+        IFusionCache cache,
         ILogger<FusionCacheLeaderElection>? logger = null,
         TimeProvider? timeProvider = null
     )
         : base(settings ?? throw new ArgumentNullException(nameof(settings)), logger, timeProvider)
     {
-        _ =
-            settings.CacheFactory
-            ?? throw new ArgumentException("CacheFactory must be provided.", nameof(settings));
-
-        _cache =
-            settings.CacheFactory.Invoke(settings)
-            ?? throw new InvalidOperationException("CacheFactory returned null.");
+        ArgumentNullException.ThrowIfNull(cache);
+        _cache = cache;
     }
 
     protected override async Task<bool> TryAcquireLeadershipInternalAsync(
