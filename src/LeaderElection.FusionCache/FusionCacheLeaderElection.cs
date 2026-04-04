@@ -143,6 +143,8 @@ public partial class FusionCacheLeaderElection : LeaderElectionBase<FusionCacheS
             }
             else
             {
+                // this is unexpected since we should own the lock.
+                // Log as a warning and give up our leadership.
                 LogFailureRenewingLock(
                     LogLevel.Warning,
                     _settings.LockKey,
@@ -152,7 +154,7 @@ public partial class FusionCacheLeaderElection : LeaderElectionBase<FusionCacheS
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
-            LogFailureRenewingLock(LogLevel.Warning, _settings.LockKey, ex.Message);
+            LogFailureRenewingLock(LogLevel.Error, _settings.LockKey, ex.Message);
         }
         finally
         {
@@ -195,26 +197,24 @@ public partial class FusionCacheLeaderElection : LeaderElectionBase<FusionCacheS
 
                 LogLockReleased(_settings.LockKey);
             }
-            else if (string.IsNullOrEmpty(currentOwner))
-            {
-                LogFailureReleasingLock(
-                    LogLevel.Information,
-                    _settings.LockKey,
-                    "Lock already expired."
-                );
-            }
             else
             {
+                // this is unexpected since we should own the lock, but since we cant
+                // verify ownership atomically, it's possible that another instance
+                // has legitimately already taken over the lock.
+                // Log as information and give up our leadership.
                 LogFailureReleasingLock(
                     LogLevel.Information,
                     _settings.LockKey,
-                    "Lock lost to another instance."
+                    string.IsNullOrEmpty(currentOwner)
+                        ? "Lock already expired."
+                        : "Lock lost to another instance."
                 );
             }
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
-            LogFailureReleasingLock(LogLevel.Warning, _settings.LockKey, ex.Message);
+            LogFailureReleasingLock(LogLevel.Error, _settings.LockKey, ex.Message);
         }
         finally
         {
