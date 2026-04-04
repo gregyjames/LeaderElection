@@ -96,11 +96,13 @@ public partial class BlobStorageLeaderElection : LeaderElectionBase<BlobStorageS
         }
         catch (Azure.RequestFailedException ex)
         {
+            // this is unexpected since we should own the lease.
+            // Log as a warning and give up our leadership.
             var logLevel = (HttpStatusCode)ex.Status switch
             {
-                HttpStatusCode.NotFound => LogLevel.Information, // blob deleted?
-                HttpStatusCode.Conflict => LogLevel.Information, // least broke/breaking
-                HttpStatusCode.PreconditionFailed => LogLevel.Information, // least lost
+                HttpStatusCode.NotFound => LogLevel.Warning, // blob deleted?
+                HttpStatusCode.Conflict => LogLevel.Warning, // lease broke/breaking
+                HttpStatusCode.PreconditionFailed => LogLevel.Warning, // lease lost
                 _ => LogLevel.Error,
             };
 
@@ -139,11 +141,13 @@ public partial class BlobStorageLeaderElection : LeaderElectionBase<BlobStorageS
         }
         catch (Azure.RequestFailedException ex)
         {
+            // this is unexpected since we should own the lease.
+            // Log as a warning and give up our leadership.
             var logLevel = (HttpStatusCode)ex.Status switch
             {
-                HttpStatusCode.NotFound => LogLevel.Information, // blob deleted?
-                HttpStatusCode.Conflict => LogLevel.Information, // least broke/breaking
-                HttpStatusCode.PreconditionFailed => LogLevel.Information, // least lost
+                HttpStatusCode.NotFound => LogLevel.Warning, // blob deleted?
+                HttpStatusCode.Conflict => LogLevel.Warning, // lease broke/breaking
+                HttpStatusCode.PreconditionFailed => LogLevel.Warning, // lease lost
                 _ => LogLevel.Error,
             };
 

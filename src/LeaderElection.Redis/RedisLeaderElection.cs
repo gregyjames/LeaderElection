@@ -173,7 +173,8 @@ public partial class RedisLeaderElection : LeaderElectionBase<RedisSettings>
     [LoggerMessage(LogLevel.Debug, "Lock renewed on {LockKey}.")]
     partial void LogLockRenewed(string lockKey);
 
-    [LoggerMessage(LogLevel.Information, "Failure renewing lock on {LockKey}.")]
+    // this is unexpected since we should have the lock. Log as a warning.
+    [LoggerMessage(LogLevel.Warning, "Failure renewing lock on {LockKey}.")]
     partial void LogFailureRenewingLock(string lockKey);
 
     [LoggerMessage(LogLevel.Error, "No lock to release.")]
@@ -182,6 +183,7 @@ public partial class RedisLeaderElection : LeaderElectionBase<RedisSettings>
     [LoggerMessage(LogLevel.Debug, "Lock released on {LockKey}.")]
     partial void LogLockReleased(string lockKey);
 
-    [LoggerMessage(LogLevel.Information, "Failure releasing lock on {LockKey}.")]
+    // this is unexpected since we should have the lock. Log as a warning.
+    [LoggerMessage(LogLevel.Warning, "Failure releasing lock on {LockKey}.")]
     partial void LogFailureReleasingLock(string lockKey);
 }

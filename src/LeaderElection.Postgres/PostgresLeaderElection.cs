@@ -155,8 +155,10 @@ public sealed partial class PostgresLeaderElection : LeaderElectionBase<Postgres
         }
         catch (PostgresException ex)
         {
+            // this is unexpected since we should have the lock.
+            // Log as a warning and give up our leadership.
             LogFailureReleasingLock(
-                LogLevel.Information,
+                LogLevel.Warning,
                 ex,
                 _settings.LockId,
                 ex.SqlState + ": " + ex.MessageText
@@ -164,7 +166,7 @@ public sealed partial class PostgresLeaderElection : LeaderElectionBase<Postgres
         }
         catch (NpgsqlException ex)
         {
-            LogFailureReleasingLock(LogLevel.Information, ex, _settings.LockId, ex.Message);
+            LogFailureReleasingLock(LogLevel.Error, ex, _settings.LockId, ex.Message);
         }
         finally
         {
