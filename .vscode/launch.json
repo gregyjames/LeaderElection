@@ -1,0 +1,80 @@
+{
+  // Use IntelliSense to learn about possible attributes.
+  // Hover to view descriptions of existing attributes.
+  // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Launch LeaderElectionTester (redis)",
+      "type": "coreclr",
+      "request": "launch",
+      "preLaunchTask": "build LeaderElectionTester.AppHost",
+      "program": "${workspaceFolder}/artifacts/bin/LeaderElectionTester.AppHost/debug/LeaderElectionTester.AppHost.dll",
+      "args": ["LeaderElectionType=redis"],
+      "cwd": "${workspaceFolder}/examples/LeaderElectionTester.AppHost",
+      "stopAtEntry": false,
+      "console": "integratedTerminal"
+      // "justMyCode": false
+    },
+    {
+      "name": "Launch LeaderElectionTester (distributed cache)",
+      "type": "coreclr",
+      "request": "launch",
+      "preLaunchTask": "build LeaderElectionTester.AppHost",
+      "program": "${workspaceFolder}/artifacts/bin/LeaderElectionTester.AppHost/debug/LeaderElectionTester.AppHost.dll",
+      "args": ["LeaderElectionType=distributedcache"],
+      "cwd": "${workspaceFolder}/examples/LeaderElectionTester.AppHost",
+      "stopAtEntry": false,
+      "console": "integratedTerminal"
+      // "justMyCode": false
+    },
+    {
+      "name": "Launch LeaderElectionTester (fusion cache)",
+      "type": "coreclr",
+      "request": "launch",
+      "preLaunchTask": "build LeaderElectionTester.AppHost",
+      "program": "${workspaceFolder}/artifacts/bin/LeaderElectionTester.AppHost/debug/LeaderElectionTester.AppHost.dll",
+      "args": ["LeaderElectionType=fusioncache"],
+      "cwd": "${workspaceFolder}/examples/LeaderElectionTester.AppHost",
+      "stopAtEntry": false,
+      "console": "integratedTerminal"
+      // "justMyCode": false
+    },
+    {
+      "name": "Launch LeaderElectionTester (blob storage)",
+      "type": "coreclr",
+      "request": "launch",
+      "preLaunchTask": "build LeaderElectionTester.AppHost",
+      "program": "${workspaceFolder}/artifacts/bin/LeaderElectionTester.AppHost/debug/LeaderElectionTester.AppHost.dll",
+      "args": ["LeaderElectionType=blobstorage"],
+      "cwd": "${workspaceFolder}/examples/LeaderElectionTester.AppHost",
+      "stopAtEntry": false,
+      "console": "integratedTerminal"
+      // "justMyCode": false
+    },
+    {
+      "name": "Launch LeaderElectionTester (s3)",
+      "type": "coreclr",
+      "request": "launch",
+      "preLaunchTask": "build LeaderElectionTester.AppHost",
+      "program": "${workspaceFolder}/artifacts/bin/LeaderElectionTester.AppHost/debug/LeaderElectionTester.AppHost.dll",
+      "args": ["LeaderElectionType=s3"],
+      "cwd": "${workspaceFolder}/examples/LeaderElectionTester.AppHost",
+      "stopAtEntry": false,
+      "console": "integratedTerminal"
+      // "justMyCode": false
+    },
+    {
+      "name": "Launch LeaderElectionTester (postgres)",
+      "type": "coreclr",
+      "request": "launch",
+      "preLaunchTask": "build LeaderElectionTester.AppHost",
+      "program": "${workspaceFolder}/artifacts/bin/LeaderElectionTester.AppHost/debug/LeaderElectionTester.AppHost.dll",
+      "args": ["LeaderElectionType=postgres"],
+      "cwd": "${workspaceFolder}/examples/LeaderElectionTester.AppHost",
+      "stopAtEntry": false,
+      "console": "integratedTerminal"
+      // "justMyCode": false
+    }
+  ]
+}
