@@ -10,15 +10,20 @@ namespace LeaderElection.Redis;
 /// </summary>
 public partial class RedisLeaderElection : LeaderElectionBase<RedisSettings>
 {
+    private readonly IConnectionMultiplexer _connectionMultiplexer;
     private IDatabase? _redis;
 
     public RedisLeaderElection(
         RedisSettings options,
+        IConnectionMultiplexer connectionMultiplexer,
         ILogger<RedisLeaderElection>? logger = null,
         TimeProvider? timeProvider = null
     )
         : base(options ?? throw new ArgumentNullException(nameof(options)), logger, timeProvider)
-    { }
+    {
+        ArgumentNullException.ThrowIfNull(connectionMultiplexer);
+        _connectionMultiplexer = connectionMultiplexer;
+    }
 
     protected override async Task<bool> TryAcquireLeadershipInternalAsync(
         CancellationToken cancellationToken
@@ -30,9 +35,7 @@ public partial class RedisLeaderElection : LeaderElectionBase<RedisSettings>
             return false;
         }
 
-        var connectionMultiplexer = await GetConnectionMultiplexer(cancellationToken)
-            .ConfigureAwait(false);
-        var redis = connectionMultiplexer.GetDatabase(_settings.Database);
+        var redis = _connectionMultiplexer.GetDatabase(_settings.Database);
 
         var success = await redis
             .StringSetAsync(
@@ -150,50 +153,10 @@ public partial class RedisLeaderElection : LeaderElectionBase<RedisSettings>
         }
     }
 
-    private async Task<IConnectionMultiplexer> GetConnectionMultiplexer(CancellationToken ct)
-    {
-        if (_settings.ConnectionMultiplexerFactory != null)
-        {
-            if (!string.IsNullOrWhiteSpace(_settings.Host))
-            {
-                LogIgnoringHostBecauseFactoryIsSet();
-            }
-
-            var multiplexer = await _settings
-                .ConnectionMultiplexerFactory(_settings, ct)
-                .ConfigureAwait(false);
-            return multiplexer
-                ?? throw new InvalidOperationException(
-                    "ConnectionMultiplexerFactory returned null."
-                );
-        }
-
-        if (!string.IsNullOrWhiteSpace(_settings.Host))
-        {
-            return await ConnectionMultiplexer
-                .ConnectAsync(
-                    new ConfigurationOptions
-                    {
-                        EndPoints = { { _settings.Host, _settings.Port } },
-                        Password = _settings.Password,
-                        DefaultDatabase = _settings.Database,
-                    }
-                )
-                .ConfigureAwait(false);
-        }
-
-        throw new InvalidOperationException(
-            "Either ConnectionMultiplexerFactory or Host must be specified in settings."
-        );
-    }
-
     void ForceReset()
     {
         _redis = null;
     }
-
-    [LoggerMessage(LogLevel.Warning, "Ignoring Host because ConnectionMultiplexerFactory is set.")]
-    partial void LogIgnoringHostBecauseFactoryIsSet();
 
     [LoggerMessage(LogLevel.Debug, "Lock already acquired on {LockKey}.")]
     partial void LogLockAlreadyAcquired(string lockKey);

@@ -1,4 +1,5 @@
 using LeaderElection.Postgres;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 
@@ -32,7 +33,11 @@ public sealed class PostgresLeaderElectionTests(PostgresContainerFixture postgre
         };
 
     private static PostgresLeaderElection CreateSut(PostgresSettings options) =>
-        new(options, NullLoggerFactory.Instance.CreateLogger<PostgresLeaderElection>());
+        new ServiceCollection()
+            .AddLogging()
+            .AddPostgresLeaderElection(builder => builder.WithSettings(options))
+            .BuildServiceProvider()
+            .GetRequiredService<PostgresLeaderElection>();
 
     [Fact]
     public async Task ShouldAcquireLeadershipWhenNoOtherInstanceExists()
