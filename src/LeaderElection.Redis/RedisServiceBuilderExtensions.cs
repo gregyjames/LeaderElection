@@ -6,9 +6,11 @@ public static class RedisServiceBuilderExtensions
 {
     public static IServiceCollection AddRedisLeaderElection(
         this IServiceCollection services,
-        Action<RedisSettings> configureOptions)
+        Action<RedisSettings> configureOptions
+    )
     {
-        services.AddOptionsWithValidateOnStart<RedisSettings, RedisSettingsValidator>()
+        services
+            .AddOptionsWithValidateOnStart<RedisSettings, RedisSettingsValidator>()
             .Configure(configureOptions);
 
         services.AddSingleton<RedisLeaderElection>();
@@ -19,7 +21,8 @@ public static class RedisServiceBuilderExtensions
 
     public static IServiceCollection AddRedisLeaderElection(
         this IServiceCollection services,
-        RedisSettings options)
+        RedisSettings options
+    )
     {
         services.AddRedisLeaderElection(opt =>
         {

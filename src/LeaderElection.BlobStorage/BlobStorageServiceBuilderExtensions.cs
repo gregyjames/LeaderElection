@@ -8,27 +8,32 @@ namespace LeaderElection.BlobStorage;
 public static class BlobStorageServiceBuilderExtensions
 {
     public static IServiceCollection AddBlobStorageLeaderElection(
-        this IServiceCollection services, 
-        Action<BlobStorageSettings> configureOptions)
+        this IServiceCollection services,
+        Action<BlobStorageSettings> configureOptions
+    )
     {
-        services.AddOptionsWithValidateOnStart<BlobStorageSettings, BlobStorageSettingsValidator>()
+        services
+            .AddOptionsWithValidateOnStart<BlobStorageSettings, BlobStorageSettingsValidator>()
             .Configure(configureOptions);
-        
+
         services.AddSingleton<BlobServiceClient>(sp =>
         {
             var options = sp.GetRequiredService<IOptions<BlobStorageSettings>>().Value;
             return new BlobServiceClient(options.ConnectionString);
         });
-        
+
         services.AddSingleton<BlobStorageLeaderElection>();
-        services.AddSingleton<ILeaderElection>(sp => sp.GetRequiredService<BlobStorageLeaderElection>());
+        services.AddSingleton<ILeaderElection>(sp =>
+            sp.GetRequiredService<BlobStorageLeaderElection>()
+        );
 
         return services;
     }
 
     public static IServiceCollection AddBlobStorageLeaderElection(
         this IServiceCollection services,
-        BlobStorageSettings options)
+        BlobStorageSettings options
+    )
     {
         services.AddBlobStorageLeaderElection(opt =>
         {
@@ -43,14 +48,15 @@ public static class BlobStorageServiceBuilderExtensions
             opt.EnableGracefulShutdown = options.EnableGracefulShutdown;
             opt.CreateContainerIfNotExists = options.CreateContainerIfNotExists;
         });
-        
+
         return services;
     }
-    
+
     public static IServiceCollection AddBlobStorageLeaderElection(
         this IServiceCollection services,
         string endpoint,
-        BlobStorageSettings options)
+        BlobStorageSettings options
+    )
     {
         services.Configure<BlobStorageSettings>(opt =>
         {
@@ -65,11 +71,15 @@ public static class BlobStorageServiceBuilderExtensions
             opt.EnableGracefulShutdown = options.EnableGracefulShutdown;
             opt.CreateContainerIfNotExists = options.CreateContainerIfNotExists;
         });
-        
-        services.AddSingleton<BlobServiceClient>(new BlobServiceClient(new Uri(endpoint), new DefaultAzureCredential()));
+
+        services.AddSingleton<BlobServiceClient>(
+            new BlobServiceClient(new Uri(endpoint), new DefaultAzureCredential())
+        );
         services.AddSingleton<BlobStorageLeaderElection>();
-        services.AddSingleton<ILeaderElection>(sp => sp.GetRequiredService<BlobStorageLeaderElection>());
-        
+        services.AddSingleton<ILeaderElection>(sp =>
+            sp.GetRequiredService<BlobStorageLeaderElection>()
+        );
+
         return services;
     }
-} 
+}

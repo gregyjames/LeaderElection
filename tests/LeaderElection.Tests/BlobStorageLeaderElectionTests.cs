@@ -10,7 +10,8 @@ namespace LeaderElection.Tests;
 [Collection("Azurite Container")]
 [Trait("Kind", "Integration")]
 [Trait("Category", "BlobStorage")]
-public sealed class BlobStorageLeaderElectionTests(AzuriteContainerFixture azuriteFixture) : TestBase
+public sealed class BlobStorageLeaderElectionTests(AzuriteContainerFixture azuriteFixture)
+    : TestBase
 {
     private readonly BlobServiceClient _blobServiceClient = azuriteFixture.BlobServiceClient;
 
@@ -37,7 +38,7 @@ public sealed class BlobStorageLeaderElectionTests(AzuriteContainerFixture azuri
             RetryInterval = retryInterval ?? TimeSpan.FromSeconds(2),
             MaxRetryAttempts = maxRetryAttempts,
             EnableGracefulShutdown = enableGracefulShutdown,
-            CreateContainerIfNotExists = createContainerIfNotExists
+            CreateContainerIfNotExists = createContainerIfNotExists,
         };
 
     private BlobStorageLeaderElection CreateSut(BlobStorageSettings options) =>
@@ -205,7 +206,8 @@ public sealed class BlobStorageLeaderElectionTests(AzuriteContainerFixture azuri
         // Arrange
         var options = CreateSettings(
             $"test-container-{Guid.NewGuid():N}",
-            createContainerIfNotExists: true);
+            createContainerIfNotExists: true
+        );
 
         await using var leaderElection = CreateSut(options);
 
@@ -252,7 +254,10 @@ public sealed class BlobStorageLeaderElectionTests(AzuriteContainerFixture azuri
     [Fact]
     public async Task ShouldHandleRenewalConflict()
     {
-        var options = CreateSettings("test-renewal-conflict", leaseDuration: TimeSpan.FromSeconds(15));
+        var options = CreateSettings(
+            "test-renewal-conflict",
+            leaseDuration: TimeSpan.FromSeconds(15)
+        );
         await using var leaderElection = CreateSut(options);
 
         await leaderElection.StartAsync(CancellationToken);
@@ -266,7 +271,10 @@ public sealed class BlobStorageLeaderElectionTests(AzuriteContainerFixture azuri
         await leaseClient.BreakAsync(TimeSpan.Zero, cancellationToken: CancellationToken);
 
         // Acquire it with a DIFFERENT lease ID (by not specifying one)
-        await leaseClient.AcquireAsync(TimeSpan.FromSeconds(15), cancellationToken: CancellationToken);
+        await leaseClient.AcquireAsync(
+            TimeSpan.FromSeconds(15),
+            cancellationToken: CancellationToken
+        );
 
         await WaitForLeadershipChange(leaderElection, false, TimeSpan.FromSeconds(20));
         leaderElection.IsLeader.Should().BeFalse();

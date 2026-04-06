@@ -1,6 +1,16 @@
 /.DS_Store
-/.idea
+bin/
+obj/
+
+# Rider support
+!/.idea
 /LeaderElection.sln.DotSettings.user
+
+# VSCode support
+!/.vscode
+
+# Visual Studio support
+/.vs
 
 /tests/**/coverage.*
 /tests/**/TestResults

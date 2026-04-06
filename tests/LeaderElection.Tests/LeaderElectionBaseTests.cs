@@ -6,23 +6,32 @@ namespace LeaderElection.Tests;
 public class LeaderElectionBaseTests
 {
     private sealed class MockLeaderElection(LeaderElectionSettingsBase settings, ILogger logger)
-        : LeaderElectionBase<LeaderElectionSettingsBase>(settings, logger), IDisposable
+        : LeaderElectionBase<LeaderElectionSettingsBase>(settings, logger),
+            IDisposable
     {
         public int TryAcquireCalls { get; private set; }
         public int RenewCalls { get; private set; }
         public int ReleaseCalls { get; private set; }
 
-        public Func<CancellationToken, Task<bool>>? TryAcquireResult { get; set; } = _ => Task.FromResult(true);
-        public Func<CancellationToken, Task<bool>>? RenewResult { get; set; } = _ => Task.FromResult(true);
+        public Func<CancellationToken, Task<bool>>? TryAcquireResult { get; set; } =
+            _ => Task.FromResult(true);
+
+        public Func<CancellationToken, Task<bool>>? RenewResult { get; set; } =
+            _ => Task.FromResult(true);
+
         public Func<Task>? ReleaseAction { get; set; }
 
-        protected override async Task<bool> TryAcquireLeadershipInternalAsync(CancellationToken cancellationToken)
+        protected override async Task<bool> TryAcquireLeadershipInternalAsync(
+            CancellationToken cancellationToken
+        )
         {
             TryAcquireCalls++;
             return await TryAcquireResult!(cancellationToken).ConfigureAwait(false);
         }
 
-        protected override async Task<bool> RenewLeadershipInternalAsync(CancellationToken cancellationToken)
+        protected override async Task<bool> RenewLeadershipInternalAsync(
+            CancellationToken cancellationToken
+        )
         {
             RenewCalls++;
             return await RenewResult!(cancellationToken).ConfigureAwait(false);
@@ -57,7 +66,7 @@ public class LeaderElectionBaseTests
         var settings = new LeaderElectionSettingsBase
         {
             RenewInterval = TimeSpan.FromMilliseconds(50),
-            RetryInterval = TimeSpan.FromMilliseconds(50)
+            RetryInterval = TimeSpan.FromMilliseconds(50),
         };
         using var sut = new MockLeaderElection(settings, NullLogger.Instance);
         sut.TryAcquireResult = _ => Task.FromResult(true);
@@ -79,7 +88,7 @@ public class LeaderElectionBaseTests
         {
             RenewInterval = TimeSpan.FromMilliseconds(50),
             RetryInterval = TimeSpan.FromMilliseconds(50),
-            MaxRetryAttempts = 1
+            MaxRetryAttempts = 1,
         };
         using var sut = new MockLeaderElection(settings, NullLogger.Instance);
         var calls = 0;
@@ -101,7 +110,7 @@ public class LeaderElectionBaseTests
         var settings = new LeaderElectionSettingsBase
         {
             RenewInterval = TimeSpan.FromMilliseconds(20),
-            RetryInterval = TimeSpan.FromMilliseconds(20)
+            RetryInterval = TimeSpan.FromMilliseconds(20),
         };
         using var sut = new MockLeaderElection(settings, NullLogger.Instance);
 
@@ -123,17 +132,24 @@ public class LeaderElectionBaseTests
         {
             RenewInterval = TimeSpan.FromMilliseconds(50),
             RetryInterval = TimeSpan.FromMilliseconds(50),
-            MaxRetryAttempts = 1
+            MaxRetryAttempts = 1,
         };
         using var sut = new MockLeaderElection(settings, NullLogger.Instance);
         var tcs = new TaskCompletionSource<bool>();
-        sut.LeadershipChanged += (_, leaderShipChanged) => { if (!leaderShipChanged.IsLeader) tcs.TrySetResult(true); };
+        sut.LeadershipChanged += (_, leaderShipChanged) =>
+        {
+            if (!leaderShipChanged.IsLeader)
+                tcs.TrySetResult(true);
+        };
 
         sut.RenewResult = _ => Task.FromResult(false);
 
         await sut.StartAsync(TestContext.Current.CancellationToken);
 
-        var eventFired = await tcs.Task.WaitAsync(TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken);
+        var eventFired = await tcs.Task.WaitAsync(
+            TimeSpan.FromSeconds(5),
+            TestContext.Current.CancellationToken
+        );
         eventFired.Should().BeTrue();
         sut.IsLeader.Should().BeFalse();
 
@@ -147,11 +163,17 @@ public class LeaderElectionBaseTests
         using var sut = new MockLeaderElection(settings, NullLogger.Instance);
         var taskExecuted = false;
 
-        await sut.RunTaskIfLeaderAsync(() => taskExecuted = true, TestContext.Current.CancellationToken);
+        await sut.RunTaskIfLeaderAsync(
+            () => taskExecuted = true,
+            TestContext.Current.CancellationToken
+        );
         taskExecuted.Should().BeFalse();
 
         await sut.TryAcquireLeadershipAsync(TestContext.Current.CancellationToken);
-        await sut.RunTaskIfLeaderAsync(() => taskExecuted = true, TestContext.Current.CancellationToken);
+        await sut.RunTaskIfLeaderAsync(
+            () => taskExecuted = true,
+            TestContext.Current.CancellationToken
+        );
         taskExecuted.Should().BeTrue();
     }
 
@@ -184,9 +206,15 @@ public class LeaderElectionBaseTests
         sut.IsLeader.Should().BeFalse();
     }
 
-    private static async Task<bool> WaitUntilLeader(ILeaderElection leaderElection, bool expected, TimeSpan timeout)
+    private static async Task<bool> WaitUntilLeader(
+        ILeaderElection leaderElection,
+        bool expected,
+        TimeSpan timeout
+    )
     {
-        using var cts = CancellationTokenSource.CreateLinkedTokenSource(TestContext.Current.CancellationToken);
+        using var cts = CancellationTokenSource.CreateLinkedTokenSource(
+            TestContext.Current.CancellationToken
+        );
         cts.CancelAfter(timeout);
 
         try

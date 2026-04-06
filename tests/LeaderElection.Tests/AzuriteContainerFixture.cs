@@ -12,7 +12,8 @@ namespace LeaderElection.Tests;
 /// requires access to the singleton <see cref="AzuriteContainerFixture"/>.
 /// </remarks>
 [CollectionDefinition("Azurite Container")]
-public sealed class AzuriteContainerCollectionFixture : ICollectionFixture<AzuriteContainerFixture> { }
+public sealed class AzuriteContainerCollectionFixture
+    : ICollectionFixture<AzuriteContainerFixture> { }
 
 /// <summary>
 /// An Xunit fixture that manages the lifecycle of a temporary Azurite container for

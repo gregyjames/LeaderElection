@@ -32,12 +32,7 @@
     <!-- Include license, icon, and readme files in the package -->
     <None Include="$(RepoRoot)$(PackageLicenseFile)" Pack="true" PackagePath="" />
     <None Include="$(RepoRoot)$(PackageIcon)" Pack="true" PackagePath="" />
-    <None
-      Condition="Exists('$(MSBuildProjectDirectory)/$(PackageReadmeFile)')"
-      Include="$(MSBuildProjectDirectory)/$(PackageReadmeFile)"
-      Pack="true"
-      PackagePath=""
-    />
+    <None Condition="Exists('$(MSBuildProjectDirectory)/$(PackageReadmeFile)')" Include="$(MSBuildProjectDirectory)/$(PackageReadmeFile)" Pack="true" PackagePath="" />
   </ItemGroup>
 
   <!--Pin platform specific package versions-->

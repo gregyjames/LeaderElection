@@ -48,12 +48,17 @@ public class PostgresServiceBuilderExtensionsTests
         });
 
         var serviceProvider = services.BuildServiceProvider();
-        var optionsProvider = serviceProvider.GetRequiredService<IOptionsSnapshot<PostgresSettings>>();
+        var optionsProvider = serviceProvider.GetRequiredService<
+            IOptionsSnapshot<PostgresSettings>
+        >();
 
         // Accessing .Value should trigger validation via IValidateOptions
         var act = new Func<object>(() => _ = optionsProvider.Value);
 
-        act.Should().Throw<OptionsValidationException>().And.Failures.Should().Contain(f => f.Contains("ConnectionString"));
+        act.Should()
+            .Throw<OptionsValidationException>()
+            .And.Failures.Should()
+            .Contain(f => f.Contains("ConnectionString"));
     }
 
     [Fact]
@@ -66,7 +71,7 @@ public class PostgresServiceBuilderExtensionsTests
         {
             ConnectionString = "Host=localhost",
             LockId = 12345,
-            InstanceId = "custom-instance"
+            InstanceId = "custom-instance",
         };
 
         services.AddPostgresLeaderElection(settings);

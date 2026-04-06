@@ -11,6 +11,7 @@ namespace LeaderElection.Tests;
 public sealed class PostgresLeaderElectionTests(PostgresContainerFixture postgresFixture) : TestBase
 {
     private static long _lockIdCounter = 1000;
+
     private static long GetNextLockId() => Interlocked.Increment(ref _lockIdCounter);
 
     private PostgresSettings CreateSettings(

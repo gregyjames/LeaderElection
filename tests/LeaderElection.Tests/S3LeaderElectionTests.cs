@@ -18,7 +18,8 @@ public sealed class S3LeaderElectionTests(MinioContainerFixture minioFixture) : 
         string instanceId = "test-instance-1",
         TimeSpan? leaseDuration = null,
         TimeSpan? renewInterval = null,
-        TimeSpan? retryInterval = null) =>
+        TimeSpan? retryInterval = null
+    ) =>
         new()
         {
             BucketName = BUCKET_NAME,
@@ -26,7 +27,7 @@ public sealed class S3LeaderElectionTests(MinioContainerFixture minioFixture) : 
             InstanceId = instanceId,
             LeaseDuration = leaseDuration ?? TimeSpan.FromSeconds(10),
             RenewInterval = renewInterval ?? TimeSpan.FromSeconds(2),
-            RetryInterval = retryInterval ?? TimeSpan.FromSeconds(1)
+            RetryInterval = retryInterval ?? TimeSpan.FromSeconds(1),
         };
 
     private S3LeaderElection CreateSut(S3Settings options) =>
@@ -43,9 +44,15 @@ public sealed class S3LeaderElectionTests(MinioContainerFixture minioFixture) : 
 #pragma warning disable CA2000 // dispose object
         var client = minioFixture.CreateClient();
 #pragma warning restore CA2000
-        if (!await client.BucketExistsAsync(new BucketExistsArgs().WithBucket(BUCKET_NAME)).ConfigureAwait(false))
+        if (
+            !await client
+                .BucketExistsAsync(new BucketExistsArgs().WithBucket(BUCKET_NAME))
+                .ConfigureAwait(false)
+        )
         {
-            await client.MakeBucketAsync(new MakeBucketArgs().WithBucket(BUCKET_NAME)).ConfigureAwait(false);
+            await client
+                .MakeBucketAsync(new MakeBucketArgs().WithBucket(BUCKET_NAME))
+                .ConfigureAwait(false);
         }
     }
 
@@ -75,7 +82,11 @@ public sealed class S3LeaderElectionTests(MinioContainerFixture minioFixture) : 
         await EnsureBucketExistsAsync();
         var key = "test-leader-election-conflict";
         var options1 = CreateSettings(key, leaseDuration: TimeSpan.FromSeconds(30));
-        var options2 = CreateSettings(key, "test-instance-2", leaseDuration: TimeSpan.FromSeconds(30));
+        var options2 = CreateSettings(
+            key,
+            "test-instance-2",
+            leaseDuration: TimeSpan.FromSeconds(30)
+        );
 
         await using var leaderElection1 = CreateSut(options1);
         await using var leaderElection2 = CreateSut(options2);
@@ -101,8 +112,17 @@ public sealed class S3LeaderElectionTests(MinioContainerFixture minioFixture) : 
         // Arrange
         await EnsureBucketExistsAsync();
         var key = "test-leader-election-transfer";
-        var options1 = CreateSettings(key, leaseDuration: TimeSpan.FromSeconds(5), renewInterval: TimeSpan.FromSeconds(1));
-        var options2 = CreateSettings(key, "test-instance-2", leaseDuration: TimeSpan.FromSeconds(5), renewInterval: TimeSpan.FromSeconds(1));
+        var options1 = CreateSettings(
+            key,
+            leaseDuration: TimeSpan.FromSeconds(5),
+            renewInterval: TimeSpan.FromSeconds(1)
+        );
+        var options2 = CreateSettings(
+            key,
+            "test-instance-2",
+            leaseDuration: TimeSpan.FromSeconds(5),
+            renewInterval: TimeSpan.FromSeconds(1)
+        );
 
         await using var leaderElection1 = CreateSut(options1);
         await using var leaderElection2 = CreateSut(options2);
