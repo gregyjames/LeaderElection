@@ -109,14 +109,14 @@ $Variables = @{
 
 # These scripts will be imported into each task prior to execution.
 $ImportScripts = @(
-    Join-Path $ScriptsDir 'build-helpers.ps1'
     # Add more scripts here as needed
 )
 
 ####################################################################################
 # Define all tasks
 ####################################################################################
-Import-Module "$ScriptsDir/task-framework.psm1" -Force -Scope Local -Verbose:$false
+Import-Module "$ScriptsDir/PSTaskFramework" -Verbose:$false
+Reset-TaskFramework
 
 Task list -desc 'List all tasks' {
     Get-TaskFrameworkTasks | Format-Table Name, Description, DependsOn -AutoSize
@@ -129,58 +129,25 @@ Task bootstrap -desc 'Installs required tools' {
 
         Required tools include:
         - Git (probably already installed, but we'll update if necessary).
-        - PowerShell 7.4 or later (assumed to be already be installed).
         - .NET SDK
         - Docker-API compatible container runtime for integration tests.
-
-        On Windows it will attempt to install the required tools using WinGet or Chocolatey.
-        If these are not available, it will prompt the user to install the tools manually.
-
-        On non-Windows platforms, it will prompt the user to install the required tools
-        manually.
+        - PowerShell 7.4 or later (assumed to be already be installed).
     #>
     param()
-    $sdkMajorVersion = '10'
-    $wingetPackageIds = @("Microsoft.DotNet.SDK.$sdkMajorVersion", 'Docker.DockerDesktop', 'Git.Git')
-    $chocoPackageIds = @("dotnet-$sdkMajorVersion.0-sdk", 'docker-desktop', 'git')
-    $installed = $false
+    Import-Module InstallHelpers -Verbose:$false
 
-    # Check if WinGet is available. See https://learn.microsoft.com/en-us/windows/package-manager/winget/
-    if (!$installed -and $IsWindows -and (Get-Command 'WinGet' -ErrorAction Ignore)) {
-        # WinGet will prompt for admin privileges when necessary.
-        $allowedExitCodes = @(
-            0,
-            0x8A15002B # No applicable update found
-        )
-        Invoke-Shell -AllowedExitCodes $allowedExitCodes -- WinGet install @wingetPackageIds --exact --accept-package-agreements --accept-source-agreements
-        $global:LASTEXITCODE = 0
-        $installed = $true
+    $appsToInstall = [ordered]@{
+        'git'           = $null # well-known app
+        'dotnet-sdk-10' = $null # well-known app
+        'docker'        = $null # well-known app
+        'powershell'    = $null # well-known app
     }
-
-    # Check if Chocolatey is available. See https://chocolatey.org/
-    if (!$installed -and $IsWindows -and (Get-Command 'choco' -ErrorAction Ignore)) {
-        # Chocolatey requires admin privileges to install packages.
-        if (Test-Administrator) {
-            Invoke-Shell -- choco install @chocoPackageIds --yes
-        }
-        else {
-            Write-Host 'Running Chocolatey as administrator. Expect a prompt.' -ForegroundColor Yellow
-            Start-Process cmd -ArgumentList "/K choco install $($chocoPackageIds -join ' ') --yes" -Verb RunAs -Wait
-        }
-        $installed = $true
-    }
-
-    if (-not $installed) {
-        Write-Host "Install latest .NET $sdkMajorVersion SDK from https://aka.ms/dotnet-download" -ForegroundColor Magenta
-        Write-Host 'Install Docker runtime, e.g. https://www.docker.com/products/docker-desktop' -ForegroundColor Magenta
-        Write-Host 'Install latest Git from https://git-scm.com/downloads' -ForegroundColor Magenta
-    }
-    Write-Host 'Install latest PowerShell from https://aka.ms/powershell' -ForegroundColor Magenta
+    Install-RequiredApp $appsToInstall -InstallPackageManagers -InformationAction Continue -Verbose:($VerbosePreference -eq 'Continue')
 }
 
 Task version -desc 'Display tool versions' {
     [PSCustomObject]@{
-        '.NET SDK'    = Invoke-Shell -NoEcho -- dotnet --version
+        '.NET SDK'    = Invoke-Shell -InformationAction Ignore -- dotnet --version
         'PowerShell'  = $PSVersionTable.PSVersion
         'OS Platform' = "$($PSVersionTable.OS) ($($PSVersionTable.Platform))"
         'RepoRoot'    = $RepoRoot
@@ -537,7 +504,7 @@ Task push -desc 'Push NuGet packages' -dependsOn version {
     $NugetSourceName = $null
     if (!$NugetSource) {
         # is there a default push source configured...
-        $dps = Invoke-Shell -noEcho -ea Ignore -- dotnet nuget config get DefaultPushSource 2>&1
+        $dps = Invoke-Shell -InformationAction Ignore -ErrorAction Ignore -- dotnet nuget config get DefaultPushSource 2>&1
         if ($global:LASTEXITCODE -eq 0) {
             $NugetSource = $dps.Trim()
         }
@@ -553,7 +520,6 @@ Task push -desc 'Push NuGet packages' -dependsOn version {
         $NugetSource
     )
 
-    Import-Module "$RepoRoot/scripts/secrets.psm1" -Scope Global -Verbose:$false
     if (-not $ApiKey) {
         $ApiKey = Read-Secret "Enter API key for pushing packages to $NugetSourceName"
     }
@@ -588,4 +554,5 @@ Invoke-TaskFramework `
     -Variables $Variables `
     -ImportScripts $ImportScripts `
     -ExitOnError `
+    -InformationAction Continue `
     -Verbose:($VerbosePreference -eq 'Continue')

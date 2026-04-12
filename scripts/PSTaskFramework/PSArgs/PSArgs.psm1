@@ -67,7 +67,7 @@ function ConvertTo-PSString {
     }
 }
 
-function ConvertTo-CommandArgs {
+function ConvertTo-CommandArg {
     <#
     .DESCRIPTION
         Converts the given value to a PowerShell command line argument string.
@@ -77,7 +77,7 @@ function ConvertTo-CommandArgs {
         - A ScriptBlock is converted to a string representation enclosed in braces.
         - Any other value is converted to a string literal using `ConvertTo-PSString`.
     #>
-    [Diagnostics.CodeAnalysis.SuppressMessage('PSUseSingularNouns', '', Justification = 'Artifacts is plural because it deletes multiple artifacts.')]
+    [CmdletBinding()]
     [OutputType([string])]
     param(
         # The value to convert to a PowerShell command line argument string.
@@ -101,4 +101,11 @@ function ConvertTo-CommandArgs {
     }
 }
 
-Export-ModuleMember -Function ConvertTo-PSString, ConvertTo-CommandArgs
+$exportModuleMemberParams = @{
+    Function = @(
+        'ConvertTo-PSString'
+        'ConvertTo-CommandArg'
+    )
+}
+
+Export-ModuleMember @exportModuleMemberParams

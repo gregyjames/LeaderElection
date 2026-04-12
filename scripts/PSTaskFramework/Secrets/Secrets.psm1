@@ -3,9 +3,53 @@
 # spell:ignore bstr
 #Requires -Version 7.4
 
-$secrets = [PSCustomObject]@{
-    values = @{}
-    regex  = $null
+[Diagnostics.CodeAnalysis.SuppressMessage('PSAvoidGlobalVars', 'global:__PSTaskFramework_Secrets', Justification = 'Intended to be used this way.')]
+param(
+    # The scope of the secret storage. Can be 'Local' or 'Global'. Defaults to 'Global'.
+    [ValidateSet('Local', 'Global')]
+    [string] $SecretScope = 'Global'
+)
+
+if ($SecretScope -eq 'Local') {
+    $script:secrets = [PSCustomObject]@{
+        values = @{}
+        regex  = $null
+    }
+}
+else {
+    $global:__PSTaskFramework_Secrets ??= [PSCustomObject]@{
+        values = @{}
+        regex  = $null
+    }
+    $script:secrets = $global:__PSTaskFramework_Secrets
+
+    if ($ExecutionContext.SessionState.Module) {
+        $ExecutionContext.SessionState.Module.OnRemove = {
+            Get-Variable -Scope Global -Name __PSTaskFramework_Secrets -ErrorAction Ignore |
+            Remove-Variable -Scope Global -Force -ErrorAction Ignore
+        }
+    }
+}
+
+# Mockable functions for testing purposes. These are not for external use.
+function getState {
+    return $script:secrets
+}
+
+function isContinuousIntegration {
+    return $env:CI -in @('1', 'true')
+}
+
+function Clear-SecretStore {
+    <#
+    .DESCRIPTION
+        Clears all secrets from the secret store.
+    #>
+    [CmdletBinding()]
+    param()
+    $secrets = getState
+    $secrets.values.Clear()
+    $secrets.regex = $null
 }
 
 function Push-Secret {
@@ -17,12 +61,14 @@ function Push-Secret {
         a corresponding `Pop-Secret X`.
     #>
     [Diagnostics.CodeAnalysis.SuppressMessage('PSPossibleIncorrectUsageOfAssignmentOperator', '', Justification = 'Intended to be used this way.')]
+    [CmdletBinding()]
     param (
-        [Parameter(Mandatory = $true, ValueFromPipeline)]
-        [string]$s
+        [Parameter(Mandatory, ValueFromPipeline)]
+        [string]$Value
     )
     process {
-        if ($s -AND ($secrets.values[$s] += 1) -eq 1) {
+        $secrets = getState
+        if ($Value -AND ($secrets.values[$Value] += 1) -eq 1) {
             $secrets.regex = $null
         }
     }
@@ -34,13 +80,15 @@ function Pop-Secret {
         Unregisters a secret value previously registered with Push-Secret.
     #>
     [Diagnostics.CodeAnalysis.SuppressMessage('PSPossibleIncorrectUsageOfAssignmentOperator', '', Justification = 'Intended to be used this way.')]
+    [CmdletBinding()]
     param (
-        [Parameter(Mandatory = $true, ValueFromPipeline)]
-        [string]$s
+        [Parameter(Mandatory, ValueFromPipeline)]
+        [string]$Value
     )
     process {
-        if ($s -AND $secrets.values.ContainsKey($s) -AND ($secrets.values[$s] -= 1) -eq 0) {
-            $null = $secrets.values.Remove($s)
+        $secrets = getState
+        if ($Value -AND $secrets.values.ContainsKey($Value) -AND ($secrets.values[$Value] -= 1) -eq 0) {
+            $null = $secrets.values.Remove($Value)
             $secrets.regex = $null
         }
     }
@@ -59,13 +107,14 @@ function Protect-Secret {
     [OutputType([string])]
     [Diagnostics.CodeAnalysis.SuppressMessage('PSReviewUnusedParameter', 'Mask', Justification = 'Not unused.')]
     param (
-        [Parameter(Mandatory = $true, Position = 0, ValueFromPipeline)]
+        [Parameter(Mandatory, Position = 0, ValueFromPipeline)]
         [AllowEmptyString()]
         [string]$Message,
         [AllowEmptyString()]
         [string]$Mask = '****'
     )
     process {
+        $secrets = getState
         if (!$secrets.regex -and $secrets.values.Count) {
             $secrets.regex = [regex]::new($secrets.values.Keys.foreach{ [regex]::Escape($_) } -join '|')
         }
@@ -96,7 +145,7 @@ function Read-Secret {
         [string] $Prompt,
         [switch] $AllowEmpty
     )
-    if ($env:CI) {
+    if (isContinuousIntegration) {
         if ($AllowEmpty) {
             Write-Warning "CI environment detected. Returning empty value for prompt '$Prompt'."
             return ''
@@ -124,4 +173,14 @@ function Read-Secret {
     return $value
 }
 
-Export-ModuleMember -Function Read-Secret, Push-Secret, Pop-Secret, Protect-Secret
+$exportModuleMemberParams = @{
+    Function = @(
+        'Read-Secret'
+        'Push-Secret'
+        'Pop-Secret'
+        'Protect-Secret'
+        'Clear-SecretStore'
+    )
+}
+
+Export-ModuleMember @exportModuleMemberParams

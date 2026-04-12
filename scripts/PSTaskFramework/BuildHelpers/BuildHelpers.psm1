@@ -6,19 +6,26 @@
 [Diagnostics.CodeAnalysis.SuppressMessage('PSAvoidUsingPositionalParameters', 'Invoke-Shell', Justification = 'Invoke-Shell is intended to be used with positional parameters.')]
 param()
 
-Import-Module "$PSScriptRoot/secrets.psm1" -Verbose:$false
-Import-Module "$PSScriptRoot/psargs.psm1" -Verbose:$false
+Import-Module "$PSScriptRoot/../Secrets" -Verbose:$false
+Import-Module "$PSScriptRoot/../PSArgs" -Verbose:$false
 
-$RepoRoot ??= Split-Path $PSScriptRoot -Parent
+# Mockable functions for testing purposes. These are not intended to be used directly.
+function getUserId {
+    id -u
+}
 
 function Test-Administrator {
+    <#
+    .DESCRIPTION
+        Check if the current user has administrative (Windows) or root (Linux/macOS) privileges.
+    #>
     if ($IsWindows) {
         # test for administrator on Windows
         return [Security.Principal.WindowsPrincipal]::new([Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
     }
     else {
         # test for root user on Linux/macOS
-        return (id -u) -eq 0
+        return (getUserId) -eq 0
     }
 }
 
@@ -37,7 +44,7 @@ function Assert-AppExists {
     #>
     [CmdletBinding(PositionalBinding = $false)]
     [OutputType([string])]
-    [Diagnostics.CodeAnalysis.SuppressMessage('PSUseSingularNouns', '', Justification = 'Exists is 3rd person present verb.')]
+    [Diagnostics.CodeAnalysis.SuppressMessage('PSUseSingularNouns', '', Justification = 'Exists is not plural.')]
     param(
         # The name or path to the application to check.
         # For maximum compatibility on non-Windows platforms, use the app name without the
@@ -56,7 +63,7 @@ function Assert-AppExists {
 
     # When multiple commands with the same name are found, Get-Command returns
     # them in execution precedence order. So take the first one
-    $cmd = Get-Command $AppPath -CommandType Application -ea Ignore | Select-Object -First 1
+    $cmd = Get-Command $AppPath -CommandType Application -ea Ignore -TotalCount 1
     if (!$cmd) {
         if ($ErrorActionPreference -ne 'Ignore') {
             $appName = $AppTitle ? "$AppTitle ($AppPath)" : $AppPath
@@ -66,7 +73,7 @@ function Assert-AppExists {
         return
     }
     if ($PassThru) {
-        return $cmd.Source
+        return $cmd.Path
     }
 }
 
@@ -76,7 +83,7 @@ function Invoke-Shell {
         Invokes a shell application.
     .DESCRIPTION
         Invokes a shell application with arguments. The full command is echoed
-        to the console, unless the -NoEcho switch is specified.
+        to the console using Write-Information (suppress with `-InformationAction Ignore`).
 
         If the command completes with a non-zero exit code, it is considered to have
         failed and an error stating as much is reported/thrown according to the
@@ -109,15 +116,13 @@ function Invoke-Shell {
         [Parameter(ValueFromRemainingArguments)]
         [string[]] $CommandArgs,
 
-        # When specified, the full command will NOT be echoed to the console before execution.
-        [switch] $NoEcho,
-
+        # An array of exit codes that are considered successful. Defaults to 0.
         [int[]] $AllowedExitCodes = @(0)
     )
 
     $cmdPath = Assert-AppExists $Command -PassThru
-    $cmdText = Protect-Secret "$(ConvertTo-PSString $cmdPath) $(ConvertTo-CommandArgs $CommandArgs)"
-    if (!$NoEcho) { Write-Host "$($PSStyle.Dim)>> $cmdText" }
+    $cmdText = Protect-Secret "$(ConvertTo-PSString $cmdPath) $(ConvertTo-CommandArg $CommandArgs)"
+    Write-Information "$($PSStyle.Dim)>> $cmdText$($PSStyle.Reset)"
 
     $global:LASTEXITCODE = 0
     $PSNativeCommandUseErrorActionPreference = $false # we'll handle errors ourselves
@@ -131,3 +136,12 @@ function Invoke-Shell {
     }
 }
 
+$exportModuleMemberParams = @{
+    Function = @(
+        'Test-Administrator'
+        'Assert-AppExists'
+        'Invoke-Shell'
+    )
+}
+
+Export-ModuleMember @exportModuleMemberParams

@@ -5,8 +5,6 @@
 
 param()
 
-Import-Module "$PSScriptRoot/psargs.psm1" -Verbose:$false
-
 class TaskDefinition {
     [string]$Name
     [string]$Description
@@ -16,7 +14,7 @@ class TaskDefinition {
 
     [string] ToString() { return $this.Name }
 
-    static hidden [System.Collections.Generic.OrderedDictionary[string, TaskDefinition]] $AllTasks = [System.Collections.Generic.OrderedDictionary[string, TaskDefinition]]::new([StringComparer]::OrdinalIgnoreCase)
+    static hidden [ordered] $AllTasks = [ordered]@{}
     static hidden [bool] $TasksSorted = $true
 
     static [void] Clear() {
@@ -25,7 +23,7 @@ class TaskDefinition {
     }
 
     static [void] AddTask([TaskDefinition]$task) {
-        if ([TaskDefinition]::AllTasks.ContainsKey($task.Name)) {
+        if ([TaskDefinition]::AllTasks.Contains($task.Name)) {
             throw "A task with the name '$($task.Name)' already exists."
         }
         [TaskDefinition]::AllTasks[$task.Name] = $task
@@ -72,7 +70,7 @@ class TaskDefinition {
 
     # Returns an ordered dictionary of all defined tasks, sorted in dependency order.
     # The keys are task names and the values are TaskDefinition objects.
-    static [System.Collections.Generic.OrderedDictionary[string, TaskDefinition]] GetOrderedTasks() {
+    static [System.Collections.Specialized.IOrderedDictionary] GetOrderedTasks() {
         if ([TaskDefinition]::TasksSorted) {
             return [TaskDefinition]::AllTasks
         }
@@ -125,6 +123,7 @@ function Reset-TaskFramework {
         to ensure a clean slate when invoking multiple tasks or when reloading the task framework.
     #>
     [Diagnostics.CodeAnalysis.SuppressMessage('PSUseShouldProcessForStateChangingFunctions', '', Justification = 'Resetting the task framework is a state change, but it is not something that users would typically want to confirm.')]
+    [CmdletBinding()]
     param()
     [TaskDefinition]::Clear()
 }
@@ -181,6 +180,7 @@ function Get-TaskFrameworkTasks {
         This can be useful for listing available tasks or for debugging task definitions.
     #>
     [Diagnostics.CodeAnalysis.SuppressMessage('PSUseSingularNouns', '', Justification = 'Tasks is plural because it manages multiple tasks.')]
+    [CmdletBinding()]
     param()
     return [TaskDefinition]::GetOrderedTasks().Values
 }
@@ -288,19 +288,33 @@ function Invoke-Task {
         [string[]]$ImportScripts
     )
 
+    if ($null -eq $Task.Action) {
+        Write-Verbose "Skipping task '$($Task.Name)' since it has no action."
+        return
+    }
+
+    Import-Module PSArgs -Verbose:$false
+    Import-Module Secrets -Verbose:$false
+    Import-Module BuildHelpers -Verbose:$false
+
     $ImportScripts.foreach{
         Write-Verbose "Importing script '$_'."
-        . $_
+        if ($_ -like '*.ps1') {
+            . $_
+        }
+        else {
+            Import-Module $_ -Verbose:$false
+        }
     }
 
     $Variables.Keys.foreach{
         Write-Verbose "Importing variable '$_' with value $(ConvertTo-PSString $Variables[$_] -UseQuotes)."
-        Set-Variable -Name $_ -Value $Variables[$_] -Scope Local -Force -ea Ignore
+        Set-Variable -Name $_ -Value $Variables[$_] -Force -ea Ignore
     }
 
     $TaskName = $Task.Name
 
-    $private:_taskCommandArgs = ConvertTo-CommandArgs $TaskArgs
+    $private:_taskCommandArgs = ConvertTo-CommandArg $TaskArgs
     if ($_taskCommandArgs) {
         Write-Verbose "Invoking task '$TaskName' with arguments: $_taskCommandArgs"
     }
@@ -375,14 +389,24 @@ function Invoke-TaskFramework {
     )
     $ErrorActionPreference = 'Stop'
 
+    $private:_orig = @{
+        PSModulePath = $env:PSModulePath
+        Location     = Get-Location
+    }
+
     Write-Verbose "Working directory: '$WorkingDirectory'."
-    Push-Location $WorkingDirectory
+    Set-Location $WorkingDirectory
     try {
         if ($TaskArgs.Count -gt 0 -and $TaskName.Count -gt 1) {
             throw 'Task arguments cannot be used when invoking multiple tasks.'
         }
 
         $TasksToExecute = [TaskDefinition]::GetOrderedTasks($TaskName, !$SkipDependencies)
+
+        # Add the scripts directory to the module path so that task actions
+        # can more easily import helper modules if needed.
+        $pathSeparator = $IsWindows ? ';' : ':'
+        $env:PSModulePath = "$PSScriptRoot$pathSeparator$env:PSModulePath"
 
         $private:targs = @{
             Task          = $null
@@ -397,7 +421,6 @@ function Invoke-TaskFramework {
             $targs.Task = $task
             $targs.TaskArgs = $task.Name -eq $TaskName ? $TaskArgs : @()
             Invoke-Task @targs
-            Write-Host ''
         }
 
         Write-Verbose "Done executing tasks."
@@ -414,7 +437,8 @@ function Invoke-TaskFramework {
         throw
     }
     finally {
-        Pop-Location
+        $env:PSModulePath = $_orig.PSModulePath
+        Set-Location $_orig.Location
     }
 }
 
@@ -423,4 +447,17 @@ Reset-TaskFramework
 
 New-Alias -Name Task -Value Add-TaskFrameworkTask -Force
 
-Export-ModuleMember -Function Reset-TaskFramework, Add-TaskFrameworkTask, Get-TaskFrameworkTasks, Invoke-TaskFramework -Alias Task
+# !Important! Remember to update the module manifest (.psd1) when adding or removing exports.
+$exportModuleMemberParams = @{
+    Function = @(
+        'Reset-TaskFramework'
+        'Add-TaskFrameworkTask'
+        'Get-TaskFrameworkTasks'
+        'Invoke-TaskFramework'
+    )
+    Alias    = @(
+        'Task'
+    )
+}
+
+Export-ModuleMember @exportModuleMemberParams

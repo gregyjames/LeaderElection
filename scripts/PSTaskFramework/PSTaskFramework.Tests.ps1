@@ -3,26 +3,17 @@
 #Requires -Version 7.4
 
 [Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSAvoidUsingCmdletAliases', 'Task', Justification = 'Task is an alias for Add-TaskFrameworkTask.')]
+[Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSUseCompatibleCommands', '', Justification = 'Chokes on Pester keywords.')]
 param()
 
-Set-StrictMode -Version Latest
-
-Describe 'task-framework.psm1' {
+Describe 'PSTaskFramework Module' {
     BeforeAll {
-        $modulePath = Join-Path $PSScriptRoot 'task-framework.psm1'
-        Import-Module $modulePath -Force -Scope Local
-
-        Mock -CommandName 'Write-Host' -MockWith { } -ModuleName 'task-framework'
-    }
-
-    BeforeEach {
+        Import-Module "$PSScriptRoot/PSTaskFramework" -Scope Local -Verbose:$false
         Reset-TaskFramework
-        $global:LASTEXITCODE = 0
-        $Error.Clear()
     }
 
-    AfterAll {
-        Remove-Module -Name task-framework -ErrorAction Ignore
+    AfterEach {
+        Reset-TaskFramework
     }
 
     It 'fails when no tasks are specified' {
