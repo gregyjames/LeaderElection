@@ -159,10 +159,16 @@ public class MyService : BackgroundService
 ## Contributing
 
 1. Fork the repository
-2. Create a feature branch
-3. Make your changes
-4. Add tests
-5. Submit a pull request
+2. Run `./build.ps1 bootstrap`\* to set up the development environment.
+3. Create a feature branch
+4. Make your changes
+5. Add tests
+6. Review test coverage using `./build.ps1 coverage`.
+7. Submit a pull request
+
+See `./build.ps1 list` for other common tasks.
+
+_\* Requires [PowerShell 7.4](https://aka.ms/powershell) or later._
 
 ## License
 
