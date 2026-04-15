@@ -406,7 +406,7 @@ Task coverage -desc 'Run tests with code coverage' -dependsOn restore {
             "-reportTypes:$($ReportType -join ',')"
             "-targetDir:$OutputDir"
         )
-        Invoke-Shell -- dotnet reportgenerator @reportArgs
+        Invoke-Shell -- reportgenerator @reportArgs
     }
 
     if ($ReportType -contains 'Html' -and !$DoNotOpenReport) {
