@@ -130,6 +130,17 @@ Describe 'PSTaskFramework.Secrets Module' {
             $masked | Should -BeExactly '****'
             $unmasked | Should -BeExactly 'pipelined-secret'
         }
+
+        It 'masks longer secrets that contain shorter ones as substrings' {
+            Push-Secret 'secret_key'
+            Push-Secret 'secret'
+
+            $result1 = Protect-Secret -Message 'hello secret_key'
+            $result2 = Protect-Secret -Message 'hello secret'
+
+            $result1 | Should -BeExactly 'hello ****'
+            $result2 | Should -BeExactly 'hello ****'
+        }
     }
 
     Context 'Read-Secret' {

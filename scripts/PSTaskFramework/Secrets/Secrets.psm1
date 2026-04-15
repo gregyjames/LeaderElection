@@ -116,7 +116,10 @@ function Protect-Secret {
     process {
         $secrets = getState
         if (!$secrets.regex -and $secrets.values.Count) {
-            $secrets.regex = [regex]::new($secrets.values.Keys.foreach{ [regex]::Escape($_) } -join '|')
+            $pattern = ($secrets.values.Keys |
+                Sort-Object Length -Descending |
+                ForEach-Object { [regex]::Escape($_) }) -join '|'
+            $secrets.regex = [regex]::new($pattern)
         }
         if ($secrets.regex) {
             # Use a match-evaluator overload to prevent '$0' from reintroducing the secret value
