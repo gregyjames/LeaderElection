@@ -73,19 +73,14 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-nuget-
 
-      - name: Restore dependencies
-        run: dotnet restore
-
-      - name: Build ${{ env.BUILD_TARGET }}
-        run: |
-          dotnet build $BUILD_TARGET --no-restore --configuration Release -p:Version=$VERSION
-
       - name: Package ${{ env.BUILD_TARGET }}
+        shell: pwsh
         run: |
-          dotnet pack $BUILD_TARGET --no-build --configuration Release -p:Version=$VERSION --output artifacts/package/release
+          .\build.ps1 package -config release -version $env:VERSION -targetProject $env:BUILD_TARGET -outputDir ./artifacts/package/release
 
       - name: Push Nuget packages
+        shell: pwsh
         run: |
-          dotnet nuget push artifacts/package/release/*.nupkg --source https://api.nuget.org/v3/index.json --api-key $NUGET_API_KEY
+          .\build.ps1 push ./artifacts/package/release/*.nupkg
         env:
           NUGET_API_KEY: ${{ secrets.NUGET_API_KEY }}
