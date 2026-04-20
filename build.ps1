@@ -13,13 +13,13 @@
 
     PowerShell 7.4 or later is required to use this script. See https://aka.ms/install-powershell.
 .EXAMPLE
-    PS> .\build.ps1
+    PS> ./build.ps1
     Executes the default 'build' task, including all of its dependencies (e.g. 'restore').
 .EXAMPLE
-    PS> .\build.ps1 list
+    PS> ./build.ps1 list
     Lists all available tasks.
 .EXAMPLE
-    PS> .\build.ps1 test -noDeps
+    PS> ./build.ps1 test -noDeps
     Executes the 'test' task without executing its dependencies.
 #>
 [Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSAvoidUsingCmdletAliases', 'Task', Justification = 'Task is an alias for Add-TaskFrameworkTask.')]
@@ -65,7 +65,7 @@ param (
     # Tip: Use `-- ` to clearly separate build-script arguments from task arguments.
     # Anything after the `-- ` will be passed verbatim to the invoked task.
     # For example:
-    #   .\build.ps1 myTask -v -- -v
+    #   ./build.ps1 myTask -v -- -v
     # In this example, the first '-v' is shorthand for PowerShell's -Verbose argument,
     # while the second '-v' is passed to 'myTask' as a task-specific argument.
     [Parameter(ValueFromRemainingArguments)]
@@ -280,10 +280,10 @@ Task build -desc 'Build the solution' -dependsOn restore {
         The build configuration can be specified using the -Configuration parameter (e.g.
         'debug' or 'release'). A build version can be specified using the -Version parameter.
     .EXAMPLE
-        PS> .\build.ps1 build
+        PS> ./build.ps1 build
         Builds the debug configuration of the solution.
     .EXAMPLE
-        PS> .\build.ps1 build -Configuration Release -Version 1.2.3
+        PS> ./build.ps1 build -Configuration Release -Version 1.2.3
         Builds the release configuration assigning it version 1.2.3.
     #>
     param()
@@ -303,13 +303,13 @@ Task test -desc 'Run tests' -dependsOn build {
         By default, it will run all tests in the repository. You can run a subset
         of tests using the -TestFilter parameter.
     .EXAMPLE
-        PS> .\build.ps1 test -TestFilter "PartialTestName"
+        PS> ./build.ps1 test -TestFilter "PartialTestName"
         Runs only tests with names that contain "PartialTestName".
     .EXAMPLE
-        PS> .\build.ps1 test -TestFilter "Kind=Integration"
+        PS> ./build.ps1 test -TestFilter "Kind=Integration"
         Runs only tests with the [Trait("Kind", "Integration")] attribute.
     .EXAMPLE
-        PS> .\build.ps1 test -TestFilter "Kind!=Integration"
+        PS> ./build.ps1 test -TestFilter "Kind!=Integration"
         Runs only tests without the [Trait("Kind", "Integration")] attribute.
     #>
     param(
@@ -339,10 +339,10 @@ Task coverage -desc 'Run tests with code coverage' -dependsOn restore {
         Finally, the HTML report (if created) will be automatically opened in the default
         browser unless the -DoNotOpenReport switch is specified.
     .EXAMPLE
-        PS> .\build.ps1 coverage
+        PS> ./build.ps1 coverage
         Generates an HTML code coverage report and opens it in the default browser.
     .EXAMPLE
-        PS> .\build.ps1 coverage -OutputDir ./coverage-report -ReportType Html,lcov,opencover -DoNotOpenReport
+        PS> ./build.ps1 coverage -OutputDir ./coverage-report -ReportType Html,lcov,opencover -DoNotOpenReport
         Generates an HTML, lcov, and OpenCover code coverage report in the "./coverage-report"
         directory and does not open the HTML report.
     #>
@@ -430,11 +430,11 @@ Task package -desc 'Package the solution' -dependsOn build {
         parameter. For non-release builds, the version is optional and will default to
         whatever version is specified in the .csproj file(s), usually 1.0.0.
     .EXAMPLE
-        PS> .\build.ps1 package
+        PS> ./build.ps1 package
         Build and package all packable projects in the solution using the Debug
         configuration and default version.
     .EXAMPLE
-        PS> .\build.ps1 package -Version 1.2.3 -TargetProject ./src/MyProject/
+        PS> ./build.ps1 package -Version 1.2.3 -TargetProject ./src/MyProject/
         Build and package the specified project as version 1.2.3.
     #>
     param(

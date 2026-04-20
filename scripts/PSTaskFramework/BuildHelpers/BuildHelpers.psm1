@@ -67,7 +67,7 @@ function Assert-AppExists {
     if (!$cmd) {
         if ($ErrorActionPreference -ne 'Ignore') {
             $appName = $AppTitle ? "$AppTitle ($AppPath)" : $AppPath
-            Write-Error -Exception "$appName not found. Please bootstrap first using '.\build.ps1 bootstrap'." `
+            Write-Error -Exception "$appName not found. Please bootstrap first using './build.ps1 bootstrap'." `
                 -CategoryActivity 'Assert-AppExists' -CategoryReason 'App not found' -CategoryTargetName $AppPath
         }
         return

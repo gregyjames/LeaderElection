@@ -76,11 +76,11 @@ jobs:
       - name: Package ${{ env.BUILD_TARGET }}
         shell: pwsh
         run: |
-          .\build.ps1 package -config release -version $env:VERSION -targetProject $env:BUILD_TARGET -outputDir ./artifacts/package/release
+          ./build.ps1 package -config release -version $env:VERSION -targetProject $env:BUILD_TARGET -outputDir ./artifacts/package/release
 
       - name: Push Nuget packages
         shell: pwsh
         run: |
-          .\build.ps1 push ./artifacts/package/release/*.nupkg
+          ./build.ps1 push ./artifacts/package/release/*.nupkg
         env:
           NUGET_API_KEY: ${{ secrets.NUGET_API_KEY }}
