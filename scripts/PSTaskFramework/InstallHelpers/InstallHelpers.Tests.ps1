@@ -1,7 +1,12 @@
-# SPDX-License-Identifier: Unlicense
-# Source: http://github.com/mrfootoyou/pstaskframework
-# spell:ignore appx,winget,choco,mytool,Contoso
+<#
+.DESCRIPTION
+    Unit tests for InstallHelpers module.
+.NOTES
+    SPDX-License-Identifier: Unlicense
+    Source: http://github.com/mrfootoyou/pstaskframework
+#>
 #Requires -Version 7.4
+# spell:ignore appx,winget,choco,mytool,Contoso
 
 [Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSUseCompatibleCommands', '', Justification = 'Chokes on Pester keywords.')]
 [Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSReviewUnusedParameter', '', Justification = 'Mocked functions may have unused parameters.')]
@@ -444,6 +449,65 @@ Describe 'PSTaskFramework.InstallHelpers Module' {
                             }
                         }
                     }
+                    [PSCustomObject]@{
+                        Name = 'pkg-d'
+                        Info = @{
+                            winget = [ordered]@{
+                                PMArgs           = 'install', 'Contoso.D'
+                                DoNotAppendArgs  = $true
+                                AllowedExitCodes = 0, 3010
+                            }
+                        }
+                    }
+                    [PSCustomObject]@{
+                        Name = 'pkg-a'
+                        Info = @{ winget = 'Contoso.E' }
+                    }
+                )
+
+                $execute = { $script:execCalls += , @($args) }
+                $installPackages = { $script:installCalls += , @($args) }
+
+                installWithPackageManager `
+                    -AppsToInstall $apps `
+                    -MethodName 'winget' `
+                    -PackageManagerName 'Winget' `
+                    -Execute $execute `
+                    -InstallPackages $installPackages
+
+                $apps | Should -HaveCount 5
+                $script:installCalls | Should -HaveCount 1
+                $script:installCalls[0] | Should -Be ('Contoso.A', 'Contoso.E')
+                $script:execCalls | Should -HaveCount 3
+                $script:execCalls[0] | Should -Be ('upgrade', 'Contoso.B')
+                $script:execCalls[1] | Should -Be ('install', 'Contoso.C')
+                $script:execCalls[2] | Should -Be @('-PMArgs:', @('install', 'Contoso.D'), '-DoNotAppendArgs:', $true, '-AllowedExitCodes:', @(0, 3010))
+            }
+        }
+
+        It 'installWithPackageManager works with hash table installation method' {
+            InModuleScope 'InstallHelpers' {
+                $script:execCalls = @()
+                $script:installCalls = @()
+
+                $apps = @(
+                    [PSCustomObject]@{
+                        Name = 'pkg-a'
+                        Info = @{ winget = 'Contoso.A' }
+                    }
+                    [PSCustomObject]@{
+                        Name = 'pkg-b'
+                        Info = @{ winget = [string[]]@('upgrade', 'Contoso.B') }
+                    }
+                    [PSCustomObject]@{
+                        Name = 'pkg-c'
+                        Info = @{
+                            winget = {
+                                param($appName, $appInfo, $execute)
+                                & $execute -- install 'Contoso.C'
+                            }
+                        }
+                    }
                 )
 
                 $execute = { $script:execCalls += , @($args) }
@@ -502,7 +566,7 @@ Describe 'PSTaskFramework.InstallHelpers Module' {
                 Should -Invoke Invoke-Shell -Times 1 -Exactly
                 $global:LASTEXITCODE | Should -Be 0
                 $script:wingetCalls[0].Command | Should -BeExactly 'winget'
-                $script:wingetCalls[0].CommandArgs | Should -BeExactly @('install', '--exact', 'Git.Git', '--silent', '--force', '--accept-package-agreements', '--accept-source-agreements')
+                $script:wingetCalls[0].CommandArgs | Should -BeExactly @('install', 'Git.Git', '--exact', '--source', 'winget', '--silent', '--force', '--accept-package-agreements', '--accept-source-agreements')
             }
         }
 
@@ -696,13 +760,17 @@ Describe 'PSTaskFramework.InstallHelpers Module' {
                 }
 
                 $appInfo = [ordered]@{
+                    data = @{
+                        LatestVersion    = $latestVersion
+                        NextVersionCheck = [DateTime]::Now.AddMinutes(-1) # past
+                    }
                 }
 
                 isPowerShellUpToDate 'powershell' $appInfo | Should -BeTrue
 
                 Should -Invoke Invoke-WebRequest -Times 1 -Exactly
-                $appInfo.LatestVersion.ToString() | Should -BeExactly $latestVersion
-                $appInfo.NextVersionCheck | Should -BeGreaterThan ([DateTime]::Now.AddMinutes(1))
+                $appInfo.data.LatestVersion.ToString() | Should -BeExactly $latestVersion
+                $appInfo.data.NextVersionCheck | Should -BeGreaterThan ([DateTime]::Now.AddMinutes(1))
             }
         }
         It 'uses cached latest version when NextVersionCheck is in the future' {
@@ -711,8 +779,10 @@ Describe 'PSTaskFramework.InstallHelpers Module' {
 
                 $latestVersion = $PSVersionTable.PSVersion.ToString()
                 $appInfo = [ordered]@{
-                    LatestVersion    = $latestVersion
-                    NextVersionCheck = [DateTime]::Now.AddMinutes(1) # future
+                    data = @{
+                        LatestVersion    = $latestVersion
+                        NextVersionCheck = [DateTime]::Now.AddMinutes(1) # future
+                    }
                 }
 
                 isPowerShellUpToDate 'powershell' $appInfo | Should -BeTrue
@@ -731,15 +801,17 @@ Describe 'PSTaskFramework.InstallHelpers Module' {
                 }
 
                 $appInfo = [ordered]@{
-                    LatestVersion    = '1.0.0'
-                    NextVersionCheck = [DateTime]::Now.AddMinutes(-1)
+                    data = @{
+                        LatestVersion    = '1.0.0'
+                        NextVersionCheck = [DateTime]::Now.AddMinutes(-1)
+                    }
                 }
 
                 isPowerShellUpToDate 'powershell' $appInfo | Should -BeFalse
 
                 Should -Invoke Invoke-WebRequest -Times 1 -Exactly
-                $appInfo.LatestVersion | Should -BeExactly $latestVersion
-                $appInfo.NextVersionCheck | Should -BeGreaterThan ([DateTime]::Now.AddMinutes(1))
+                $appInfo.data.LatestVersion | Should -BeExactly $latestVersion
+                $appInfo.data.NextVersionCheck | Should -BeGreaterThan ([DateTime]::Now.AddMinutes(1))
             }
         }
         It 'uses cached latest version when web request fails' {
@@ -751,8 +823,10 @@ Describe 'PSTaskFramework.InstallHelpers Module' {
 
                 $latestVersion = $PSVersionTable.PSVersion.ToString()
                 $appInfo = [ordered]@{
-                    LatestVersion    = $latestVersion
-                    NextVersionCheck = [DateTime]::Now.AddMinutes(-1) # past
+                    data = @{
+                        LatestVersion    = $latestVersion
+                        NextVersionCheck = [DateTime]::Now.AddMinutes(-1) # past
+                    }
                 }
 
                 $WarningPreference = 'Ignore'
@@ -760,8 +834,8 @@ Describe 'PSTaskFramework.InstallHelpers Module' {
 
                 $result | Should -BeTrue
                 Should -Invoke Invoke-WebRequest -Times 1 -Exactly
-                $appInfo.LatestVersion | Should -BeExactly $latestVersion
-                $appInfo.NextVersionCheck | Should -BeGreaterThan ([DateTime]::Now.AddMinutes(1))
+                $appInfo.data.LatestVersion | Should -BeExactly $latestVersion
+                $appInfo.data.NextVersionCheck | Should -BeGreaterThan ([DateTime]::Now.AddMinutes(1))
             }
         }
         It 'uses cached latest version when web request does not return 302' {
@@ -772,16 +846,18 @@ Describe 'PSTaskFramework.InstallHelpers Module' {
 
                 $latestVersion = $PSVersionTable.PSVersion.ToString()
                 $appInfo = [ordered]@{
-                    LatestVersion    = $latestVersion
-                    NextVersionCheck = [DateTime]::Now.AddMinutes(-1) # past
+                    data = @{
+                        LatestVersion    = $latestVersion
+                        NextVersionCheck = [DateTime]::Now.AddMinutes(-1) # past
+                    }
                 }
 
                 $WarningPreference = 'Ignore'
                 (& isPowerShellUpToDate 'powershell' $appInfo) | Should -BeTrue
 
                 Should -Invoke Invoke-WebRequest -Times 1 -Exactly
-                $appInfo.LatestVersion | Should -BeExactly $latestVersion
-                $appInfo.NextVersionCheck | Should -BeGreaterThan ([DateTime]::Now.AddMinutes(1))
+                $appInfo.data.LatestVersion | Should -BeExactly $latestVersion
+                $appInfo.data.NextVersionCheck | Should -BeGreaterThan ([DateTime]::Now.AddMinutes(1))
             }
         }
     }

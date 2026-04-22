@@ -1,7 +1,12 @@
-# SPDX-License-Identifier: Unlicense
-# Source: http://github.com/mrfootoyou/pstaskframework
-# spell:ignore pscustomobject,splatable
+<#
+.DESCRIPTION
+    PowerShell argument conversion helpers.
+.NOTES
+    SPDX-License-Identifier: Unlicense
+    Source: http://github.com/mrfootoyou/pstaskframework
+#>
 #Requires -Version 7.4
+# spell:ignore pscustomobject,splatable
 
 function ConvertTo-PSString {
     <#

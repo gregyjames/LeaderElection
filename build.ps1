@@ -1,7 +1,3 @@
-# SPDX-License-Identifier: Unlicense
-# Source: http://github.com/mrfootoyou/pstaskframework
-# spell:ignore winget,choco,opencover,reportgenerator,reportgenerator-globaltool
-#Requires -Version 7.4
 <#
 .SYNOPSIS
     A lightweight task runner for common .NET Core repository tasks.
@@ -14,15 +10,23 @@
     PowerShell 7.4 or later is required to use this script. See https://aka.ms/install-powershell.
 .EXAMPLE
     PS> ./build.ps1
+
     Executes the default 'build' task, including all of its dependencies (e.g. 'restore').
 .EXAMPLE
     PS> ./build.ps1 list
+
     Lists all available tasks.
 .EXAMPLE
     PS> ./build.ps1 test -noDeps
+
     Executes the 'test' task without executing its dependencies.
+.NOTES
+    SPDX-License-Identifier: Unlicense
+    Source: http://github.com/mrfootoyou/pstaskframework
 #>
-[Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSAvoidUsingCmdletAliases', 'Task', Justification = 'Task is an alias for Add-TaskFrameworkTask.')]
+#Requires -Version 7.4
+# spell:ignore winget,choco,opencover,reportgenerator,reportgenerator-globaltool
+
 [CmdletBinding(PositionalBinding = $false)]
 param (
     # The name of the task(s) to execute.
@@ -281,9 +285,11 @@ Task build -desc 'Build the solution' -dependsOn restore {
         'debug' or 'release'). A build version can be specified using the -Version parameter.
     .EXAMPLE
         PS> ./build.ps1 build
+
         Builds the debug configuration of the solution.
     .EXAMPLE
         PS> ./build.ps1 build -Configuration Release -Version 1.2.3
+
         Builds the release configuration assigning it version 1.2.3.
     #>
     param()
@@ -304,12 +310,15 @@ Task test -desc 'Run tests' -dependsOn build {
         of tests using the -TestFilter parameter.
     .EXAMPLE
         PS> ./build.ps1 test -TestFilter "PartialTestName"
+
         Runs only tests with names that contain "PartialTestName".
     .EXAMPLE
         PS> ./build.ps1 test -TestFilter "Kind=Integration"
+
         Runs only tests with the [Trait("Kind", "Integration")] attribute.
     .EXAMPLE
         PS> ./build.ps1 test -TestFilter "Kind!=Integration"
+
         Runs only tests without the [Trait("Kind", "Integration")] attribute.
     #>
     param(
@@ -340,9 +349,11 @@ Task coverage -desc 'Run tests with code coverage' -dependsOn restore {
         browser unless the -DoNotOpenReport switch is specified.
     .EXAMPLE
         PS> ./build.ps1 coverage
+
         Generates an HTML code coverage report and opens it in the default browser.
     .EXAMPLE
         PS> ./build.ps1 coverage -OutputDir ./coverage-report -ReportType Html,lcov,opencover -DoNotOpenReport
+
         Generates an HTML, lcov, and OpenCover code coverage report in the "./coverage-report"
         directory and does not open the HTML report.
     #>
@@ -431,10 +442,12 @@ Task package -desc 'Package the solution' -dependsOn build {
         whatever version is specified in the .csproj file(s), usually 1.0.0.
     .EXAMPLE
         PS> ./build.ps1 package
+
         Build and package all packable projects in the solution using the Debug
         configuration and default version.
     .EXAMPLE
         PS> ./build.ps1 package -Version 1.2.3 -TargetProject ./src/MyProject/
+
         Build and package the specified project as version 1.2.3.
     #>
     param(
@@ -470,10 +483,12 @@ Task push -desc 'Push NuGet packages' -dependsOn version {
         the 'package' task).
     .EXAMPLE
         PS> ./build.ps1 push ./artifacts/package/release
+
         Push all packages in the specified folder to the default NuGet source,
         prompting for the API key if not set via the NUGET_API_KEY environment variable.
     .EXAMPLE
         PS> ./build.ps1 push ./artifacts/package/release/MyPackage.1.2.3.nupkg -ApiKey $secretKey
+
         Push the specified package using the specified API key.
     #>
     [CmdletBinding(PositionalBinding = $false)]

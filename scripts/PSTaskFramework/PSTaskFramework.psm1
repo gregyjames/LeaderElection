@@ -1,7 +1,12 @@
-# SPDX-License-Identifier: Unlicense
-# Source: http://github.com/mrfootoyou/pstaskframework
-# spell:ignore psargs,targs
+<#
+.DESCRIPTION
+    Task management helpers for PowerShell.
+.NOTES
+    SPDX-License-Identifier: Unlicense
+    Source: http://github.com/mrfootoyou/pstaskframework
+#>
 #Requires -Version 7.4
+# spell:ignore psargs,targs
 
 param()
 
@@ -128,7 +133,7 @@ function Reset-TaskFramework {
     [TaskDefinition]::Clear()
 }
 
-function Add-TaskFrameworkTask {
+function Task {
     <#
     .DESCRIPTION
         Adds a task with an associated action and optional task dependencies to the
@@ -445,18 +450,13 @@ function Invoke-TaskFramework {
 # reset the task framework state when the module is [force] imported to ensure a clean slate
 Reset-TaskFramework
 
-New-Alias -Name Task -Value Add-TaskFrameworkTask -Force
-
 # !Important! Remember to update the module manifest (.psd1) when adding or removing exports.
 $exportModuleMemberParams = @{
     Function = @(
         'Reset-TaskFramework'
-        'Add-TaskFrameworkTask'
+        'Task'
         'Get-TaskFrameworkTasks'
         'Invoke-TaskFramework'
-    )
-    Alias    = @(
-        'Task'
     )
 }
 

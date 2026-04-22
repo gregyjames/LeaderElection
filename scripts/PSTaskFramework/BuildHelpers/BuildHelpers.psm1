@@ -1,7 +1,12 @@
-# SPDX-License-Identifier: Unlicense
-# Source: http://github.com/mrfootoyou/pstaskframework
-# spell:ignore psargs
+<#
+.DESCRIPTION
+    Shell helpers for PowerShell.
+.NOTES
+    SPDX-License-Identifier: Unlicense
+    Source: http://github.com/mrfootoyou/pstaskframework
+#>
 #Requires -Version 7.4
+# spell:ignore psargs
 
 [Diagnostics.CodeAnalysis.SuppressMessage('PSAvoidUsingPositionalParameters', 'Invoke-Shell', Justification = 'Invoke-Shell is intended to be used with positional parameters.')]
 param()

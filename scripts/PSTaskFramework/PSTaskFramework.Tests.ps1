@@ -1,8 +1,12 @@
-# SPDX-License-Identifier: Unlicense
-# Source: http://github.com/mrfootoyou/pstaskframework
+<#
+.DESCRIPTION
+    Unit tests for PSTaskFramework module.
+.NOTES
+    SPDX-License-Identifier: Unlicense
+    Source: http://github.com/mrfootoyou/pstaskframework
+#>
 #Requires -Version 7.4
 
-[Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSAvoidUsingCmdletAliases', 'Task', Justification = 'Task is an alias for Add-TaskFrameworkTask.')]
 [Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSUseCompatibleCommands', '', Justification = 'Chokes on Pester keywords.')]
 param()
 
@@ -21,11 +25,11 @@ Describe 'PSTaskFramework Module' {
         $global:LASTEXITCODE | Should -Be -1
     }
 
-    It 'registers and executes tasks via Add-TaskFrameworkTask and Task alias' {
+    It 'registers and executes tasks via Task command' {
         $shared = [ordered]@{ State = [System.Collections.Generic.List[string]]::new() }
 
-        Add-TaskFrameworkTask -Name 'alpha' -Description 'first task' -Action { $Shared.State.Add('alpha') } -DependsOn @('beta')
-        Task 'beta' { $Shared.State.Add('beta') } -Description 'second task'
+        Task 'alpha' -Description 'first task' -Action { $Shared.State.Add('alpha') } -DependsOn @('beta')
+        Task 'beta' -Description 'second task' -Action { $Shared.State.Add('beta') }
 
         Invoke-TaskFramework -WorkingDirectory $TestDrive -TaskName @('alpha') -Variables @{ Shared = $shared }
 
