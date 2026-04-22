@@ -36,6 +36,14 @@
     "editor.formatOnSave": true,
     "editor.defaultFormatter": "esbenp.prettier-vscode"
   },
+  "[powershell]": {
+    "debug.saveBeforeStart": "nonUntitledEditorsInActiveGroup",
+    "editor.semanticHighlighting.enabled": false,
+    "editor.wordSeparators": "`~!@#$%^&*()=+[{]}\\|;:'\",.<>/?",
+    "editor.formatOnSave": true,
+    "editor.defaultFormatter": "ms-vscode.powershell"
+  },
+  "powershell.scriptAnalysis.enable": true,
   "files.associations": {
     "CODEOWNERS": "plaintext", // never format
     "LICENSE.md": "plaintext", // never format
