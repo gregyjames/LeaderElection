@@ -12,6 +12,7 @@ obj/
 # Visual Studio support
 /.vs
 
-/tests/**/coverage.*
+coverage.*
+
 /tests/**/TestResults
 /artifacts
