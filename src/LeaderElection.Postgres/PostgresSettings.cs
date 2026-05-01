@@ -2,23 +2,28 @@ using Npgsql;
 
 namespace LeaderElection.Postgres;
 
+/// <summary>
+/// Settings for PostgreSQL-based leader election.
+/// </summary>
 public class PostgresSettings : LeaderElectionSettingsBase
 {
     /// <summary>
-    /// Factory function to create a new <see cref="NpgsqlConnection"/>.
+    /// An optional factory function used to obtain an <see cref="NpgsqlConnection"/>.
     /// </summary>
     /// <remarks>
     /// If not provided, a connection will be created using the
-    /// <see cref="ConnectionString"/> property, or if that is not set,
+    /// <see cref="ConnectionString"/> property. If that is null or empty,
     /// it will attempt to obtain a <see cref="NpgsqlConnection"/> from DI
     /// (assuming the leader election is created via DI).
     /// </remarks>
     public Func<PostgresSettings, NpgsqlConnection>? ConnectionFactory { get; set; }
 
     /// <summary>
-    /// Connection string for the <see cref="NpgsqlConnection"/>.
-    /// Ignored if <see cref="ConnectionFactory"/> is set.
+    /// Optional connection string for the <see cref="NpgsqlConnection"/>.
     /// </summary>
+    /// <remarks>
+    /// Ignored if <see cref="ConnectionFactory"/> is set.
+    /// </remarks>
     public string? ConnectionString { get; set; }
 
     /// <summary>
@@ -34,8 +39,8 @@ public class PostgresSettings : LeaderElectionSettingsBase
         ArgumentNullException.ThrowIfNull(src);
         ArgumentNullException.ThrowIfNull(dst);
         LeaderElectionSettingsBase.Copy(src, dst);
-        dst.ConnectionString = src.ConnectionString;
         dst.ConnectionFactory = src.ConnectionFactory;
+        dst.ConnectionString = src.ConnectionString;
         dst.LockId = src.LockId;
     }
 }
