@@ -5,16 +5,31 @@ using Microsoft.Extensions.Logging.Abstractions;
 
 namespace LeaderElection;
 
+/// <summary>
+/// A thread-safe abstract implementation of the <see cref="ILeaderElection"/> interface that
+/// manages the leader loop, leadership status, and event notifications.
+/// <para/>
+/// Derived classes are responsible for implementing the specific logic to acquire, renew,
+/// and release leadership by implementing the abstract methods
+/// <see cref="TryAcquireLeadershipInternalAsync"/>, <see cref="RenewLeadershipInternalAsync"/>,
+/// and <see cref="ReleaseLeadershipAsync"/>.
+/// </summary>
+/// <typeparam name="TSettings">The settings used by the derived implementation.</typeparam>
 public abstract partial class LeaderElectionBase<TSettings> : ILeaderElection
     where TSettings : LeaderElectionSettingsBase
 {
-    private readonly SemaphoreSlim _leaderLoopSemaphore = new(1, 1);
-    private volatile Task? _leaderLoopTask;
-    private CancellationTokenSource? _leaderLoopTaskCTS;
-    private DateTimeOffset _lastLeadershipRenewal;
-    private volatile bool _isLeader;
-    private volatile int _disposedValue;
+    // We use an int for the disposed flag since Interlocked doesn't support bool.
+    // 0 = not disposed, 1 = disposed.
+    private int _disposedValue;
 
+    // Semaphore to protect access to the leader loop and related state.
+    private readonly SemaphoreSlim _leaderLoopSemaphore = new(1, 1);
+    private Task? _leaderLoopTask;
+    private CancellationTokenSource? _leaderLoopTaskCTS;
+    private bool _isLeader;
+    private long _lastLeadershipRenewalTicks;
+
+    // These readonly fields are visible for derived types.
     [SuppressMessage("Design", "CA1051", Justification = "Field readonly to derived types")]
     protected readonly TSettings _settings;
 
@@ -43,14 +58,16 @@ public abstract partial class LeaderElectionBase<TSettings> : ILeaderElection
     public event EventHandler<LeadershipExceptionEventArgs>? ErrorOccurred;
 
     /// <inheritdoc />
-    public bool LeaderLoopRunning => _leaderLoopTask != null;
+    public bool LeaderLoopRunning => Volatile.Read(ref _leaderLoopTask) != null;
 
     /// <inheritdoc />
-    public bool IsLeader => _isLeader;
+    public bool IsLeader => Volatile.Read(ref _isLeader);
 
     /// <inheritdoc />
     public DateTime LastLeadershipRenewal =>
-        _isLeader ? _lastLeadershipRenewal.UtcDateTime : DateTime.MinValue;
+        IsLeader
+            ? new DateTime(Interlocked.Read(ref _lastLeadershipRenewalTicks), DateTimeKind.Utc)
+            : DateTime.MinValue;
 
     /// <inheritdoc />
     public async Task StartAsync(CancellationToken cancellationToken = default)
@@ -64,7 +81,7 @@ public abstract partial class LeaderElectionBase<TSettings> : ILeaderElection
         }
 
         CancellationTokenSource? cts = null;
-        await _leaderLoopSemaphore.WaitAsync(cancellationToken).ConfigureAwait(false);
+        await AcquireLeaderLoopSemaphoreAsync(cancellationToken).ConfigureAwait(false);
         try
         {
             if (LeaderLoopRunning)
@@ -85,13 +102,13 @@ public abstract partial class LeaderElectionBase<TSettings> : ILeaderElection
             var task = RunLeaderLoopAsync(cts.Token);
 
             // success
-            _leaderLoopTask = task;
             _leaderLoopTaskCTS = cts;
+            Volatile.Write(ref _leaderLoopTask, task);
             cts = null; // ownership transferred
         }
         finally
         {
-            _leaderLoopSemaphore.Release();
+            ReleaseLeaderLoopSemaphore();
             cts?.Dispose();
         }
     }
@@ -121,9 +138,10 @@ public abstract partial class LeaderElectionBase<TSettings> : ILeaderElection
             return true; // Already the leader
         }
 
+        var isLeader = await AcquireLeaderLoopSemaphoreAsync(cancellationToken)
+            .ConfigureAwait(false);
+        var acquiredLeadership = false;
         Exception? exceptionInfo = null;
-        var isLeader = false;
-        await _leaderLoopSemaphore.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {
             if (!LeaderLoopRunning)
@@ -133,7 +151,7 @@ public abstract partial class LeaderElectionBase<TSettings> : ILeaderElection
                 );
             }
 
-            if (IsLeader)
+            if (isLeader)
             {
                 return true; // Already the leader
             }
@@ -145,8 +163,8 @@ public abstract partial class LeaderElectionBase<TSettings> : ILeaderElection
             }
 
             // Successfully acquired leadership
-            _isLeader = true;
-            _lastLeadershipRenewal = _timeProvider.GetUtcNow();
+            isLeader = true;
+            acquiredLeadership = true;
             LogLeadershipAcquired(_settings.InstanceId);
         }
         catch (Exception ex)
@@ -157,8 +175,8 @@ public abstract partial class LeaderElectionBase<TSettings> : ILeaderElection
         }
         finally
         {
-            isLeader = _isLeader;
-            _leaderLoopSemaphore.Release();
+            SetLeaderStatus(isLeader, acquiredLeadership);
+            ReleaseLeaderLoopSemaphore();
         }
 
         // Fire events outside of the lock to avoid potential deadlocks
@@ -239,28 +257,64 @@ public abstract partial class LeaderElectionBase<TSettings> : ILeaderElection
     /// </summary>
     protected abstract Task ReleaseLeadershipAsync();
 
-    private void ThrowIfDisposed() => ObjectDisposedException.ThrowIf(_disposedValue != 0, this);
+    private void ThrowIfDisposed() =>
+        ObjectDisposedException.ThrowIf(Volatile.Read(ref _disposedValue) != 0, this);
+
+    // Helper method to acquire the leader loop semaphore and check if we are the leader.
+    // Primarily used to throw ObjectDisposedException when another thread disposes this
+    // instance while waiting on the semaphore.
+    private async Task<bool> AcquireLeaderLoopSemaphoreAsync(CancellationToken cancellationToken)
+    {
+        try
+        {
+            await _leaderLoopSemaphore.WaitAsync(cancellationToken).ConfigureAwait(false);
+            // in critical section now, so we can read the leader status
+            // safely without worrying about race conditions
+            return _isLeader;
+        }
+        catch (ObjectDisposedException)
+        {
+            // semaphore was disposed by another thread.
+            ThrowIfDisposed();
+            throw; // should be unreachable
+        }
+    }
+
+    // Helper method to release the leader loop semaphore.
+    // Primarily used to throw ObjectDisposedException when another thread disposes this
+    // instance while waiting on the semaphore.
+    private void ReleaseLeaderLoopSemaphore()
+    {
+        try
+        {
+            _leaderLoopSemaphore.Release();
+        }
+        catch (ObjectDisposedException)
+        {
+            // semaphore was disposed by another thread.
+            ThrowIfDisposed();
+            throw; // should be unreachable
+        }
+    }
 
     private async Task RunLeaderLoopAsync(CancellationToken cancellationToken)
     {
         while (true)
         {
-            var wasLeader = false;
-            var isLeader = false;
+            var isLeader = await AcquireLeaderLoopSemaphoreAsync(cancellationToken)
+                .ConfigureAwait(false);
+            var wasLeader = isLeader;
+            var acquiredLeadership = false;
             Exception? exceptionInfo = null;
-
-            // Grab the semaphore to ensure that we don't get interrupted by
-            // TryAcquireLeadershipAsync() or StopAsync().
-            await _leaderLoopSemaphore.WaitAsync(cancellationToken).ConfigureAwait(false);
             try
             {
-                wasLeader = _isLeader;
-                if (!wasLeader)
+                if (!isLeader)
                 {
-                    _isLeader = await TryAcquireLeadershipInternalAsync(cancellationToken)
+                    isLeader = await TryAcquireLeadershipInternalAsync(cancellationToken)
                         .ConfigureAwait(false);
-                    if (_isLeader)
+                    if (isLeader)
                     {
+                        acquiredLeadership = true;
                         LogLeadershipAcquired(_settings.InstanceId);
                     }
                     else
@@ -272,10 +326,11 @@ public abstract partial class LeaderElectionBase<TSettings> : ILeaderElection
                 }
                 else
                 {
-                    _isLeader = await RenewLeadershipInternalAsync(cancellationToken)
+                    isLeader = await RenewLeadershipInternalAsync(cancellationToken)
                         .ConfigureAwait(false);
-                    if (_isLeader)
+                    if (isLeader)
                     {
+                        acquiredLeadership = true;
                         // very common that leadership renewal succeeds, but we log it anyway
                         // to provide visibility into the leader loop's operations
                         LogLeadershipRenewedSuccessfully(_settings.InstanceId);
@@ -295,17 +350,12 @@ public abstract partial class LeaderElectionBase<TSettings> : ILeaderElection
                 // On any unexpected error, we assume we are no longer the leader.
                 // This is a safety measure to avoid a situation where an instance thinks
                 // it is the leader when it is not.
-                _isLeader = false;
+                isLeader = false;
             }
             finally
             {
-                isLeader = _isLeader;
-                if (isLeader)
-                {
-                    _lastLeadershipRenewal = _timeProvider.GetUtcNow();
-                }
-
-                _leaderLoopSemaphore.Release();
+                SetLeaderStatus(isLeader, acquiredLeadership);
+                ReleaseLeaderLoopSemaphore();
             }
 
             // Fire events outside of the lock to avoid potential deadlocks
@@ -332,20 +382,16 @@ public abstract partial class LeaderElectionBase<TSettings> : ILeaderElection
             return; // already stopped
         }
 
-        var wasLeader = false;
-        var isLeader = false;
+        var isLeader = await AcquireLeaderLoopSemaphoreAsync(cancellationToken)
+            .ConfigureAwait(false);
+        var wasLeader = isLeader;
         Exception? exceptionInfo = null;
-
-        await _leaderLoopSemaphore.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {
             if (!LeaderLoopRunning)
             {
                 return; // already stopped
             }
-
-            Debug.Assert(_leaderLoopTask != null);
-            Debug.Assert(_leaderLoopTaskCTS != null);
 
             // First stop the leader loop to prevent any further leadership
             // changes while we are trying to stop
@@ -358,8 +404,7 @@ public abstract partial class LeaderElectionBase<TSettings> : ILeaderElection
 
             // we must not consider ourselves leader since we've abandoned the
             // leader election process
-            wasLeader = _isLeader;
-            _isLeader = false;
+            isLeader = false;
 
             if (wasLeader && releaseLeadership)
             {
@@ -377,14 +422,17 @@ public abstract partial class LeaderElectionBase<TSettings> : ILeaderElection
         }
         finally
         {
-            isLeader = _isLeader;
-            _leaderLoopSemaphore.Release();
+            SetLeaderStatus(isLeader);
+            ReleaseLeaderLoopSemaphore();
         }
 
         NotifyLeadershipStatus(wasLeader, isLeader, exceptionInfo);
 
         async Task StopLeaderLoopAsync()
         {
+            Debug.Assert(_leaderLoopTask != null);
+            Debug.Assert(_leaderLoopTaskCTS != null);
+
             LogStoppingLeaderElection(_settings.InstanceId);
 
             // Cancel the leader loop task, wait for it to complete, and cleanup resources...
@@ -405,20 +453,37 @@ public abstract partial class LeaderElectionBase<TSettings> : ILeaderElection
             }
             finally
             {
-                _leaderLoopTask = null;
+                // Clear the task and dispose the CTS.
+                Volatile.Write(ref _leaderLoopTask, null);
                 _leaderLoopTaskCTS.Dispose();
                 _leaderLoopTaskCTS = null;
             }
         }
     }
 
+    // Set the leader status and update the last renewal time if we acquired leadership.
+    private void SetLeaderStatus(bool isLeader, bool acquiredLeadership = false)
+    {
+        if (isLeader && acquiredLeadership)
+        {
+            // Use Interlocked to ensure that LastLeadershipRenewal
+            // does not read a torn value
+            Interlocked.Exchange(ref _lastLeadershipRenewalTicks, _timeProvider.GetUtcNow().Ticks);
+        }
+
+        // Use Volatile.Write to ensure this happens last since LastLeadershipRenewal
+        // depends on IsLeader being true to return a valid value.
+        Volatile.Write(ref _isLeader, isLeader);
+    }
+
+    // Helper method to fire the LeadershipChanged and ErrorOccurred events based on the
+    // provided parameters. This consolidates the logic for firing these events in one place
+    // and ensures that they are always fired in the correct order (ErrorOccurred first, then
+    // LeadershipChanged).
+    // This *must* be called outside of the lock to avoid potential deadlocks if event handlers
+    // interact with the leader election instance.
     private void NotifyLeadershipStatus(bool wasLeader, bool isLeader, Exception? exceptionInfo)
     {
-        Debug.Assert(
-            _leaderLoopSemaphore.CurrentCount == 1,
-            "Must be called outside of the leader loop lock"
-        );
-
         if (exceptionInfo != null)
         {
             ErrorOccurred?.Invoke(this, new(exceptionInfo));
@@ -453,7 +518,7 @@ public abstract partial class LeaderElectionBase<TSettings> : ILeaderElection
 
         _leaderLoopTaskCTS?.Dispose();
         _leaderLoopSemaphore.Dispose();
-        _isLeader = false;
+        SetLeaderStatus(false);
     }
 
     [LoggerMessage(
