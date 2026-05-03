@@ -38,6 +38,8 @@ public abstract partial class LeaderElectionBase<TSettings> : ILeaderElection
     public event EventHandler<LeadershipChangedEventArgs>? LeadershipChanged;
     public event EventHandler<LeadershipExceptionEventArgs>? ErrorOccurred;
 
+    public bool LeaderLoopRunning => Volatile.Read(ref _leadershipLoopTask) != null;
+
     private bool IsDisposed => Volatile.Read(ref _disposedValue) == 1;
     public bool IsLeader => _isLeader && !IsDisposed;
     public DateTime LastLeadershipRenewal => _lastLeadershipRenewalTime.UtcDateTime;
@@ -147,7 +149,7 @@ public abstract partial class LeaderElectionBase<TSettings> : ILeaderElection
 
     private async Task InternalStopAsync(CancellationToken cancellationToken = default)
     {
-        if (!_isLeader)
+        if (_leadershipLoopTask == null)
         {
             return;
         }

@@ -287,6 +287,24 @@ public class LeaderElectionBaseTests
         sut.Settings.TryReleaseCount.Should().Be(gracefulShutdown ? 1 : 0);
     }
 
+    [Fact]
+    public async Task StopAsyncShouldAlwaysStopLeaderLoop()
+    {
+        // Arrange
+        await using var sut = CreateSut();
+        sut.Settings.AcquireResult = () => false; // do NOT acquire leadership
+        await sut.StartAsync(TestContext.Current.CancellationToken);
+        await FastForward(TimeSpan.Zero);
+        sut.IsLeader.Should().BeFalse();
+        sut.LeaderLoopRunning.Should().BeTrue();
+
+        // Act
+        await sut.StopAsync(TestContext.Current.CancellationToken);
+
+        // Assert
+        sut.LeaderLoopRunning.Should().BeFalse();
+    }
+
     [Theory]
     [InlineData(true)]
     [InlineData(false)]
