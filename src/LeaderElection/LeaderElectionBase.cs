@@ -149,15 +149,10 @@ public abstract partial class LeaderElectionBase<TSettings> : ILeaderElection
 
     private async Task InternalStopAsync(CancellationToken cancellationToken = default)
     {
-        if (_leadershipLoopTask == null)
-        {
-            return;
-        }
-
-        LogStoppingLeaderElectionForInstanceInstanceid(_settings.InstanceId);
-
         if (_leadershipLoopCancellationTokenSource != null)
         {
+            LogStoppingLeaderElectionForInstanceInstanceid(_settings.InstanceId);
+
             await _leadershipLoopCancellationTokenSource.CancelAsync().ConfigureAwait(false);
         }
 
