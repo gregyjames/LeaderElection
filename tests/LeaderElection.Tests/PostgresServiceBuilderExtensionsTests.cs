@@ -48,9 +48,7 @@ public class PostgresServiceBuilderExtensionsTests
         });
 
         var serviceProvider = services.BuildServiceProvider();
-        var optionsProvider = serviceProvider.GetRequiredService<
-            IOptionsSnapshot<PostgresSettings>
-        >();
+        var optionsProvider = serviceProvider.GetRequiredService<IOptions<PostgresSettings>>();
 
         // Accessing .Value should trigger validation via IValidateOptions
         var act = new Func<object>(() => _ = optionsProvider.Value);

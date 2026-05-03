@@ -88,7 +88,7 @@ public sealed class RedisServiceBuilderExtensionsTests
             .BuildServiceProvider();
 
         // Assert
-        var actualSettings = sp.GetRequiredService<IOptionsSnapshot<RedisSettings>>()
+        var actualSettings = sp.GetRequiredService<IOptionsMonitor<RedisSettings>>()
             .Get(serviceKey);
         actualSettings.ConnectionMultiplexerFactory.Should().NotBeNull();
         actualSettings.ConnectionMultiplexerFactory = null;

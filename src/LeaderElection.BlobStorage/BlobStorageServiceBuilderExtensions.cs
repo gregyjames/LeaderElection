@@ -107,7 +107,7 @@ public static class BlobStorageServiceBuilderExtensions
             static (sp, key) =>
             {
                 // get settings
-                var settings = sp.GetRequiredService<IOptionsSnapshot<BlobStorageSettings>>()
+                var settings = sp.GetRequiredService<IOptionsMonitor<BlobStorageSettings>>()
                     .Get(key as string);
 
                 // create a new instance...

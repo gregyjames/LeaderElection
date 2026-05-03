@@ -88,7 +88,7 @@ public sealed class BlobStorageServiceBuilderExtensionsTests
             .BuildServiceProvider();
 
         // Assert
-        var actualSettings = sp.GetRequiredService<IOptionsSnapshot<BlobStorageSettings>>()
+        var actualSettings = sp.GetRequiredService<IOptionsMonitor<BlobStorageSettings>>()
             .Get(serviceKey);
         actualSettings.Should().BeEquivalentTo(settings);
     }

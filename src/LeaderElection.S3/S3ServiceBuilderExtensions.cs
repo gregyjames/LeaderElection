@@ -71,7 +71,7 @@ public static class S3ServiceBuilderExtensions
             static (sp, key) =>
             {
                 // get settings
-                var settings = sp.GetRequiredService<IOptionsSnapshot<S3Settings>>()
+                var settings = sp.GetRequiredService<IOptionsMonitor<S3Settings>>()
                     .Get(key as string);
 
                 // Note: We must resolve the Minio client here. If we don't do it now

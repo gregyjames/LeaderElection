@@ -85,7 +85,7 @@ public sealed class S3ServiceBuilderExtensionsTests
             .BuildServiceProvider();
 
         // Assert
-        var actualSettings = sp.GetRequiredService<IOptionsSnapshot<S3Settings>>().Get(serviceKey);
+        var actualSettings = sp.GetRequiredService<IOptionsMonitor<S3Settings>>().Get(serviceKey);
         actualSettings.Should().BeEquivalentTo(settings);
     }
 
