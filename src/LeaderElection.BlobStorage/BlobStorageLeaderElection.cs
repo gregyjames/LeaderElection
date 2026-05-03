@@ -130,13 +130,11 @@ public partial class BlobStorageLeaderElection : LeaderElectionBase<BlobStorageS
 
         Debug.Assert(_blobClient != null);
 
-        var success = false;
         try
         {
             var leaseClient = _blobClient.GetBlobLeaseClient(_currentLeaseId);
             await leaseClient.ReleaseAsync().ConfigureAwait(false);
 
-            success = true;
             LogLeaseReleased(_blobClient.Uri);
         }
         catch (Azure.RequestFailedException ex)
@@ -155,11 +153,9 @@ public partial class BlobStorageLeaderElection : LeaderElectionBase<BlobStorageS
         }
         finally
         {
-            if (!success)
-            {
-                // give up the lease in our state to avoid being stuck in a bad state
-                ForceReset();
-            }
+            // always give up local leadership state even if release failed, since we don't
+            // want to be stuck in a bad state where we think we are the leader but are not.
+            ForceReset();
         }
     }
 
