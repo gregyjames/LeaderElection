@@ -392,6 +392,7 @@ function Invoke-TaskFramework {
         # the function will throw an exception failure.
         [switch]$ExitOnError
     )
+    & $PSScriptRoot/syncCallerPreferences.ps1 $MyInvocation
     $ErrorActionPreference = 'Stop'
 
     $private:_orig = @{

@@ -35,6 +35,8 @@ function Get-WellKnownAppInfo {
         [string[]] $Name = @('*')
     )
     process {
+        & $PSScriptRoot/../syncCallerPreferences.ps1 $MyInvocation -PreferencesToSync ErrorAction
+
         switch ($Name) {
             { $_.IndexOfAny([char[]]'*?[') -ge 0 } {
                 $n = $_
@@ -622,6 +624,8 @@ function Install-PackageManager {
         [string[]] $PackageManager
     )
 
+    & $PSScriptRoot/../syncCallerPreferences.ps1 $MyInvocation
+
     $PackageManager = @(
         $PackageManager |
         ForEach-Object {
@@ -808,6 +812,8 @@ function Install-RequiredApp {
         [switch] $InstallPackageManagers
     )
 
+    & $PSScriptRoot/../syncCallerPreferences.ps1 $MyInvocation
+
     # Validate that all apps have installation information, either provided
     # directly or via the well-known apps list...
     $copiedAppsToInstall = [ordered]@{}
@@ -964,6 +970,8 @@ function Install-PowerShellModule {
         [ValidateSet('CurrentUser', 'AllUsers')]
         [string]$Scope = 'CurrentUser'
     )
+
+    & $PSScriptRoot/../syncCallerPreferences.ps1 $MyInvocation
 
     function tryGetModule([string]$Name, [version]$MinimumVersion) {
         Get-Module -Name $Name -ListAvailable -ea Ignore |
