@@ -22,6 +22,10 @@ public abstract partial class LeaderElectionBase<TSettings> : ILeaderElection
     // 0 = not disposed, 1 = disposed.
     private int _disposedValue;
 
+    // A random number generator used for applying jitter to retry intervals.
+    // Must return a value in the range [0.0, 1.0).
+    private readonly Func<double> _getRandomDouble;
+
     // Semaphore to protect access to the leader loop and related state.
     private readonly SemaphoreSlim _leaderLoopSemaphore = new(1, 1);
     private Task? _leaderLoopTask;
@@ -42,13 +46,33 @@ public abstract partial class LeaderElectionBase<TSettings> : ILeaderElection
     protected LeaderElectionBase(
         TSettings settings,
         ILogger? logger = null,
-        TimeProvider? timeProvider = null
+        TimeProvider? timeProvider = null,
+        Func<double>? getRandomDouble = null
     )
     {
         ArgumentNullException.ThrowIfNull(settings);
         _settings = settings;
         _logger = logger ?? NullLogger.Instance;
         _timeProvider = timeProvider ?? TimeProvider.System;
+
+#pragma warning disable CA5394 // We do not need a cryptographically secure RNG
+#if NET6_0_OR_GREATER
+        _getRandomDouble = getRandomDouble ?? Random.Shared.NextDouble;
+#else
+        if (getRandomDouble == null)
+        {
+            var random = new Random(Guid.NewGuid().GetHashCode());
+            getRandomDouble = () =>
+            {
+                lock (random)
+                {
+                    return random.NextDouble();
+                }
+            };
+        }
+        _getRandomDouble = getRandomDouble;
+#endif
+#pragma warning restore CA5394 // Do not use insecure randomness
     }
 
     /// <inheritdoc />
@@ -312,6 +336,7 @@ public abstract partial class LeaderElectionBase<TSettings> : ILeaderElection
 
     private async Task RunLeaderLoopAsync(CancellationToken cancellationToken)
     {
+        var errorCount = 0;
         while (true)
         {
             var isLeader = await AcquireLeaderLoopSemaphoreAsync(cancellationToken)
@@ -354,11 +379,14 @@ public abstract partial class LeaderElectionBase<TSettings> : ILeaderElection
                         LogLostLeadershipDuringRenewal(_settings.InstanceId);
                     }
                 }
+
+                errorCount = 0;
             }
             catch (Exception ex) when (!cancellationToken.IsCancellationRequested)
             {
                 LogUnexpectedErrorInLeaderElection(ex, _settings.InstanceId);
                 exceptionInfo = ex;
+                errorCount++;
 
                 // On any unexpected error, we assume we are no longer the leader.
                 // This is a safety measure to avoid a situation where an instance thinks
@@ -376,13 +404,29 @@ public abstract partial class LeaderElectionBase<TSettings> : ILeaderElection
             NotifyLeadershipStatus(wasLeader, isLeader, exceptionInfo);
 
             // Wait before checking again...
-            var delay = GetNextDelay(isLeader ? 0 : 1);
+            var delay = GetNextDelay(isLeader, errorCount);
             await _timeProvider.Delay(delay, cancellationToken).ConfigureAwait(false);
         }
     }
 
-    protected virtual TimeSpan GetNextDelay(int retryCount) =>
-        retryCount == 0 ? _settings.RenewInterval : _settings.RetryInterval;
+    private TimeSpan GetNextDelay(bool isLeader, int errorCount)
+    {
+        if (isLeader)
+        {
+            return _settings.RenewInterval;
+        }
+        else
+        {
+            var backoffFactor = Math.Pow(_settings.RetryBackoffFactor, Math.Min(errorCount, 30));
+            var jitter = _settings.RetryJitter - (_getRandomDouble() * _settings.RetryJitter * 2);
+            return TimeSpan.FromTicks(
+                Math.Min(
+                    (long)(_settings.RetryInterval.Ticks * backoffFactor * (1.0 - jitter)),
+                    _settings.MaxRetryInterval.Ticks
+                )
+            );
+        }
+    }
 
     private async Task InternalStopAsync(
         bool releaseLeadership,

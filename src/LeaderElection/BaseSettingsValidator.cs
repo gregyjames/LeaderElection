@@ -17,4 +17,18 @@ public static class BaseSettingsValidator
             : new ValidationResult(
                 $"{nameof(LeaderElectionSettingsBase.RetryInterval)} must be positive."
             );
+
+    public static ValidationResult? ValidateMaxRetryInterval(
+        TimeSpan maxRetryInterval,
+        ValidationContext context
+    )
+    {
+        ArgumentNullException.ThrowIfNull(context);
+        var settings = (LeaderElectionSettingsBase)context.ObjectInstance;
+        return maxRetryInterval >= settings.RetryInterval
+            ? ValidationResult.Success
+            : new ValidationResult(
+                $"{nameof(LeaderElectionSettingsBase.MaxRetryInterval)} must be greater than or equal to {nameof(LeaderElectionSettingsBase.RetryInterval)}."
+            );
+    }
 }

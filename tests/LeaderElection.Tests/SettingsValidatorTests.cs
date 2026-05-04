@@ -16,22 +16,108 @@ public partial class SettingsValidatorTests
     internal partial class TestSettingsValidator : IValidateOptions<TestSettings> { }
 
     [Fact]
-    public void BaseSettingsValidatorShouldFailWhenDefaultSettings()
+    public void BaseSettingsValidatorShouldSucceedWithDefaults()
     {
         var validator = new TestSettingsValidator();
-        var settings = new TestSettings
-        {
-            InstanceId = string.Empty,
-            RenewInterval = TimeSpan.Zero,
-            RetryInterval = TimeSpan.Zero,
-        };
+        var settings = new TestSettings();
+
+        var result = validator.Validate(null, settings);
+
+        result.Failed.Should().BeFalse();
+    }
+
+    [Theory]
+    [InlineData("")]
+    [InlineData(null)]
+    public void BaseSettingsValidatorShouldFailWhenInvalidInstanceId(string? instanceId)
+    {
+        var validator = new TestSettingsValidator();
+        var settings = new TestSettings { InstanceId = instanceId! };
 
         var result = validator.Validate(null, settings);
 
         result.Failed.Should().BeTrue();
         result.Failures.Should().Contain(f => f.Contains("InstanceId"));
+    }
+
+    [Theory]
+    [InlineData(0.0)]
+    [InlineData(-1.0)]
+    public void BaseSettingsValidatorShouldFailWhenInvalidRenewInterval(double renewIntervalSeconds)
+    {
+        var validator = new TestSettingsValidator();
+        var settings = new TestSettings
+        {
+            RenewInterval = TimeSpan.FromSeconds(renewIntervalSeconds),
+        };
+
+        var result = validator.Validate(null, settings);
+
+        result.Failed.Should().BeTrue();
         result.Failures.Should().Contain(f => f.Contains("RenewInterval"));
+    }
+
+    [Theory]
+    [InlineData(0.0)]
+    [InlineData(-1.0)]
+    public void BaseSettingsValidatorShouldFailWhenInvalidRetryInterval(double retryIntervalSeconds)
+    {
+        var validator = new TestSettingsValidator();
+        var settings = new TestSettings
+        {
+            RetryInterval = TimeSpan.FromSeconds(retryIntervalSeconds),
+        };
+
+        var result = validator.Validate(null, settings);
+
+        result.Failed.Should().BeTrue();
         result.Failures.Should().Contain(f => f.Contains("RetryInterval"));
+    }
+
+    [Fact]
+    public void BaseSettingsValidatorShouldFailWhenInvalidMaxRetryInterval()
+    {
+        var validator = new TestSettingsValidator();
+        var settings = new TestSettings
+        {
+            RetryInterval = TimeSpan.FromSeconds(5), // valid
+            MaxRetryInterval = TimeSpan.FromSeconds(3), // invalid
+        };
+
+        var result = validator.Validate(null, settings);
+
+        result.Failed.Should().BeTrue();
+        result.Failures.Should().Contain(f => f.Contains("MaxRetryInterval"));
+    }
+
+    [Theory]
+    [InlineData(1.0 - 0.001)]
+    [InlineData(3.0 + 0.001)]
+    public void BaseSettingsValidatorShouldFailWhenInvalidRetryBackoffFactor(
+        double retryBackoffFactor
+    )
+    {
+        var validator = new TestSettingsValidator();
+        var settings = new TestSettings { RetryBackoffFactor = retryBackoffFactor };
+
+        var result = validator.Validate(null, settings);
+
+        result.Failed.Should().BeTrue();
+        result.Failures.Should().Contain(f => f.Contains("RetryBackoffFactor"));
+    }
+
+    [Theory]
+    [InlineData(0.0 - 0.001)]
+    [InlineData(1.0 + 0.001)]
+    public void BaseSettingsValidatorShouldFailWhenInvalidRetryJitter(double retryJitter)
+    {
+        var validator = new TestSettingsValidator();
+        var settings = new TestSettings { RetryJitter = retryJitter };
+
+        var result = validator.Validate(null, settings);
+
+        result.Failed.Should().BeTrue();
+        result.Failures.Should().Contain(f => f.Contains("RetryJitter"));
     }
 
     [Fact]
