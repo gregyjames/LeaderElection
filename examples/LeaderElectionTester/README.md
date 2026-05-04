@@ -40,42 +40,40 @@ See below for examples.
 
 The `LeaderElectionTester.AppHost` project orchestrates the infrastructure automatically using .NET
 Aspire. This is the recommended way to run the example, as it provides a unified experience and
-dashboard for viewing logs across multiple tester instances.
+dashboard for viewing logs of all the running instances.
 
 From the repository root:
 
 ```bash
-cd examples/LeaderElectionTester.AppHost
-dotnet run
+./build.ps1 runExample
 ```
 
-This starts Redis and two tester instances by default. To use a different backing store, pass
-`LeaderElectionType` as a command-line argument:
+This builds the example project then creates a Redis container and two example application
+instances. To use a different LeaderElection type, pass it as a command-line argument. For example:
 
 ```bash
-dotnet run -- LeaderElectionType=Redis
-dotnet run -- LeaderElectionType=DistributedCache
-dotnet run -- LeaderElectionType=FusionCache
-dotnet run -- LeaderElectionType=BlobStorage
-dotnet run -- LeaderElectionType=S3
-dotnet run -- LeaderElectionType=Postgres
+./build.ps1 runExample -- redis # same as above
+./build.ps1 runExample -- blob # or 'BlobStorage'
+./build.ps1 runExample -- s3
+./build.ps1 runExample -- postgres
+./build.ps1 runExample -- dc # or 'DistributedCache'
+./build.ps1 runExample -- fc # or 'FusionCache'
 ```
 
-You can also adjust the number of tester instances using the `TesterCount` setting. For example, to
-start 5 tester instances using Postgres:
+You can also adjust the number of example application instances using the `-count` parameter. For
+example, to start 5 instances using Postgres:
 
 ```bash
-dotnet run -- LeaderElectionType=Postgres TesterCount=5
+  ./build.ps1 runExample -- postgres -count 5
 ```
 
-You may also set these values via `appsettings.json` inside the AppHost project.
-
-The Aspire dashboard (shown in the terminal on startup) lets you view logs from all tester instances
-side-by-side.
+The Aspire dashboard (click the "dashboard" link in the console output) lets you view logs from all
+example application instances side-by-side. You can stop and start individual instances to see
+leadership transfer in action.
 
 ## Running Standalone (Without Aspire)
 
-You can also run the tester directly against manually-started infrastructure.
+You can also run the tester directly against manually configured infrastructure.
 
 ### Start A Backing Store
 
@@ -106,46 +104,27 @@ bucket (or modify the example to use a existing bucket name).
 docker run --name leader-election-postgres -p 5432:5432 -e POSTGRES_DB=mydb -e POSTGRES_USER=myuser -e POSTGRES_PASSWORD=mypassword -d postgres:17
 ```
 
-### Build
-
-From the `./examples/LeaderElectionTester` directory, build the app:
-
-```bash
-cd ./examples/LeaderElectionTester
-dotnet build
-```
-
 ### Run The Example (Standalone)
 
-From the `./examples/LeaderElectionTester` directory, run one instance:
-
 ```bash
-cd ./examples/LeaderElectionTester
-dotnet run --no-build
+./build.ps1 runExample -- -NoAspire
 ```
 
-This defaults to `LeaderElectionType=Redis`.
-
-Run a specific LeaderElection type:
+This starts a single example application instance running Redis leader election. To use a different
+leader election type, pass it as a command-line argument. For example:
 
 ```bash
-dotnet run --no-build -- LeaderElectionType=Redis
-dotnet run --no-build -- LeaderElectionType=DistributedCache
-dotnet run --no-build -- LeaderElectionType=FusionCache
-dotnet run --no-build -- LeaderElectionType=BlobStorage
-dotnet run --no-build -- LeaderElectionType=S3
-dotnet run --no-build -- LeaderElectionType=Postgres
+./build.ps1 runExample -- -NoAspire redis
+./build.ps1 runExample -- -NoAspire blob # or 'BlobStorage'
+./build.ps1 runExample -- -NoAspire s3
+./build.ps1 runExample -- -NoAspire postgres
+./build.ps1 runExample -- -NoAspire dc # or 'DistributedCache'
+./build.ps1 runExample -- -NoAspire fc # or 'FusionCache'
 ```
 
-You can also set it via `appsettings.json` in the LeaderElectionTester project.
-
-## Observe Leadership Transfer
-
-1. Start two or more instances of the ElectionLeaderTester app using the same LeaderElectionType
-   settings, e.g., Redis.
-2. Watch logs: one instance will report that it is leader.
-3. Stop or kill the leader instance (Ctrl+C).
-4. One of the remaining instances will become leader shortly after.
+Run the command in multiple terminals to start multiple instances. Each instance will log whether it
+is the leader or not. Stop the leader instance (Ctrl+C) to see leadership transfer in the remaining
+instances.
 
 ## Notes
 

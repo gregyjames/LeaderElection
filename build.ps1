@@ -47,7 +47,8 @@ param (
         'test',
         'coverage',
         'package',
-        'push'
+        'push',
+        'runExample'
     )]
     [string[]]
     $TaskName = @('build'),
@@ -555,6 +556,77 @@ Task push -desc 'Push NuGet packages' -dependsOn version {
     finally {
         Pop-Secret $ApiKey
     }
+}
+
+Task runExample -desc 'Run the example application' -dependsOn build {
+    <#
+    .DESCRIPTION
+        Runs the example application located in 'examples/LeaderElectionTester' folder.
+
+        By default it uses Aspire to orchestrate the infrastructure and the example
+        application instances. Click the "dashboard" link in the console output to view
+        the Aspire dashboard.
+
+        To run without Aspire, use the -NoAspire switch. In this mode, you are responsible
+        for ensuring that the necessary infrastructure (e.g. docker containers) is
+        properly configured and running *before* starting the example application.
+    .EXAMPLE
+        PS> ./build.ps1 runExample
+
+        Uses Aspire to orchestrate a Redis container and two instances of the example
+        application running Redis leader election.
+    .EXAMPLE
+        PS> ./build.ps1 runExample -- blob -count 5
+
+        Uses Aspire to orchestrate a Blob Storage container and five instances of the
+        example application running BlobStorage leader election.
+    .EXAMPLE
+        PS> ./build.ps1 runExample -- postgres -NoAspire
+
+        Starts one instance of the example application running Postgres leader election.
+        The caller is responsible for managing a compatible Postgres database.
+        Run the command again (in another terminal window) to create a second instance.
+    #>
+    [CmdletBinding(PositionalBinding = $false)]
+    param(
+        # The type of LeaderElection to run. Valid values are:
+        #  - redis
+        #  - blob or blobStorage
+        #  - s3
+        #  - postgres
+        #  - dc or distributedCache
+        #  - fc or fusionCache
+        # Default is redis.
+        [Parameter(Position = 0)]
+        [string] $Type = 'redis',
+
+        # The number of example application instances Aspire should create.
+        # Defaults to 2.
+        [ValidateRange(1, 100)]
+        [int] $Count = 2,
+
+        # When specified, a single instance of the example application will be started without
+        # using Aspire. It is the caller's responsibility to ensure that the necessary
+        # infrastructure (e.g. docker containers) is properly configured.
+        [switch] $NoAspire
+    )
+
+    $runArgs = @(
+        '--no-build'
+        '--launch-profile', 'https'
+        '--'
+        "LeaderElectionType=$Type"
+    )
+
+    if ($NoAspire) {
+        Set-Location './examples/LeaderElectionTester'
+    }
+    else {
+        Set-Location './examples/LeaderElectionTester.AppHost'
+        $runArgs += "TesterCount=$Count"
+    }
+
+    Invoke-Shell -- dotnet run @runArgs
 }
 
 ##############################################################
