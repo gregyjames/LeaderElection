@@ -108,6 +108,9 @@ function Pop-Secret {
         [ValidateNotNullOrEmpty()]
         [string]$Value
     )
+    begin {
+        & $PSScriptRoot/../syncCallerPreferences.ps1 $MyInvocation -PreferencesToSync ErrorAction
+    }
     process {
         $secrets = getState
         if (!$secrets.values.ContainsKey($Value)) {
@@ -176,6 +179,8 @@ function Read-Secret {
         [string] $Prompt,
         [switch] $AllowEmpty
     )
+    & $PSScriptRoot/../syncCallerPreferences.ps1 $MyInvocation -PreferencesToSync ErrorAction, WarningAction
+
     if (isContinuousIntegration) {
         if ($AllowEmpty) {
             Write-Warning "CI environment detected. Returning empty value for prompt '$Prompt'."
