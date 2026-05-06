@@ -106,11 +106,6 @@ function ConvertTo-CommandArg {
     }
 }
 
-$exportModuleMemberParams = @{
-    Function = @(
-        'ConvertTo-PSString'
-        'ConvertTo-CommandArg'
-    )
-}
-
-Export-ModuleMember @exportModuleMemberParams
+Export-ModuleMember -Function `
+    ConvertTo-PSString, `
+    ConvertTo-CommandArg
