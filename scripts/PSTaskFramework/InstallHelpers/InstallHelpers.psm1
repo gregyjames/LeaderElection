@@ -32,6 +32,7 @@ function Get-WellKnownAppInfo {
         # Defaults to '*'.
         [Parameter(Position = 0, ValueFromPipeline, ValueFromPipelineByPropertyName)]
         [SupportsWildcards()]
+        [ValidateNotNullOrEmpty()]
         [string[]] $Name = @('*')
     )
     process {
@@ -1001,14 +1002,9 @@ function Install-PowerShellModule {
     }
 }
 
-$exportModuleMemberParams = @{
-    Function = @(
-        'Install-PowerShellModule'
-        'Get-WellKnownAppInfo'
-        'Install-PackageManager'
-        'Get-PackageManager'
-        'Install-RequiredApp'
-    )
-}
-
-Export-ModuleMember @exportModuleMemberParams
+Export-ModuleMember -Function `
+    Install-PowerShellModule, `
+    Get-WellKnownAppInfo, `
+    Install-PackageManager, `
+    Get-PackageManager, `
+    Install-RequiredApp

@@ -72,7 +72,6 @@ function Push-Secret {
     [CmdletBinding()]
     param (
         [Parameter(Mandatory, ValueFromPipeline)]
-        [ValidateNotNullOrEmpty()]
         [string]$Value
     )
     process {
@@ -105,7 +104,6 @@ function Pop-Secret {
     param (
         # The secret value which was previously registered with Push-Secret.
         [Parameter(Mandatory, ValueFromPipeline)]
-        [ValidateNotNullOrEmpty()]
         [string]$Value
     )
     begin {
@@ -140,7 +138,7 @@ function Protect-Secret {
         [Parameter(Mandatory, Position = 0, ValueFromPipeline)]
         [AllowEmptyString()]
         [string]$Message,
-        [AllowEmptyString()]
+        [ValidateNotNull()]
         [string]$Mask = '****'
     )
     process {
@@ -171,6 +169,7 @@ function Read-Secret {
         [System.String]
         The secret value read from the console.
     #>
+    # TODO: Add a "-Secret" switch, rename to "Read-Input", and move to BuildHelpers.
     [CmdletBinding()]
     [OutputType([string])]
     param(
@@ -209,14 +208,9 @@ function Read-Secret {
     return $value
 }
 
-$exportModuleMemberParams = @{
-    Function = @(
-        'Read-Secret'
-        'Push-Secret'
-        'Pop-Secret'
-        'Protect-Secret'
-        'Clear-SecretStore'
-    )
-}
-
-Export-ModuleMember @exportModuleMemberParams
+Export-ModuleMember -Function `
+    Read-Secret, `
+    Push-Secret, `
+    Pop-Secret, `
+    Protect-Secret, `
+    Clear-SecretStore
