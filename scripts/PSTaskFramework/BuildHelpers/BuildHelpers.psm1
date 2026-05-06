@@ -133,9 +133,12 @@ function Invoke-Shell {
         # You typically do not use this parameter directly since PowerShell will automatically
         # add any unrecognized arguments to this parameter.
         [Parameter(ValueFromRemainingArguments)]
-        [string[]] $CommandArgs,
+        [ValidateNotNull()]
+        [string[]] $CommandArgs = @(),
 
         # An array of exit codes that are considered successful. Defaults to 0.
+        # An empty array means to ignore the exit code (i.e. consider all exit codes successful).
+        [ValidateNotNull()]
         [int[]] $AllowedExitCodes = @(0)
     )
 
@@ -149,7 +152,7 @@ function Invoke-Shell {
     $PSNativeCommandUseErrorActionPreference = $false # we'll handle errors ourselves
     & $cmdPath @CommandArgs
 
-    if ($global:LASTEXITCODE -notin $AllowedExitCodes) {
+    if ($AllowedExitCodes.Count -gt 0 -and $global:LASTEXITCODE -notin $AllowedExitCodes) {
         if ($ErrorActionPreference -ne 'Ignore') {
             Write-Error -Exception "Command failed with exit code $global:LASTEXITCODE ($cmdText)." `
                 -CategoryActivity 'Invoke-Shell' -CategoryReason 'Non-zero exit code' -CategoryTargetName $Command
@@ -157,12 +160,7 @@ function Invoke-Shell {
     }
 }
 
-$exportModuleMemberParams = @{
-    Function = @(
-        'Test-Administrator'
-        'Assert-AppExists'
-        'Invoke-Shell'
-    )
-}
-
-Export-ModuleMember @exportModuleMemberParams
+Export-ModuleMember -Function `
+    'Test-Administrator', `
+    'Assert-AppExists', `
+    'Invoke-Shell'
