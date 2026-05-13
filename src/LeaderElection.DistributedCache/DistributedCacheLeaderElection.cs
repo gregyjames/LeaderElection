@@ -153,7 +153,7 @@ public partial class DistributedCacheLeaderElection : LeaderElectionBase<Distrib
             if (!success)
             {
                 // Abandon the lock locally if we failed to renew it for any reason.
-                _lockOwnedUntil = null;
+                await ResetLeadershipAsync().ConfigureAwait(false);
             }
         }
         return success;
@@ -210,8 +210,14 @@ public partial class DistributedCacheLeaderElection : LeaderElectionBase<Distrib
         finally
         {
             // Regardless of whether the release succeeded, we should consider the lock abandoned locally
-            _lockOwnedUntil = null;
+            await ResetLeadershipAsync().ConfigureAwait(false);
         }
+    }
+
+    protected override ValueTask ResetLeadershipAsync()
+    {
+        _lockOwnedUntil = null;
+        return new ValueTask();
     }
 
     private Task<string?> GetOwnershipAsync(CancellationToken cancellationToken) =>

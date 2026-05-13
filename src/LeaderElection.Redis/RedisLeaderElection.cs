@@ -106,7 +106,7 @@ public partial class RedisLeaderElection : LeaderElectionBase<RedisSettings>
             if (!success)
             {
                 // give up the lock in our state to avoid being stuck in a bad state
-                ForceReset();
+                await ResetLeadershipAsync().ConfigureAwait(false);
             }
         }
 
@@ -149,13 +149,14 @@ public partial class RedisLeaderElection : LeaderElectionBase<RedisSettings>
         finally
         {
             // give up the lock in our state to avoid being stuck in a bad state
-            ForceReset();
+            await ResetLeadershipAsync().ConfigureAwait(false);
         }
     }
 
-    void ForceReset()
+    protected override ValueTask ResetLeadershipAsync()
     {
         _redis = null;
+        return new ValueTask();
     }
 
     [LoggerMessage(LogLevel.Debug, "Lock already acquired on {LockKey}.")]

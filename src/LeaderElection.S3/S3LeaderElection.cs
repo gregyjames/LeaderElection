@@ -162,7 +162,7 @@ public sealed partial class S3LeaderElection : LeaderElectionBase<S3Settings>
             {
                 // Clear the ETag regardless of the error to avoid being stuck in
                 // a state where we think we have the lease when we don't.
-                _lastEtag = null;
+                await ResetLeadershipAsync().ConfigureAwait(false);
             }
         }
         return success;
@@ -191,7 +191,6 @@ public sealed partial class S3LeaderElection : LeaderElectionBase<S3Settings>
             _ = await PutLeaseAsync(emptyLease, _lastEtag, CancellationToken.None)
                 .ConfigureAwait(false);
 
-            _lastEtag = null;
             LogLeaseReleased(_settings.BucketName, _settings.ObjectKey);
         }
         catch (ObjectNotFoundException)
@@ -231,8 +230,14 @@ public sealed partial class S3LeaderElection : LeaderElectionBase<S3Settings>
         {
             // Clear the ETag regardless of success to avoid being stuck in
             // a state where we think we have the lease when we don't.
-            _lastEtag = null;
+            await ResetLeadershipAsync().ConfigureAwait(false);
         }
+    }
+
+    protected override ValueTask ResetLeadershipAsync()
+    {
+        _lastEtag = null;
+        return new ValueTask();
     }
 
     private async Task<string> WriteLeaseAsync(

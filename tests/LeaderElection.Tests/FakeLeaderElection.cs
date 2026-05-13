@@ -61,4 +61,6 @@ internal sealed class FakeLeaderElection : LeaderElectionBase<FakeLeaderElection
         _settings.ReleaseAction?.Invoke();
         return Task.CompletedTask;
     }
+
+    protected override ValueTask ResetLeadershipAsync() => ValueTask.CompletedTask;
 }

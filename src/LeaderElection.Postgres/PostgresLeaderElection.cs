@@ -39,13 +39,12 @@ public sealed partial class PostgresLeaderElection : LeaderElectionBase<Postgres
             using var cmd = new NpgsqlCommand("SELECT pg_try_advisory_lock(@LockId);", _connection);
             cmd.Parameters.AddWithValue("LockId", _settings.LockId);
 
-            var acquired =
+            success =
                 (bool?)await cmd.ExecuteScalarAsync(cancellationToken).ConfigureAwait(false)
                 ?? false;
 
-            if (acquired)
+            if (success)
             {
-                success = true;
                 _ownsLock = true;
                 LogAcquiredLock(_settings.LockId);
             }
@@ -71,14 +70,6 @@ public sealed partial class PostgresLeaderElection : LeaderElectionBase<Postgres
         catch (NpgsqlException ex)
         {
             LogFailureAcquiringLock(LogLevel.Warning, ex, _settings.LockId, ex.Message);
-        }
-        finally
-        {
-            if (!success)
-            {
-                // assume we lost the lock. Abandon it to clean up our state
-                await AbandonLockAsync().ConfigureAwait(false);
-            }
         }
 
         return success;
@@ -124,7 +115,7 @@ public sealed partial class PostgresLeaderElection : LeaderElectionBase<Postgres
             if (!success)
             {
                 // assume we lost the lock. Abandon it to clean up our state
-                await AbandonLockAsync().ConfigureAwait(false);
+                await ResetLeadershipAsync().ConfigureAwait(false);
             }
         }
 
@@ -172,11 +163,11 @@ public sealed partial class PostgresLeaderElection : LeaderElectionBase<Postgres
         {
             // always assume we lost the lock, even if there was an error
             // releasing it in Postgres.
-            await AbandonLockAsync().ConfigureAwait(false);
+            await ResetLeadershipAsync().ConfigureAwait(false);
         }
     }
 
-    async Task AbandonLockAsync()
+    protected override async ValueTask ResetLeadershipAsync()
     {
         _ownsLock = false;
         await _connection.CloseAsync().ConfigureAwait(false);

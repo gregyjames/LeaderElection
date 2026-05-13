@@ -113,7 +113,7 @@ public partial class BlobStorageLeaderElection : LeaderElectionBase<BlobStorageS
             if (!success)
             {
                 // give up the lease in our state to avoid being stuck in a bad state
-                ForceReset();
+                await ResetLeadershipAsync().ConfigureAwait(false);
             }
         }
 
@@ -155,14 +155,15 @@ public partial class BlobStorageLeaderElection : LeaderElectionBase<BlobStorageS
         {
             // always give up local leadership state even if release failed, since we don't
             // want to be stuck in a bad state where we think we are the leader but are not.
-            ForceReset();
+            await ResetLeadershipAsync().ConfigureAwait(false);
         }
     }
 
-    private void ForceReset()
+    protected override ValueTask ResetLeadershipAsync()
     {
         _currentLeaseId = null;
         _blobClient = null;
+        return new ValueTask();
     }
 
     private async Task<BlobClient> CreateBlobClientAsync(CancellationToken cancellationToken)

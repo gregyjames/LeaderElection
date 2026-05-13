@@ -170,13 +170,17 @@ public abstract partial class LeaderElectionBase<TSettings> : ILeaderElection
             }
         }
 
-        if (_settings.EnableGracefulShutdown && _isLeader)
-        {
-            await ReleaseLeadershipAsync().ConfigureAwait(false);
-        }
-
         if (_isLeader)
         {
+            if (_settings.EnableGracefulShutdown)
+            {
+                await ReleaseLeadershipAsync().ConfigureAwait(false);
+            }
+            else
+            {
+                await ResetLeadershipAsync().ConfigureAwait(false);
+            }
+
             SetLeadership(false);
         }
     }
@@ -187,6 +191,7 @@ public abstract partial class LeaderElectionBase<TSettings> : ILeaderElection
 
     protected abstract Task<bool> RenewLeadershipInternalAsync(CancellationToken cancellationToken);
     protected abstract Task ReleaseLeadershipAsync();
+    protected abstract ValueTask ResetLeadershipAsync();
 
     protected void SetLeadership(bool isLeader)
     {
