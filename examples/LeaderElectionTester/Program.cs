@@ -16,6 +16,12 @@ using ZiggyCreatures.Caching.Fusion;
 
 var builder = Host.CreateApplicationBuilder(args);
 
+builder.Services.Configure<ServiceProviderOptions>(options =>
+{
+    options.ValidateOnBuild = true;
+    options.ValidateScopes = true;
+});
+
 var leaderElectionType = ConfigurationBinder
     .GetValue(builder.Configuration, "LeaderElectionType", "Redis")
     .ToUpperInvariant() switch
