@@ -170,7 +170,7 @@ public partial class BlobStorageLeaderElection : LeaderElectionBase<BlobStorageS
     {
         if (_settings.BlobClientFactory != null)
         {
-            if (_settings.ConnectionString != null)
+            if (!string.IsNullOrEmpty(_settings.ConnectionString))
             {
                 LogIgnoringConnectionStringBecauseFactoryIsSet();
             }
@@ -180,7 +180,7 @@ public partial class BlobStorageLeaderElection : LeaderElectionBase<BlobStorageS
                 .ConfigureAwait(false);
         }
 
-        if (_settings.ConnectionString != null)
+        if (!string.IsNullOrEmpty(_settings.ConnectionString))
         {
             var bsc = new BlobServiceClient(_settings.ConnectionString);
             return await BlobStorageServiceBuilderExtensions
