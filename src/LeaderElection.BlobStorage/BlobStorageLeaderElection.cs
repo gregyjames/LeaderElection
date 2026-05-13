@@ -36,7 +36,7 @@ public partial class BlobStorageLeaderElection : LeaderElectionBase<BlobStorageS
     {
         if (!string.IsNullOrEmpty(_currentLeaseId))
         {
-            LogLeaseAlreadyAcquired(_blobClient?.Uri);
+            LogLeaseAlreadyAcquired(_blobClient!.Uri.GetLeftPart(UriPartial.Path));
             return false;
         }
 
@@ -55,7 +55,10 @@ public partial class BlobStorageLeaderElection : LeaderElectionBase<BlobStorageS
             success = true;
             _currentLeaseId = leaseResponse.Value.LeaseId;
             _blobClient = blobClient;
-            LogAcquiredLeaseWithIdLeaseId(_blobClient.Uri, _currentLeaseId);
+            LogAcquiredLeaseWithIdLeaseId(
+                _blobClient.Uri.GetLeftPart(UriPartial.Path),
+                _currentLeaseId
+            );
         }
         catch (Azure.RequestFailedException ex)
         {
@@ -64,7 +67,14 @@ public partial class BlobStorageLeaderElection : LeaderElectionBase<BlobStorageS
                     ? LogLevel.Debug
                     : LogLevel.Error;
 
-            LogFailureAcquiringLease(logLevel, blobClient.Uri, ex.Status, ex.ErrorCode);
+#pragma warning disable CA1873 // Avoid potentially expensive logging
+            LogFailureAcquiringLease(
+                logLevel,
+                blobClient.Uri.GetLeftPart(UriPartial.Path),
+                ex.Status,
+                ex.ErrorCode
+            );
+#pragma warning restore CA1873 // Avoid potentially expensive logging
         }
 
         return success;
@@ -92,7 +102,7 @@ public partial class BlobStorageLeaderElection : LeaderElectionBase<BlobStorageS
 
             success = true;
             Debug.Assert(_currentLeaseId == leaseResponse.Value.LeaseId);
-            LogLeaseRenewed(_blobClient.Uri, _currentLeaseId);
+            LogLeaseRenewed(_blobClient.Uri.GetLeftPart(UriPartial.Path), _currentLeaseId);
         }
         catch (Azure.RequestFailedException ex)
         {
@@ -106,7 +116,15 @@ public partial class BlobStorageLeaderElection : LeaderElectionBase<BlobStorageS
                 _ => LogLevel.Error,
             };
 
-            LogFailureRenewingLease(logLevel, _blobClient.Uri, ex.Status, ex.ErrorCode, ex);
+#pragma warning disable CA1873 // Avoid potentially expensive logging
+            LogFailureRenewingLease(
+                logLevel,
+                _blobClient.Uri.GetLeftPart(UriPartial.Path),
+                ex.Status,
+                ex.ErrorCode,
+                ex
+            );
+#pragma warning restore CA1873 // Avoid potentially expensive logging
         }
         finally
         {
@@ -135,7 +153,7 @@ public partial class BlobStorageLeaderElection : LeaderElectionBase<BlobStorageS
             var leaseClient = _blobClient.GetBlobLeaseClient(_currentLeaseId);
             await leaseClient.ReleaseAsync().ConfigureAwait(false);
 
-            LogLeaseReleased(_blobClient.Uri);
+            LogLeaseReleased(_blobClient.Uri.GetLeftPart(UriPartial.Path));
         }
         catch (Azure.RequestFailedException ex)
         {
@@ -149,7 +167,14 @@ public partial class BlobStorageLeaderElection : LeaderElectionBase<BlobStorageS
                 _ => LogLevel.Error,
             };
 
-            LogFailureReleasingLease(logLevel, _blobClient.Uri, ex.Status, ex.ErrorCode);
+#pragma warning disable CA1873 // Avoid potentially expensive logging
+            LogFailureReleasingLease(
+                logLevel,
+                _blobClient.Uri.GetLeftPart(UriPartial.Path),
+                ex.Status,
+                ex.ErrorCode
+            );
+#pragma warning restore CA1873 // Avoid potentially expensive logging
         }
         finally
         {
@@ -208,7 +233,7 @@ public partial class BlobStorageLeaderElection : LeaderElectionBase<BlobStorageS
                 )
                 .ConfigureAwait(false);
 
-            LogCreatedBlob(blobClient.Uri);
+            LogCreatedBlob(blobClient.Uri.GetLeftPart(UriPartial.Path));
         }
         catch (Azure.RequestFailedException ex)
             when (ex.ErrorCode == BlobErrorCode.BlobAlreadyExists)
@@ -217,20 +242,24 @@ public partial class BlobStorageLeaderElection : LeaderElectionBase<BlobStorageS
         }
         catch (Azure.RequestFailedException ex)
         {
-            LogFailureCreatingBlob(blobClient.Uri, ex.Status, ex.ErrorCode);
+            LogFailureCreatingBlob(
+                blobClient.Uri.GetLeftPart(UriPartial.Path),
+                ex.Status,
+                ex.ErrorCode
+            );
         }
     }
 
-    [LoggerMessage(LogLevel.Information, "Lease already acquired on {BlobUri}.")]
-    partial void LogLeaseAlreadyAcquired(Uri? blobUri);
+    [LoggerMessage(LogLevel.Information, "Lease already acquired on {BlobUrl}.")]
+    partial void LogLeaseAlreadyAcquired(string blobUrl);
 
-    [LoggerMessage(LogLevel.Debug, "Lease acquired on {BlobUri}: {LeaseId}.")]
-    partial void LogAcquiredLeaseWithIdLeaseId(Uri blobUri, string leaseId);
+    [LoggerMessage(LogLevel.Debug, "Lease acquired on {BlobUrl}: {LeaseId}.")]
+    partial void LogAcquiredLeaseWithIdLeaseId(string blobUrl, string leaseId);
 
-    [LoggerMessage("Failure acquiring lease on {BlobUri}: {Status} - {ErrorCode}.")]
+    [LoggerMessage("Failure acquiring lease on {BlobUrl}: {Status} - {ErrorCode}.")]
     partial void LogFailureAcquiringLease(
         LogLevel level,
-        Uri blobUri,
+        string blobUrl,
         int status,
         string? errorCode
     );
@@ -238,13 +267,13 @@ public partial class BlobStorageLeaderElection : LeaderElectionBase<BlobStorageS
     [LoggerMessage(LogLevel.Information, "No lease to renew.")]
     partial void LogNoCurrentLeaseToRenew();
 
-    [LoggerMessage(LogLevel.Debug, "Lease renewed on {BlobUri}: {LeaseId}.")]
-    partial void LogLeaseRenewed(Uri blobUri, string leaseId);
+    [LoggerMessage(LogLevel.Debug, "Lease renewed on {BlobUrl}: {LeaseId}.")]
+    partial void LogLeaseRenewed(string blobUrl, string leaseId);
 
-    [LoggerMessage("Failure renewing lease on {BlobUri}: {Status} - {ErrorCode}.")]
+    [LoggerMessage("Failure renewing lease on {BlobUrl}: {Status} - {ErrorCode}.")]
     partial void LogFailureRenewingLease(
         LogLevel logLevel,
-        Uri blobUri,
+        string blobUrl,
         int status,
         string? errorCode,
         Exception exception
@@ -253,13 +282,13 @@ public partial class BlobStorageLeaderElection : LeaderElectionBase<BlobStorageS
     [LoggerMessage(LogLevel.Information, "No lease to release.")]
     partial void LogNoLeaseToRelease();
 
-    [LoggerMessage(LogLevel.Debug, "Lease released on {BlobUri}.")]
-    partial void LogLeaseReleased(Uri blobUri);
+    [LoggerMessage(LogLevel.Debug, "Lease released on {BlobUrl}.")]
+    partial void LogLeaseReleased(string blobUrl);
 
-    [LoggerMessage("Failure releasing lease on {BlobUri}: {Status} - {ErrorCode}.")]
+    [LoggerMessage("Failure releasing lease on {BlobUrl}: {Status} - {ErrorCode}.")]
     partial void LogFailureReleasingLease(
         LogLevel logLevel,
-        Uri blobUri,
+        string blobUrl,
         int status,
         string? errorCode
     );
@@ -270,9 +299,9 @@ public partial class BlobStorageLeaderElection : LeaderElectionBase<BlobStorageS
     )]
     partial void LogIgnoringConnectionStringBecauseFactoryIsSet();
 
-    [LoggerMessage(LogLevel.Information, "Created blob: {BlobUri}.")]
-    partial void LogCreatedBlob(Uri blobUri);
+    [LoggerMessage(LogLevel.Information, "Created blob: {BlobUrl}.")]
+    partial void LogCreatedBlob(string blobUrl);
 
-    [LoggerMessage(LogLevel.Warning, "Failure creating blob: {BlobUri}: {Status} - {ErrorCode}.")]
-    partial void LogFailureCreatingBlob(Uri blobUri, int status, string? errorCode);
+    [LoggerMessage(LogLevel.Warning, "Failure creating blob: {BlobUrl}: {Status} - {ErrorCode}.")]
+    partial void LogFailureCreatingBlob(string blobUrl, int status, string? errorCode);
 }
