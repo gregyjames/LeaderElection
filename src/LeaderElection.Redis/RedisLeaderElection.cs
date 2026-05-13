@@ -132,12 +132,12 @@ public partial class RedisLeaderElection : LeaderElectionBase<RedisSettings>
                 end
                 """;
 
-            var keysRemoves = (int)
+            var keysRemoved = (int)
                 await _redis
                     .ScriptEvaluateAsync(script, [_settings.LockKey], [_settings.InstanceId])
                     .ConfigureAwait(false);
 
-            if (keysRemoves > 0)
+            if (keysRemoved > 0)
             {
                 LogLockReleased(_settings.LockKey);
             }

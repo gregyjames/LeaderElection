@@ -42,7 +42,7 @@ public class BlobStorageSettings : LeaderElectionSettingsBase
     /// <remarks>
     /// Will be created if it does not exist and <see cref="CreateContainerIfNotExists"/> is true.
     /// <para/>
-    /// Must be a valid Azure Blob Storage blob name. See
+    /// Must be a valid Azure Blob Storage container name. See
     /// https://learn.microsoft.com/en-us/rest/api/storageservices/blob-service-concepts.
     /// </remarks>
     [Required]
