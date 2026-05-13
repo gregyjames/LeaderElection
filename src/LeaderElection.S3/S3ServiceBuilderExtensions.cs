@@ -41,7 +41,7 @@ public static class S3ServiceBuilderExtensions
     ) => AddS3LeaderElectionInternal(services, builder, serviceKey);
 
     /// <summary>
-    /// Adds S3-based leader election services to the specified specified
+    /// Adds S3-based leader election services to the specified
     /// <see cref="IServiceCollection"/>.
     /// </summary>
     /// <param name="services">The service collection to add the services to.</param>
