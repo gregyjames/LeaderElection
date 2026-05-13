@@ -6,7 +6,6 @@ using StackExchange.Redis;
 namespace LeaderElection.Redis;
 
 public sealed record ServiceBuilder(
-    IServiceCollection Services,
     string? ServiceKey,
     OptionsBuilder<RedisSettings> OptionsBuilder
 );
@@ -120,7 +119,7 @@ public static class RedisServiceBuilderExtensions
 
         // Invoke builder action to allow user to specify a connection multiplexer
         // factory and settings
-        builder(new ServiceBuilder(services, serviceKey, optionsBuilder));
+        builder(new ServiceBuilder(serviceKey, optionsBuilder));
 
         // Ensure a default connection multiplexer factory is specified...
         optionsBuilder.PostConfigure<IServiceProvider>(
