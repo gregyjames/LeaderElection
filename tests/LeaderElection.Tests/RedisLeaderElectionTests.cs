@@ -19,7 +19,6 @@ public sealed class RedisLeaderElectionTests(RedisContainerFixture redisFixture)
     ) =>
         new()
         {
-            Host = "", // Host is not used when ConnectionMultiplexer is provided
             LockKey = lockKey,
             InstanceId = instanceId,
             LockExpiry = lockExpiry ?? TimeSpan.FromSeconds(10),

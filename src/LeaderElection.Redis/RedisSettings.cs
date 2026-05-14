@@ -12,10 +12,8 @@ public class RedisSettings : LeaderElectionSettingsBase
     /// An optional factory function used to obtain an <see cref="IConnectionMultiplexer"/>.
     /// </summary>
     /// <remarks>
-    /// If not provided, a connection will be created using the <see cref="Host"/>,
-    /// <see cref="Port"/>, and <see cref="Password"/> properties.
-    /// If <see cref="Host"/> is null or empty, it will attempt to obtain an
-    /// <see cref="IConnectionMultiplexer"/> from DI (assuming the leader election is created via DI).
+    /// If not provided, it will attempt to obtain an <see cref="IConnectionMultiplexer"/>
+    /// from DI (assuming the leader election is created via DI).
     /// </remarks>
     public Func<RedisSettings, IConnectionMultiplexer>? ConnectionMultiplexerFactory { get; set; }
 
@@ -23,25 +21,33 @@ public class RedisSettings : LeaderElectionSettingsBase
     /// The Redis server host name or IP address.
     /// </summary>
     /// <remarks>
-    /// Ignored if a <see cref="ConnectionMultiplexerFactory"/> is set.
+    /// Unused and will be removed in a future version.
     /// </remarks>
+    [Obsolete(
+        "The Host/Port/Password properties are deprecated and will be removed in a future version. Use ConnectionMultiplexerFactory or DI instead."
+    )]
     public string? Host { get; set; }
 
     /// <summary>
     /// The Redis server port number. Default is 6379.
     /// </summary>
     /// <remarks>
-    /// Ignored if a <see cref="ConnectionMultiplexerFactory"/> is set.
+    /// Unused and will be removed in a future version.
     /// </remarks>
-    [Range(1, 65535)]
+    [Obsolete(
+        "The Host/Port/Password properties are deprecated and will be removed in a future version. Use ConnectionMultiplexerFactory or DI instead."
+    )]
     public int Port { get; set; } = 6379;
 
     /// <summary>
     /// The password for authenticating with the Redis server, if required.
     /// </summary>
     /// <remarks>
-    /// Ignored if a <see cref="ConnectionMultiplexerFactory"/> is set.
+    /// Unused and will be removed in a future version.
     /// </remarks>
+    [Obsolete(
+        "The Host/Port/Password properties are deprecated and will be removed in a future version. Use ConnectionMultiplexerFactory or DI instead."
+    )]
     public string? Password { get; set; }
 
     /// <summary>
@@ -84,9 +90,11 @@ public class RedisSettings : LeaderElectionSettingsBase
         ArgumentNullException.ThrowIfNull(dst);
         LeaderElectionSettingsBase.Copy(src, dst);
         dst.ConnectionMultiplexerFactory = src.ConnectionMultiplexerFactory;
+#pragma warning disable CS0618 // Type or member is obsolete
         dst.Host = src.Host;
         dst.Port = src.Port;
         dst.Password = src.Password;
+#pragma warning restore CS0618 // Type or member is obsolete
         dst.Database = src.Database;
         dst.LockKey = src.LockKey;
         dst.LockExpiry = src.LockExpiry;

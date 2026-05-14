@@ -60,7 +60,6 @@ public partial class SettingsValidatorTests
         var settings = new RedisSettings
         {
             LockKey = string.Empty,
-            Host = null, // okay
             Database = -1,
             LockExpiry = TimeSpan.Zero,
         };

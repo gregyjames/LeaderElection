@@ -12,9 +12,6 @@ public sealed class RedisServiceBuilderExtensionsTests
     // Settings with all properties set to non-default values.
     private readonly RedisSettings settings = new()
     {
-        Host = "foo.localhost",
-        Port = 101,
-        Password = "pass",
         Database = 22,
         LockKey = "test-lock",
         LockExpiry = TimeSpan.FromSeconds(10),
@@ -55,9 +52,6 @@ public sealed class RedisServiceBuilderExtensionsTests
             .AddInMemoryCollection(
                 new Dictionary<string, string?>
                 {
-                    ["LeaderElection:Redis:Host"] = settings.Host,
-                    ["LeaderElection:Redis:Port"] = settings.Port.ToString(),
-                    ["LeaderElection:Redis:Password"] = settings.Password,
                     ["LeaderElection:Redis:Database"] = settings.Database.ToString(),
                     ["LeaderElection:Redis:LockExpiry"] = settings.LockExpiry.ToString(),
                     ["LeaderElection:Redis:LockKey"] = settings.LockKey,
@@ -99,16 +93,13 @@ public sealed class RedisServiceBuilderExtensionsTests
     [InlineData("foo", true)]
     [InlineData("foo", false)]
     [InlineData(null, false)]
-    public async Task ShouldSetDefaultConnectionMultiplexerFactoryWhenHostIsEmpty(
+    public async Task ShouldSetRegisteredConnectionMultiplexerFactory(
         string? serviceKey,
         bool useKeyedCM
     )
     {
         // Arrange
-        var noHostSettings = new RedisSettings
-        {
-            Host = null, // use CM from DI
-        };
+        var defaultSettings = new RedisSettings();
 
         var mockCM = Mock.Of<IConnectionMultiplexer>();
 
@@ -116,66 +107,17 @@ public sealed class RedisServiceBuilderExtensionsTests
         await using var sp = new ServiceCollection()
             .AddLogging()
             .AddKeyedSingleton(useKeyedCM ? serviceKey : null, mockCM)
-            .AddRedisLeaderElection(builder => builder.WithSettings(noHostSettings), serviceKey)
+            .AddRedisLeaderElection(builder => builder.WithSettings(defaultSettings), serviceKey)
             .BuildServiceProvider();
 
         // Assert
         var options = sp.GetRequiredService<IOptionsMonitor<RedisSettings>>().Get(serviceKey);
         options.ConnectionMultiplexerFactory.Should().NotBeNull();
-        var actualCM = options.ConnectionMultiplexerFactory(noHostSettings);
+        var actualCM = options.ConnectionMultiplexerFactory(defaultSettings);
         actualCM.Should().BeSameAs(mockCM);
 
         var leaderElection = sp.GetRequiredKeyedService<RedisLeaderElection>(serviceKey);
         sp.GetRequiredKeyedService<ILeaderElection>(serviceKey).Should().BeSameAs(leaderElection);
-    }
-
-    [Theory]
-    [InlineData("foo", true)]
-    [InlineData("foo", false)]
-    [InlineData(null, false)]
-    public async Task ShouldUseRegisteredConnectionMultiplexerWhenTold(
-        string? serviceKey,
-        bool useKeyedCM
-    )
-    {
-        // Arrange
-        // ensure host is set to confirm that factory is used instead of host/port
-        settings.Host = "foo.localhost";
-
-        var mockCM = Mock.Of<IConnectionMultiplexer>();
-
-        // Act
-        await using var sp = new ServiceCollection()
-            .AddLogging()
-            .AddKeyedSingleton(useKeyedCM ? serviceKey : null, mockCM)
-            .AddRedisLeaderElection(
-                builder => builder.WithSettings(settings).WithRegisteredCache(),
-                serviceKey
-            )
-            .BuildServiceProvider();
-
-        // Assert
-        var options = sp.GetRequiredService<IOptionsMonitor<RedisSettings>>().Get(serviceKey);
-        options.ConnectionMultiplexerFactory.Should().NotBeNull();
-        var actualCM = options.ConnectionMultiplexerFactory(settings);
-        actualCM.Should().BeSameAs(mockCM);
-    }
-
-    [Fact]
-    public async Task ShouldSetDefaultConnectionMultiplexerFactoryWhenHostIsSpecified()
-    {
-        // Arrange
-        settings.Host.Should().NotBeNullOrWhiteSpace();
-
-        // Act
-        await using var sp = new ServiceCollection()
-            .AddLogging()
-            .AddRedisLeaderElection(builder => builder.WithSettings(settings))
-            .BuildServiceProvider();
-
-        // Assert
-        var options = sp.GetRequiredService<IOptions<RedisSettings>>().Value;
-        options.ConnectionMultiplexerFactory.Should().NotBeNull();
     }
 
     [Theory]
