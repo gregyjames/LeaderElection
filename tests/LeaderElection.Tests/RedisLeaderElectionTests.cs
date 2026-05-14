@@ -14,7 +14,7 @@ public sealed class RedisLeaderElectionTests(RedisContainerFixture redisFixture)
         TimeSpan? lockExpiry = null,
         TimeSpan? renewInterval = null,
         TimeSpan? retryInterval = null,
-        int maxRetryAttempts = 3,
+        TimeSpan? maxRetryInterval = null,
         bool enableGracefulShutdown = true
     ) =>
         new()
@@ -24,7 +24,7 @@ public sealed class RedisLeaderElectionTests(RedisContainerFixture redisFixture)
             LockExpiry = lockExpiry ?? TimeSpan.FromSeconds(10),
             RenewInterval = renewInterval ?? TimeSpan.FromSeconds(2),
             RetryInterval = retryInterval ?? TimeSpan.FromSeconds(1),
-            MaxRetryAttempts = maxRetryAttempts,
+            MaxRetryInterval = maxRetryInterval ?? TimeSpan.FromSeconds(60),
             EnableGracefulShutdown = enableGracefulShutdown,
         };
 
@@ -176,6 +176,8 @@ public sealed class RedisLeaderElectionTests(RedisContainerFixture redisFixture)
         var options = CreateSettings("test-leader-election-manual");
 
         await using var leaderElection = CreateSut(options);
+        await leaderElection.StartAsync(CancellationToken);
+        await WaitForLeadershipChange(leaderElection, true);
 
         // Act
         var result = await leaderElection.TryAcquireLeadershipAsync(CancellationToken);

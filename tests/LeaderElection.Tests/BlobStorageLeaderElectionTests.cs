@@ -20,7 +20,7 @@ public sealed class BlobStorageLeaderElectionTests(AzuriteContainerFixture azuri
         TimeSpan? leaseDuration = null,
         TimeSpan? renewInterval = null,
         TimeSpan? retryInterval = null,
-        int maxRetryAttempts = 3,
+        TimeSpan? maxRetryInterval = null,
         bool enableGracefulShutdown = true,
         bool createContainerIfNotExists = true,
         string? connectionString = null
@@ -34,7 +34,7 @@ public sealed class BlobStorageLeaderElectionTests(AzuriteContainerFixture azuri
             LeaseDuration = leaseDuration ?? TimeSpan.FromSeconds(15),
             RenewInterval = renewInterval ?? TimeSpan.FromSeconds(5),
             RetryInterval = retryInterval ?? TimeSpan.FromSeconds(2),
-            MaxRetryAttempts = maxRetryAttempts,
+            MaxRetryInterval = maxRetryInterval ?? TimeSpan.FromSeconds(60),
             EnableGracefulShutdown = enableGracefulShutdown,
             CreateContainerIfNotExists = createContainerIfNotExists,
         };
@@ -189,6 +189,8 @@ public sealed class BlobStorageLeaderElectionTests(AzuriteContainerFixture azuri
         var options = CreateSettings("test-leader-election-manual");
 
         await using var leaderElection = CreateSut(options);
+        await leaderElection.StartAsync(CancellationToken);
+        await WaitForLeadershipChange(leaderElection, true);
 
         // Act
         var result = await leaderElection.TryAcquireLeadershipAsync(CancellationToken);
