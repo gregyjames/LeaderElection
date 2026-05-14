@@ -51,7 +51,7 @@ public static class S3ServiceBuilderExtensions
     /// application. If not provided, the services and settings will be registered
     /// without a key.</param>
     /// <returns>The updated service collection.</returns>
-    public static IServiceCollection AddS3LeaderElectionInternal(
+    private static IServiceCollection AddS3LeaderElectionInternal(
         IServiceCollection services,
         Action<ServiceBuilder> builder,
         string? serviceKey = null

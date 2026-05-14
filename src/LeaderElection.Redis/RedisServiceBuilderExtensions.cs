@@ -46,7 +46,7 @@ public static class RedisServiceBuilderExtensions
     /// application. If not provided, the services and settings will be registered
     /// without a key.</param>
     /// <returns>The updated service collection.</returns>
-    public static IServiceCollection AddRedisLeaderElectionInternal(
+    private static IServiceCollection AddRedisLeaderElectionInternal(
         IServiceCollection services,
         Action<ServiceBuilder> builder,
         string? serviceKey = null

@@ -201,16 +201,18 @@ public partial class BlobStorageLeaderElection : LeaderElectionBase<BlobStorageS
             }
 
             return await _settings
-                .BlobClientFactory(_settings, cancellationToken)
-                .ConfigureAwait(false);
+                    .BlobClientFactory(_settings, cancellationToken)
+                    .ConfigureAwait(false)
+                ?? throw new InvalidOperationException("BlobClientFactory returned null.");
         }
 
         if (!string.IsNullOrEmpty(_settings.ConnectionString))
         {
             var bsc = new BlobServiceClient(_settings.ConnectionString);
             return await BlobStorageServiceBuilderExtensions
-                .CreateBlobClient(bsc, _settings, cancellationToken)
-                .ConfigureAwait(false);
+                    .CreateBlobClient(bsc, _settings, cancellationToken)
+                    .ConfigureAwait(false)
+                ?? throw new InvalidOperationException("CreateBlobClient returned null.");
         }
 
         throw new InvalidOperationException(

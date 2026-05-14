@@ -259,7 +259,7 @@ public static class BlobStorageServiceBuilderExtensions
         ArgumentNullException.ThrowIfNull(factoryFunc);
         return builder.WithSettings(
             (settings, sp, _) =>
-                settings.BlobClientFactory = (settings, ct) => factoryFunc(sp, settings, ct)
+                settings.BlobClientFactory = (blobSettings, ct) => factoryFunc(sp, blobSettings, ct)
         );
     }
 

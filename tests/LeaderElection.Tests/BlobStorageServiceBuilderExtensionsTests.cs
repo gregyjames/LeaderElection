@@ -109,13 +109,6 @@ public sealed class BlobStorageServiceBuilderExtensionsTests
             CreateContainerIfNotExists = false,
         };
 
-        var mockBC = Mock.Of<BlobClient>();
-        var mockBCC = Mock.Of<BlobContainerClient>(m =>
-            m.GetBlobClient(settings.BlobName) == mockBC
-        );
-        var mockBSC = Mock.Of<BlobServiceClient>(m =>
-            m.GetBlobContainerClient(settings.ContainerName) == mockBCC
-        );
         var bsc = new BlobServiceClient("UseDevelopmentStorage=true");
 
         // Act

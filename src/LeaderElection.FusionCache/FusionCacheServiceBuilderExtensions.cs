@@ -135,6 +135,21 @@ public static class FusionCacheServiceBuilderExtensions
     }
 
     /// <summary>
+    /// Specifies the default <see cref="FusionCacheSettings"/> used by
+    /// the Leader Election.
+    /// </summary>
+    public static ServiceBuilder WithSettings(
+        this ServiceBuilder builder,
+        FusionCacheSettings settings
+    )
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+        ArgumentNullException.ThrowIfNull(settings);
+        builder.OptionsBuilder.Configure(options => FusionCacheSettings.Copy(settings, options));
+        return builder;
+    }
+
+    /// <summary>
     /// Configures the leader election settings.
     /// </summary>
     public static ServiceBuilder WithSettings(

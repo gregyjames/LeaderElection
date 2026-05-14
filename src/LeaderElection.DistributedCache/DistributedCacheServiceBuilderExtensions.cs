@@ -146,6 +146,23 @@ public static class DistributedCacheServiceBuilderExtensions
     }
 
     /// <summary>
+    /// Specifies the default <see cref="DistributedCacheSettings"/> used by
+    /// the Leader Election.
+    /// </summary>
+    public static ServiceBuilder WithSettings(
+        this ServiceBuilder builder,
+        DistributedCacheSettings settings
+    )
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+        ArgumentNullException.ThrowIfNull(settings);
+        builder.OptionsBuilder.Configure(options =>
+            DistributedCacheSettings.Copy(settings, options)
+        );
+        return builder;
+    }
+
+    /// <summary>
     /// Configures the leader election settings using a configuration action.
     /// </summary>
     public static ServiceBuilder WithSettings(
