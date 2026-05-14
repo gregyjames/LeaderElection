@@ -1,233 +1,381 @@
-using Microsoft.Extensions.Logging;
-using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.Extensions.Time.Testing;
 
 namespace LeaderElection.Tests;
 
 public class LeaderElectionBaseTests
 {
-    private sealed class MockLeaderElection(LeaderElectionSettingsBase settings, ILogger logger)
-        : LeaderElectionBase<LeaderElectionSettingsBase>(settings, logger),
-            IDisposable
+    readonly FakeTimeProvider _fakeTimeProvider = new();
+
+    FakeLeaderElection CreateSut(FakeLeaderElectionSettings? settings = null) =>
+        new(settings ?? new(), _fakeTimeProvider);
+
+    // Helper method to fast forward time and allow any released tasks to run
+    async Task FastForward(TimeSpan timeSpan)
     {
-        public int TryAcquireCalls { get; private set; }
-        public int RenewCalls { get; private set; }
-        public int ReleaseCalls { get; private set; }
-
-        public Func<CancellationToken, Task<bool>>? TryAcquireResult { get; set; } =
-            _ => Task.FromResult(true);
-
-        public Func<CancellationToken, Task<bool>>? RenewResult { get; set; } =
-            _ => Task.FromResult(true);
-
-        public Func<Task>? ReleaseAction { get; set; }
-
-        protected override async Task<bool> TryAcquireLeadershipInternalAsync(
-            CancellationToken cancellationToken
-        )
-        {
-            TryAcquireCalls++;
-            return await TryAcquireResult!(cancellationToken).ConfigureAwait(false);
-        }
-
-        protected override async Task<bool> RenewLeadershipInternalAsync(
-            CancellationToken cancellationToken
-        )
-        {
-            RenewCalls++;
-            return await RenewResult!(cancellationToken).ConfigureAwait(false);
-        }
-
-        protected override Task ReleaseLeadershipAsync()
-        {
-            ReleaseCalls++;
-            return ReleaseAction?.Invoke() ?? Task.CompletedTask;
-        }
-
-        protected override TimeSpan GetNextDelay(int retryCount) => TimeSpan.FromMilliseconds(50);
-
-        private static void Dispose(bool disposing)
-        {
-            if (disposing)
-            {
-                // TODO release managed resources here
-            }
-        }
-
-        public void Dispose()
-        {
-            Dispose(true);
-            GC.SuppressFinalize(this);
-        }
+        _fakeTimeProvider.Advance(timeSpan);
+        await Task.Yield(); // allow any released tasks to run
     }
 
     [Fact]
-    public async Task StartAsyncShouldAcquireLeadershipSuccessfully()
+    public async Task StartAsyncShouldAcquireLeadership()
     {
-        var settings = new LeaderElectionSettingsBase
-        {
-            RenewInterval = TimeSpan.FromMilliseconds(50),
-            RetryInterval = TimeSpan.FromMilliseconds(50),
-        };
-        using var sut = new MockLeaderElection(settings, NullLogger.Instance);
-        sut.TryAcquireResult = _ => Task.FromResult(true);
+        // Arrange
+        await using var sut = CreateSut();
 
+        // Act
         await sut.StartAsync(TestContext.Current.CancellationToken);
+        await FastForward(TimeSpan.Zero);
 
-        var isLeader = await WaitUntilLeader(sut, true, TimeSpan.FromSeconds(5));
+        // Assert
+        sut.IsLeader.Should().BeTrue();
+        sut.LastLeadershipRenewal.Should().Be(_fakeTimeProvider.GetUtcNow().UtcDateTime);
+        sut.Settings.TryAcquireCount.Should().Be(1);
+        sut.Settings.LeadershipChangedCount.Should().Be(1);
+        sut.Settings.ErrorCount.Should().Be(0);
 
-        isLeader.Should().BeTrue();
-        sut.TryAcquireCalls.Should().BeGreaterThan(0);
-
-        await sut.StopAsync(TestContext.Current.CancellationToken);
+        // Call StartAsync again should be no-op
+        await sut.StartAsync(TestContext.Current.CancellationToken);
+        sut.IsLeader.Should().BeTrue();
+        sut.Settings.TryAcquireCount.Should().Be(1);
+        sut.Settings.LeadershipChangedCount.Should().Be(1);
+        sut.Settings.ErrorCount.Should().Be(0);
     }
 
     [Fact]
     public async Task StartAsyncShouldRetryAcquisitionWhenFails()
     {
-        var settings = new LeaderElectionSettingsBase
-        {
-            RenewInterval = TimeSpan.FromMilliseconds(50),
-            RetryInterval = TimeSpan.FromMilliseconds(50),
-            MaxRetryAttempts = 1,
-        };
-        using var sut = new MockLeaderElection(settings, NullLogger.Instance);
-        var calls = 0;
-        sut.TryAcquireResult = _ => Task.FromResult(++calls > 1);
+        // Arrange
+        await using var sut = CreateSut();
 
+        sut.Settings.AcquireResult = () => false;
         await sut.StartAsync(TestContext.Current.CancellationToken);
+        await FastForward(TimeSpan.Zero);
+        sut.IsLeader.Should().BeFalse();
+        sut.Settings.TryAcquireCount.Should().Be(1);
+        sut.Settings.LeadershipChangedCount.Should().Be(0);
+        sut.Settings.ErrorCount.Should().Be(0);
 
-        var isLeader = await WaitUntilLeader(sut, true, TimeSpan.FromSeconds(5));
+        // Act
+        sut.Settings.AcquireResult = () => true;
+        await FastForward(sut.Settings.RetryInterval);
 
-        sut.TryAcquireCalls.Should().BeGreaterThan(1);
-        isLeader.Should().BeTrue();
+        // Assert
+        sut.IsLeader.Should().BeTrue();
+        sut.LastLeadershipRenewal.Should().Be(_fakeTimeProvider.GetUtcNow().UtcDateTime);
+        sut.Settings.TryAcquireCount.Should().Be(2);
+        sut.Settings.LeadershipChangedCount.Should().Be(1);
+        sut.Settings.ErrorCount.Should().Be(0);
+    }
 
-        await sut.StopAsync(TestContext.Current.CancellationToken);
+    [Fact]
+    public async Task LeaderLoopShouldRetryOnError()
+    {
+        // Arrange
+        await using var sut = CreateSut();
+
+        // Act
+        sut.Settings.AcquireResult = () => throw new InvalidOperationException("Test exception");
+        await sut.StartAsync(TestContext.Current.CancellationToken);
+        await FastForward(TimeSpan.Zero);
+
+        // Assert - Should have reported the error
+        sut.IsLeader.Should().BeFalse();
+        sut.Settings.TryAcquireCount.Should().Be(1);
+        sut.Settings.ErrorCount.Should().Be(1);
+
+        // Act - Clear error and retry
+        sut.Settings.AcquireResult = () => true;
+        await FastForward(sut.Settings.RetryInterval);
+
+        // Assert
+        sut.IsLeader.Should().BeTrue();
+        sut.LastLeadershipRenewal.Should().Be(_fakeTimeProvider.GetUtcNow().UtcDateTime);
+        sut.Settings.TryAcquireCount.Should().Be(2);
+        sut.Settings.LeadershipChangedCount.Should().Be(1);
+        sut.Settings.ErrorCount.Should().Be(1);
+    }
+
+    [Fact]
+    public async Task LeaderLoopShouldCancelOnRequest()
+    {
+        // Arrange
+        await using var sut = CreateSut();
+        using var cts = CancellationTokenSource.CreateLinkedTokenSource(
+            TestContext.Current.CancellationToken
+        );
+
+        sut.Settings.AcquireResult = () =>
+        {
+            cts.Cancel();
+            cts.Token.ThrowIfCancellationRequested();
+            return true;
+        };
+
+        // Act
+        await sut.StartAsync(cts.Token);
+        await FastForward(TimeSpan.Zero);
+        sut.IsLeader.Should().BeFalse();
+        sut.Settings.TryAcquireCount.Should().Be(1);
+        sut.Settings.ErrorCount.Should().Be(0);
     }
 
     [Fact]
     public async Task RenewShouldBeCalledRepeatedlyWhenLeader()
     {
-        var settings = new LeaderElectionSettingsBase
-        {
-            RenewInterval = TimeSpan.FromMilliseconds(20),
-            RetryInterval = TimeSpan.FromMilliseconds(20),
-        };
-        using var sut = new MockLeaderElection(settings, NullLogger.Instance);
+        // Arrange
+        await using var sut = CreateSut();
 
         await sut.StartAsync(TestContext.Current.CancellationToken);
-
-        // Wait for multiple renewals
-        await Task.Delay(500, TestContext.Current.CancellationToken);
-
+        await FastForward(TimeSpan.Zero);
         sut.IsLeader.Should().BeTrue();
-        sut.RenewCalls.Should().BeGreaterThan(1);
+        sut.Settings.LeadershipChangedCount.Should().Be(1);
 
-        await sut.StopAsync(TestContext.Current.CancellationToken);
+        // Act
+        // Wait for multiple renewals
+        for (var i = 0; i < 50; i++)
+        {
+            await FastForward(sut.Settings.RenewInterval);
+
+            // Assert
+            sut.IsLeader.Should().BeTrue();
+            sut.Settings.TryRenewCount.Should().Be(i + 1);
+        }
+
+        sut.Settings.LeadershipChangedCount.Should().Be(1);
     }
 
     [Fact]
     public async Task LeadershipShouldBeLostWhenRenewalFails()
     {
-        var settings = new LeaderElectionSettingsBase
-        {
-            RenewInterval = TimeSpan.FromMilliseconds(50),
-            RetryInterval = TimeSpan.FromMilliseconds(50),
-            MaxRetryAttempts = 1,
-        };
-        using var sut = new MockLeaderElection(settings, NullLogger.Instance);
-        var tcs = new TaskCompletionSource<bool>();
-        sut.LeadershipChanged += (_, leaderShipChanged) =>
-        {
-            if (!leaderShipChanged.IsLeader)
-                tcs.TrySetResult(true);
-        };
+        // Arrange
+        await using var sut = CreateSut();
 
-        sut.RenewResult = _ => Task.FromResult(false);
-
+        // acquire leadership first
         await sut.StartAsync(TestContext.Current.CancellationToken);
+        await FastForward(TimeSpan.Zero);
+        sut.IsLeader.Should().BeTrue();
+        sut.Settings.TryRenewCount.Should().Be(0);
+        sut.Settings.LeadershipChangedCount.Should().Be(1);
 
-        var eventFired = await tcs.Task.WaitAsync(
-            TimeSpan.FromSeconds(5),
-            TestContext.Current.CancellationToken
-        );
-        eventFired.Should().BeTrue();
+        // Act - Renewal failure
+        sut.Settings.RenewResult = () => false;
+        await FastForward(sut.Settings.RenewInterval);
+
+        // Assert - Lost leadership
         sut.IsLeader.Should().BeFalse();
+        sut.Settings.TryRenewCount.Should().Be(1);
+        sut.Settings.LeadershipChangedCount.Should().Be(2);
+        sut.Settings.ErrorCount.Should().Be(0);
 
-        await sut.StopAsync(TestContext.Current.CancellationToken);
+        // Act - Clear error and retry
+        sut.Settings.RenewResult = () => true;
+        await FastForward(sut.Settings.RetryInterval);
+
+        // Assert - Leadership reacquired
+        sut.IsLeader.Should().BeTrue();
+        sut.Settings.TryAcquireCount.Should().Be(2);
+        sut.Settings.TryRenewCount.Should().Be(1);
+        sut.Settings.LeadershipChangedCount.Should().Be(3);
+        sut.Settings.ErrorCount.Should().Be(0);
     }
 
     [Fact]
-    public async Task RunTaskIfLeaderAsyncShouldOnlyRunWhenLeader()
+    public async Task RunTaskIfLeaderAsyncShouldNotRunWhenNotStarted()
     {
-        var settings = new LeaderElectionSettingsBase();
-        using var sut = new MockLeaderElection(settings, NullLogger.Instance);
+        // Arrange
+        await using var sut = CreateSut();
+
+        // Act
         var taskExecuted = false;
-
         await sut.RunTaskIfLeaderAsync(
             () => taskExecuted = true,
             TestContext.Current.CancellationToken
         );
+
+        // Assert
         taskExecuted.Should().BeFalse();
+    }
 
-        await sut.TryAcquireLeadershipAsync(TestContext.Current.CancellationToken);
+    [Fact]
+    public async Task RunTaskIfLeaderAsyncShouldNotRunWhenNotLeader()
+    {
+        // Arrange
+        await using var sut = CreateSut();
+
+        // start without leadership
+        sut.Settings.AcquireResult = () => false;
+        await sut.StartAsync(TestContext.Current.CancellationToken);
+        await FastForward(TimeSpan.Zero);
+        sut.IsLeader.Should().BeFalse();
+
+        // Act
+        var taskExecuted = false;
         await sut.RunTaskIfLeaderAsync(
             () => taskExecuted = true,
             TestContext.Current.CancellationToken
         );
+
+        // Assert
+        taskExecuted.Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task RunTaskIfLeaderAsyncShouldRunWhenLeader()
+    {
+        // Arrange
+        await using var sut = CreateSut();
+
+        // start with leadership
+        await sut.StartAsync(TestContext.Current.CancellationToken);
+        await FastForward(TimeSpan.Zero);
+        sut.IsLeader.Should().BeTrue();
+
+        // Act
+        var taskExecuted = false;
+        await sut.RunTaskIfLeaderAsync(
+            () => taskExecuted = true,
+            TestContext.Current.CancellationToken
+        );
+
+        // Assert
         taskExecuted.Should().BeTrue();
     }
 
     [Fact]
-    public async Task StopAsyncShouldReleaseLeadershipWhenEnabled()
+    public async Task RunTaskIfLeaderAsyncShouldReportErrorOnException()
     {
-        var settings = new LeaderElectionSettingsBase { EnableGracefulShutdown = true };
-        using var sut = new MockLeaderElection(settings, NullLogger.Instance);
+        // Arrange
+        await using var sut = CreateSut();
+
+        // start with leadership
+        sut.Settings.AcquireResult = () => true;
+        await sut.StartAsync(TestContext.Current.CancellationToken);
+        await FastForward(TimeSpan.Zero);
+        sut.IsLeader.Should().BeTrue();
+        sut.Settings.ErrorCount.Should().Be(0);
+
+        // Act
+        await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            sut.RunTaskIfLeaderAsync(
+                () => throw new InvalidOperationException("Test exception"),
+                TestContext.Current.CancellationToken
+            )
+        );
+
+        // Assert
+        sut.Settings.ErrorCount.Should().Be(1);
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task StopAsyncShouldReleaseLeadership(bool gracefulShutdown)
+    {
+        // Arrange
+        await using var sut = CreateSut();
+        sut.Settings.EnableGracefulShutdown = gracefulShutdown;
 
         await sut.StartAsync(TestContext.Current.CancellationToken);
-        await WaitUntilLeader(sut, true, TimeSpan.FromSeconds(5));
+        await FastForward(TimeSpan.Zero);
+        sut.IsLeader.Should().BeTrue();
 
+        // Act
         await sut.StopAsync(TestContext.Current.CancellationToken);
 
-        sut.ReleaseCalls.Should().Be(1);
-        sut.IsLeader.Should().BeFalse();
+        // Assert
+        sut.IsLeader.Should().BeFalse(); // because stopped
+        sut.Settings.TryReleaseCount.Should().Be(gracefulShutdown ? 1 : 0);
     }
 
     [Fact]
-    public async Task DisposeAsyncShouldStopCorrectly()
+    public async Task StopAsyncShouldAlwaysStopLeaderLoop()
     {
-        var settings = new LeaderElectionSettingsBase();
-        var sut = new MockLeaderElection(settings, NullLogger.Instance);
-
+        // Arrange
+        await using var sut = CreateSut();
+        sut.Settings.AcquireResult = () => false; // do NOT acquire leadership
         await sut.StartAsync(TestContext.Current.CancellationToken);
-        await WaitUntilLeader(sut, true, TimeSpan.FromSeconds(5));
-
-        await sut.DisposeAsync();
-
+        await FastForward(TimeSpan.Zero);
         sut.IsLeader.Should().BeFalse();
+        sut.LeaderLoopRunning.Should().BeTrue();
+
+        // Act
+        await sut.StopAsync(TestContext.Current.CancellationToken);
+
+        // Assert
+        sut.LeaderLoopRunning.Should().BeFalse();
     }
 
-    private static async Task<bool> WaitUntilLeader(
-        ILeaderElection leaderElection,
-        bool expected,
-        TimeSpan timeout
-    )
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task DisposeAsyncShouldReleaseLeadership(bool gracefulShutdown)
     {
-        using var cts = CancellationTokenSource.CreateLinkedTokenSource(
-            TestContext.Current.CancellationToken
+        // Arrange
+        await using var sut = CreateSut();
+        sut.Settings.EnableGracefulShutdown = gracefulShutdown;
+
+        await sut.StartAsync(TestContext.Current.CancellationToken);
+        await FastForward(TimeSpan.Zero);
+        sut.IsLeader.Should().BeTrue();
+
+        // Act
+        await sut.DisposeAsync();
+
+        // Assert
+        sut.IsLeader.Should().BeFalse(); // because disposed/stopped
+        sut.Settings.TryReleaseCount.Should().Be(gracefulShutdown ? 1 : 0);
+    }
+
+    [Fact]
+    public async Task UseAfterDisposeShouldThrowObjectDisposedException()
+    {
+        // Arrange
+        await using var sut = CreateSut();
+        await sut.DisposeAsync();
+
+        // Act & Assert
+        await Assert.ThrowsAsync<ObjectDisposedException>(() =>
+            sut.StartAsync(TestContext.Current.CancellationToken)
         );
-        cts.CancelAfter(timeout);
+        await Assert.ThrowsAsync<ObjectDisposedException>(() =>
+            sut.StopAsync(TestContext.Current.CancellationToken)
+        );
+        await Assert.ThrowsAsync<ObjectDisposedException>(() =>
+            sut.RunTaskIfLeaderAsync(
+                () => Task.CompletedTask,
+                TestContext.Current.CancellationToken
+            )
+        );
+        await Assert.ThrowsAsync<ObjectDisposedException>(() =>
+            sut.RunTaskIfLeaderAsync(() => { }, TestContext.Current.CancellationToken)
+        );
 
-        try
-        {
-            while (!cts.IsCancellationRequested)
-            {
-                if (leaderElection.IsLeader == expected)
-                    return expected;
-                await Task.Delay(20, cts.Token).ConfigureAwait(false);
-            }
-        }
-        catch (OperationCanceledException) { }
+        // Properties are okay
+        sut.IsLeader.Should().BeFalse();
+        sut.LastLeadershipRenewal.Should().Be(DateTime.MinValue);
 
-        return leaderElection.IsLeader;
+        // Calling DisposeAsync multiple times should be fine
+        await sut.DisposeAsync();
+        await sut.DisposeAsync();
+    }
+
+    [Fact]
+    public async Task DisposeShouldSwallowReleaseException()
+    {
+        // Arrange
+        await using var sut = CreateSut();
+        sut.Settings.EnableGracefulShutdown = true;
+        sut.Settings.ReleaseAction = () => throw new InvalidOperationException("Release failed");
+
+        await sut.StartAsync(TestContext.Current.CancellationToken);
+        await FastForward(TimeSpan.Zero);
+        sut.IsLeader.Should().BeTrue();
+
+        // Act
+        await sut.DisposeAsync();
+
+        // Assert
+        sut.Settings.TryReleaseCount.Should().Be(1);
+        sut.Settings.ErrorCount.Should().Be(0);
     }
 }

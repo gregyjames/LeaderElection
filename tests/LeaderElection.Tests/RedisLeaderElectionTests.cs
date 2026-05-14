@@ -1,7 +1,5 @@
 using LeaderElection.Redis;
-using Microsoft.Extensions.Logging;
-using Microsoft.Extensions.Logging.Abstractions;
-using Microsoft.Extensions.Options;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace LeaderElection.Tests;
 
@@ -30,12 +28,16 @@ public sealed class RedisLeaderElectionTests(RedisContainerFixture redisFixture)
             EnableGracefulShutdown = enableGracefulShutdown,
         };
 
-    private RedisLeaderElection CreateSut(RedisSettings options) =>
-        new(
-            redisFixture.ConnectionMultiplexer,
-            Options.Create(options),
-            NullLoggerFactory.Instance.CreateLogger<RedisLeaderElection>()
-        );
+    private RedisLeaderElection CreateSut(RedisSettings settings) =>
+        new ServiceCollection()
+            .AddLogging()
+            .AddRedisLeaderElection(builder =>
+                builder
+                    .WithSettings(settings)
+                    .WithConnectionMultiplexer(redisFixture.ConnectionMultiplexer)
+            )
+            .BuildServiceProvider()
+            .GetRequiredService<RedisLeaderElection>();
 
     [Fact]
     public async Task ShouldAcquireLeadershipWhenNoOtherInstanceExists()
@@ -78,7 +80,7 @@ public sealed class RedisLeaderElectionTests(RedisContainerFixture redisFixture)
         await WaitForLeadershipChange(leaderElection1, true, TimeSpan.FromSeconds(10));
 
         await leaderElection2.StartAsync(CancellationToken);
-        await Task.Delay(TimeSpan.FromSeconds(5), CancellationToken); // Give time for second instance to try
+        await TimeProvider.Delay(TimeSpan.FromSeconds(5), CancellationToken); // Give time for second instance to try
 
         // Assert
         leaderElection1.IsLeader.Should().BeTrue();

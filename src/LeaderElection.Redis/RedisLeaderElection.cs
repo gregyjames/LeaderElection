@@ -1,119 +1,190 @@
 using Microsoft.Extensions.Logging;
-using Microsoft.Extensions.Options;
 using StackExchange.Redis;
 
 namespace LeaderElection.Redis;
 
+/// <summary>
+/// Leader Election implementation that uses Redis for leader election. Each contender
+/// will attempt to set a "lock key" in Redis with a unique instance ID and an expiration
+/// time. The instance that successfully sets the lock key is considered the leader.
+/// </summary>
 public partial class RedisLeaderElection : LeaderElectionBase<RedisSettings>
 {
-    private readonly IDatabase _redis;
+    private readonly IConnectionMultiplexer _connectionMultiplexer;
+    private IDatabase? _redis;
 
     public RedisLeaderElection(
+        RedisSettings options,
         IConnectionMultiplexer connectionMultiplexer,
-        IOptions<RedisSettings> options,
-        ILogger<RedisLeaderElection> logger
+        ILogger<RedisLeaderElection>? logger = null,
+        TimeProvider? timeProvider = null
     )
-        : base(options?.Value ?? throw new ArgumentNullException(nameof(options)), logger)
+        : base(options ?? throw new ArgumentNullException(nameof(options)), logger, timeProvider)
     {
-        _ = connectionMultiplexer ?? throw new ArgumentNullException(nameof(connectionMultiplexer));
-        this._redis =
-            connectionMultiplexer.GetDatabase()
-            ?? throw new ArgumentNullException(nameof(connectionMultiplexer));
+        ArgumentNullException.ThrowIfNull(connectionMultiplexer);
+        _connectionMultiplexer = connectionMultiplexer;
     }
 
     protected override async Task<bool> TryAcquireLeadershipInternalAsync(
         CancellationToken cancellationToken
     )
     {
-        try
+        if (_redis != null)
         {
-            var result = await _redis
-                .StringSetAsync(
-                    key: _settings.LockKey,
-                    value: _settings.InstanceId,
-                    expiry: _settings.LockExpiry,
-                    when: When.NotExists
-                )
-                .ConfigureAwait(false);
-
-            return result;
-        }
-        catch (Exception ex)
-        {
-            LogErrorAcquiringLeadership(_logger, ex);
+            LogLockAlreadyAcquired(_settings.LockKey);
             return false;
         }
+
+        var redis = _connectionMultiplexer.GetDatabase(_settings.Database);
+
+        var success = await redis
+            .StringSetAsync(
+                key: _settings.LockKey,
+                value: _settings.InstanceId,
+                expiry: _settings.LockExpiry,
+                when: When.NotExists
+            )
+            .ConfigureAwait(false);
+
+        if (success)
+        {
+            _redis = redis;
+            LogLockAcquired(_settings.LockKey);
+        }
+        else
+        {
+            // Log at debug level since it's expected that multiple contenders will fail to acquire the lock
+            LogFailureAcquiringLock(_settings.LockKey);
+        }
+
+        return success;
     }
 
     protected override async Task<bool> RenewLeadershipInternalAsync(
         CancellationToken cancellationToken
     )
     {
+        if (_redis == null)
+        {
+            LogNoLockToRenew();
+            return false;
+        }
+
+        var success = false;
         try
         {
-            var script =
-                @"
+            var script = """
                 if redis.call('GET', KEYS[1]) == ARGV[1]
                 then
                     return redis.call('PEXPIRE', KEYS[1], ARGV[2])
                 else
                     return 0
-                end";
+                end
+                """;
 
-            var result = await _redis
-                .ScriptEvaluateAsync(
-                    script,
-                    [_settings.LockKey],
-                    [_settings.InstanceId, (int)_settings.LockExpiry.TotalMilliseconds]
-                )
-                .ConfigureAwait(false);
+            var result = (int)
+                await _redis
+                    .ScriptEvaluateAsync(
+                        script,
+                        [_settings.LockKey],
+                        [_settings.InstanceId, (int)_settings.LockExpiry.TotalMilliseconds]
+                    )
+                    .ConfigureAwait(false);
 
-            return (int)result != 0;
+            if (result > 0)
+            {
+                success = true;
+                LogLockRenewed(_settings.LockKey);
+            }
+            else
+            {
+                LogFailureRenewingLock(_settings.LockKey);
+            }
         }
-        catch (Exception ex)
+        finally
         {
-            LogErrorRenewingLeadership(_logger, ex);
-            return false;
+            if (!success)
+            {
+                // give up the lock in our state to avoid being stuck in a bad state
+                await ResetLeadershipAsync().ConfigureAwait(false);
+            }
         }
+
+        return success;
     }
 
     protected override async Task ReleaseLeadershipAsync()
     {
+        if (_redis == null)
+        {
+            LogNoLockToRelease();
+            return;
+        }
+
         try
         {
-            var script =
-                @"
+            var script = """
                 if redis.call('GET', KEYS[1]) == ARGV[1]
                 then
                     return redis.call('DEL', KEYS[1])
                 else
                     return 0
-                end";
+                end
+                """;
 
-            await _redis
-                .ScriptEvaluateAsync(script, [_settings.LockKey], [_settings.InstanceId])
-                .ConfigureAwait(false);
+            var keysRemoved = (int)
+                await _redis
+                    .ScriptEvaluateAsync(script, [_settings.LockKey], [_settings.InstanceId])
+                    .ConfigureAwait(false);
 
-            LogLeadershipReleasedForInstanceInstanceId(_logger, _settings.InstanceId);
+            if (keysRemoved > 0)
+            {
+                LogLockReleased(_settings.LockKey);
+            }
+            else
+            {
+                LogFailureReleasingLock(_settings.LockKey);
+            }
         }
-        catch (Exception ex)
+        finally
         {
-            LogErrorReleasingLeadership(_logger, ex);
+            // give up the lock in our state to avoid being stuck in a bad state
+            await ResetLeadershipAsync().ConfigureAwait(false);
         }
     }
 
-    [LoggerMessage(LogLevel.Error, "Error acquiring leadership")]
-    static partial void LogErrorAcquiringLeadership(ILogger logger, Exception exception);
+    protected override ValueTask ResetLeadershipAsync()
+    {
+        _redis = null;
+        return new ValueTask();
+    }
 
-    [LoggerMessage(LogLevel.Error, "Error renewing leadership")]
-    static partial void LogErrorRenewingLeadership(ILogger logger, Exception exception);
+    [LoggerMessage(LogLevel.Debug, "Lock already acquired on {LockKey}.")]
+    partial void LogLockAlreadyAcquired(string lockKey);
 
-    [LoggerMessage(LogLevel.Information, "Leadership released for instance {instanceId}")]
-    static partial void LogLeadershipReleasedForInstanceInstanceId(
-        ILogger logger,
-        string instanceId
-    );
+    [LoggerMessage(LogLevel.Debug, "Lock acquired on {LockKey}.")]
+    partial void LogLockAcquired(string lockKey);
 
-    [LoggerMessage(LogLevel.Error, "Error releasing leadership")]
-    static partial void LogErrorReleasingLeadership(ILogger logger, Exception exception);
+    [LoggerMessage(LogLevel.Debug, "Failure acquiring lock on {LockKey}.")]
+    partial void LogFailureAcquiringLock(string lockKey);
+
+    [LoggerMessage(LogLevel.Error, "No lock to renew.")]
+    partial void LogNoLockToRenew();
+
+    [LoggerMessage(LogLevel.Debug, "Lock renewed on {LockKey}.")]
+    partial void LogLockRenewed(string lockKey);
+
+    // this is unexpected since we should have the lock. Log as a warning.
+    [LoggerMessage(LogLevel.Warning, "Failure renewing lock on {LockKey}.")]
+    partial void LogFailureRenewingLock(string lockKey);
+
+    [LoggerMessage(LogLevel.Error, "No lock to release.")]
+    partial void LogNoLockToRelease();
+
+    [LoggerMessage(LogLevel.Debug, "Lock released on {LockKey}.")]
+    partial void LogLockReleased(string lockKey);
+
+    // this is unexpected since we should have the lock. Log as a warning.
+    [LoggerMessage(LogLevel.Warning, "Failure releasing lock on {LockKey}.")]
+    partial void LogFailureReleasingLock(string lockKey);
 }

@@ -2,140 +2,216 @@ namespace LeaderElection.Postgres;
 
 using System.Data;
 using Microsoft.Extensions.Logging;
-using Microsoft.Extensions.Options;
 using Npgsql;
 
 public sealed partial class PostgresLeaderElection : LeaderElectionBase<PostgresSettings>
 {
-    private NpgsqlConnection? _activeConnection;
+    private readonly NpgsqlConnection _connection;
+    private bool _ownsLock;
 
     public PostgresLeaderElection(
-        IOptions<PostgresSettings> options,
-        ILogger<PostgresLeaderElection> logger
+        PostgresSettings options,
+        NpgsqlConnection connection,
+        ILogger<PostgresLeaderElection>? logger = null,
+        TimeProvider? timeProvider = null
     )
-        : base(options?.Value ?? throw new ArgumentNullException(nameof(options)), logger) { }
+        : base(options ?? throw new ArgumentNullException(nameof(options)), logger, timeProvider)
+    {
+        ArgumentNullException.ThrowIfNull(connection);
+        _connection = connection;
+    }
 
     protected override async Task<bool> TryAcquireLeadershipInternalAsync(
         CancellationToken cancellationToken
     )
     {
+        if (_ownsLock)
+        {
+            LogLockAlreadyAcquired(_settings.LockId);
+            return false;
+        }
+
+        var success = false;
         try
         {
-            if (_activeConnection != null)
-            {
-                await _activeConnection.DisposeAsync().ConfigureAwait(false);
-                _activeConnection = null;
-            }
+            await _connection.OpenAsync(cancellationToken).ConfigureAwait(false);
 
-            var connection = new NpgsqlConnection(_settings.ConnectionString);
-            await connection.OpenAsync(cancellationToken).ConfigureAwait(false);
-
-            using var cmd = new NpgsqlCommand("SELECT pg_try_advisory_lock(@LockId);", connection);
+            using var cmd = new NpgsqlCommand("SELECT pg_try_advisory_lock(@LockId);", _connection);
             cmd.Parameters.AddWithValue("LockId", _settings.LockId);
 
-            var result = await cmd.ExecuteScalarAsync(cancellationToken).ConfigureAwait(false);
-            if (result is true)
-            {
-                _activeConnection = connection;
-                return true;
-            }
+            success =
+                (bool?)await cmd.ExecuteScalarAsync(cancellationToken).ConfigureAwait(false)
+                ?? false;
 
-            await connection.DisposeAsync().ConfigureAwait(false);
-            return false;
+            if (success)
+            {
+                _ownsLock = true;
+                LogAcquiredLock(_settings.LockId);
+            }
+            else
+            {
+                LogFailureAcquiringLock(
+                    LogLevel.Debug,
+                    null,
+                    _settings.LockId,
+                    "Lock is already held by another instance."
+                );
+            }
         }
-        catch (Exception ex)
+        catch (PostgresException ex)
         {
-            LogErrorAcquiringPostgresqlLeadership(_logger, ex);
-            return false;
+            LogFailureAcquiringLock(
+                LogLevel.Information,
+                ex,
+                _settings.LockId,
+                ex.SqlState + ": " + ex.MessageText
+            );
         }
+        catch (NpgsqlException ex)
+        {
+            LogFailureAcquiringLock(LogLevel.Warning, ex, _settings.LockId, ex.Message);
+        }
+
+        return success;
     }
 
     protected override async Task<bool> RenewLeadershipInternalAsync(
         CancellationToken cancellationToken
     )
     {
-        if (_activeConnection is not { State: ConnectionState.Open })
+        if (!_ownsLock)
         {
+            LogNoActiveLockToRenew();
             return false;
         }
 
+        var success = false;
         try
         {
             // The advisory lock is held as long as the connection is open; this is just a heartbeat.
-            using var cmd = new NpgsqlCommand("SELECT 1;", _activeConnection);
+            using var cmd = new NpgsqlCommand("SELECT 1;", _connection);
             await cmd.ExecuteScalarAsync(cancellationToken).ConfigureAwait(false);
-            return true;
+
+            success = true;
+            LogRenewedLock(_settings.LockId);
         }
-        catch (Exception ex)
+        catch (PostgresException ex)
         {
-            LogErrorRenewingPostgresqlLeadershipConnectionLost(_logger, ex);
-
-            if (_activeConnection != null)
-            {
-                await _activeConnection.DisposeAsync().ConfigureAwait(false);
-                _activeConnection = null;
-            }
-
-            return false;
+            // this is unexpected since we should have the lock.
+            // Log as a warning and give up our leadership.
+            LogFailureRenewingLock(
+                LogLevel.Warning,
+                ex,
+                _settings.LockId,
+                ex.SqlState + ": " + ex.MessageText
+            );
         }
+        catch (NpgsqlException ex)
+        {
+            LogFailureRenewingLock(LogLevel.Error, ex, _settings.LockId, ex.Message);
+        }
+        finally
+        {
+            if (!success)
+            {
+                // assume we lost the lock. Abandon it to clean up our state
+                await ResetLeadershipAsync().ConfigureAwait(false);
+            }
+        }
+
+        return success;
     }
 
     protected override async Task ReleaseLeadershipAsync()
     {
-        if (_activeConnection == null)
+        if (!_ownsLock)
+        {
+            LogNoActiveLockToRelease();
             return;
+        }
 
         try
         {
-            if (_activeConnection.State == ConnectionState.Open)
+            if (_connection.State == ConnectionState.Open)
             {
                 using var cmd = new NpgsqlCommand(
                     "SELECT pg_advisory_unlock(@LockId);",
-                    _activeConnection
+                    _connection
                 );
                 cmd.Parameters.AddWithValue("LockId", _settings.LockId);
-                await cmd.ExecuteScalarAsync(CancellationToken.None).ConfigureAwait(false);
+                await cmd.ExecuteScalarAsync(default).ConfigureAwait(false);
             }
 
-            LogLeadershipReleasedForInstanceInstanceId(_logger, _settings.InstanceId);
+            LogReleasedLock(_settings.LockId);
         }
-        catch (Exception ex)
+        catch (PostgresException ex)
         {
-            LogErrorReleasingPostgresqlLeadership(_logger, ex);
+            // this is unexpected since we should have the lock.
+            // Log as a warning and give up our leadership.
+            LogFailureReleasingLock(
+                LogLevel.Warning,
+                ex,
+                _settings.LockId,
+                ex.SqlState + ": " + ex.MessageText
+            );
+        }
+        catch (NpgsqlException ex)
+        {
+            LogFailureReleasingLock(LogLevel.Error, ex, _settings.LockId, ex.Message);
         }
         finally
         {
-            await _activeConnection.DisposeAsync().ConfigureAwait(false);
-            _activeConnection = null;
+            // always assume we lost the lock, even if there was an error
+            // releasing it in Postgres.
+            await ResetLeadershipAsync().ConfigureAwait(false);
         }
     }
 
-    protected override async ValueTask DisposeAsyncCore()
+    protected override async ValueTask ResetLeadershipAsync()
     {
-        await base.DisposeAsyncCore().ConfigureAwait(false);
-
-        if (_activeConnection != null)
-        {
-            await _activeConnection.DisposeAsync().ConfigureAwait(false);
-            _activeConnection = null;
-        }
+        _ownsLock = false;
+        await _connection.CloseAsync().ConfigureAwait(false);
     }
 
-    [LoggerMessage(LogLevel.Error, "Error acquiring PostgreSQL leadership")]
-    static partial void LogErrorAcquiringPostgresqlLeadership(ILogger logger, Exception exception);
+    [LoggerMessage(LogLevel.Information, "Lock already acquired: {lockId}.")]
+    partial void LogLockAlreadyAcquired(long lockId);
 
-    [LoggerMessage(LogLevel.Error, "Error renewing PostgreSQL leadership; connection lost")]
-    static partial void LogErrorRenewingPostgresqlLeadershipConnectionLost(
-        ILogger logger,
-        Exception exception
+    [LoggerMessage(LogLevel.Debug, "Acquired lock {lockId}.")]
+    partial void LogAcquiredLock(long lockId);
+
+    [LoggerMessage("Failure acquiring lock {lockId}: {Reason}.")]
+    partial void LogFailureAcquiringLock(
+        LogLevel logLevel,
+        Exception? exception,
+        long lockId,
+        string reason
     );
 
-    [LoggerMessage(LogLevel.Information, "Leadership released for instance {instanceId}")]
-    static partial void LogLeadershipReleasedForInstanceInstanceId(
-        ILogger logger,
-        string instanceId
+    [LoggerMessage(LogLevel.Information, "No active lock to renew.")]
+    partial void LogNoActiveLockToRenew();
+
+    [LoggerMessage(LogLevel.Debug, "Renewed lock {lockId}.")]
+    partial void LogRenewedLock(long lockId);
+
+    [LoggerMessage("Failure renewing lock {lockId}: {Reason}.")]
+    partial void LogFailureRenewingLock(
+        LogLevel logLevel,
+        Exception? exception,
+        long lockId,
+        string reason
     );
 
-    [LoggerMessage(LogLevel.Error, "Error releasing PostgreSQL leadership")]
-    static partial void LogErrorReleasingPostgresqlLeadership(ILogger logger, Exception exception);
+    [LoggerMessage(LogLevel.Information, "No active lock to release.")]
+    partial void LogNoActiveLockToRelease();
+
+    [LoggerMessage(LogLevel.Debug, "Released lock {lockId}.")]
+    partial void LogReleasedLock(long lockId);
+
+    [LoggerMessage("Failure releasing lock {lockId}: {Reason}.")]
+    partial void LogFailureReleasingLock(
+        LogLevel logLevel,
+        Exception? exception,
+        long lockId,
+        string reason
+    );
 }

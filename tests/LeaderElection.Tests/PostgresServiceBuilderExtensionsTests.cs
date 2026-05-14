@@ -42,15 +42,13 @@ public class PostgresServiceBuilderExtensionsTests
 
         services.AddPostgresLeaderElection(options =>
         {
-            // Specifically leave ConnectionString empty
-            options.ConnectionString = string.Empty;
+            // Specifically leave InstanceId empty
+            options.InstanceId = string.Empty;
             options.LockId = 12345;
         });
 
         var serviceProvider = services.BuildServiceProvider();
-        var optionsProvider = serviceProvider.GetRequiredService<
-            IOptionsSnapshot<PostgresSettings>
-        >();
+        var optionsProvider = serviceProvider.GetRequiredService<IOptions<PostgresSettings>>();
 
         // Accessing .Value should trigger validation via IValidateOptions
         var act = new Func<object>(() => _ = optionsProvider.Value);
@@ -58,7 +56,7 @@ public class PostgresServiceBuilderExtensionsTests
         act.Should()
             .Throw<OptionsValidationException>()
             .And.Failures.Should()
-            .Contain(f => f.Contains("ConnectionString"));
+            .Contain(f => f.Contains("InstanceId"));
     }
 
     [Fact]

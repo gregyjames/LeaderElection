@@ -10,6 +10,14 @@ public abstract class TestBase
     /// </summary>
     protected static CancellationToken CancellationToken => TestContext.Current.CancellationToken;
 
+    /// <summary>
+    /// The <see cref="TimeProvider"/> used to control time in tests.
+    /// Tests can use <see cref="FakeTimeProvider"/> to simulate time passage and test
+    /// time-dependent behavior without real delays.
+    /// Defaults to <see cref="TimeProvider.System"/> (real time) if not provided.
+    /// </summary>
+    protected TimeProvider TimeProvider { get; init; } = TimeProvider.System;
+
     protected static async Task WaitForLeadershipChange(
         ILeaderElection leaderElection,
         bool expectedLeadership,
@@ -46,7 +54,7 @@ public abstract class TestBase
             );
             linkedCts.Token.Register(() => tcs.TrySetCanceled());
 
-            await tcs.Task.ConfigureAwait(false);
+            await tcs.Task;
         }
         finally
         {
@@ -79,7 +87,7 @@ public abstract class TestBase
             );
             linkedCts.Token.Register(() => tcs.TrySetCanceled());
 
-            await tcs.Task.ConfigureAwait(false);
+            await tcs.Task;
         }
         finally
         {
@@ -104,7 +112,7 @@ public abstract class TestBase
     /// <param name="timeout">The maximum time to wait for a renewal.</param>
     /// <param name="pollInterval">The interval at which to check for leadership renewal.</param>
     /// <returns>True if a renewal was observed within the timeout period; otherwise, false.</returns>
-    protected static async Task<bool> WaitForLeadershipRenewal(
+    protected async Task<bool> WaitForLeadershipRenewal(
         ILeaderElection leaderElection,
         TimeSpan? timeout = null,
         TimeSpan? pollInterval = null
@@ -117,10 +125,10 @@ public abstract class TestBase
         leaderElection.IsLeader.Should().BeTrue("Expected to be leader before waiting for renewal");
         var lastKnownRenewal = leaderElection.LastLeadershipRenewal;
 
-        var stopTime = DateTime.UtcNow + timeout.Value;
-        while (DateTime.UtcNow < stopTime)
+        var stopTime = TimeProvider.GetUtcNow() + timeout.Value;
+        while (TimeProvider.GetUtcNow() < stopTime)
         {
-            await Task.Delay(pollInterval.Value, CancellationToken).ConfigureAwait(false);
+            await TimeProvider.Delay(pollInterval.Value, CancellationToken);
 
             if (!leaderElection.IsLeader)
             {
@@ -136,26 +144,25 @@ public abstract class TestBase
         return false; // Timeout reached without observing renewal
     }
 
-    protected static async Task TestShouldRetainLeadershipAfterAtLeastOneRenewalCycle(
+    protected async Task TestShouldRetainLeadershipAfterAtLeastOneRenewalCycle(
         ILeaderElection leaderElection,
         LeaderElectionSettingsBase settings
     )
     {
         // Act
         Debug.Assert(leaderElection != null, nameof(leaderElection) + " != null");
-        await leaderElection.StartAsync(CancellationToken).ConfigureAwait(false);
-        await WaitForLeadershipChange(leaderElection, true).ConfigureAwait(false);
+        await leaderElection.StartAsync(CancellationToken);
+        await WaitForLeadershipChange(leaderElection, true);
 
         Debug.Assert(settings != null, nameof(settings) + " != null");
         var renewalObserved = await WaitForLeadershipRenewal(
-                leaderElection,
-                settings.RenewInterval + TimeSpan.FromSeconds(0.5) // Add a buffer to avoid timing issues
-            )
-            .ConfigureAwait(false);
+            leaderElection,
+            settings.RenewInterval + TimeSpan.FromSeconds(0.5) // Add a buffer to avoid timing issues
+        );
 
         // Assert
         renewalObserved.Should().BeTrue();
 
-        await leaderElection.StopAsync(CancellationToken).ConfigureAwait(false);
+        await leaderElection.StopAsync(CancellationToken);
     }
 }

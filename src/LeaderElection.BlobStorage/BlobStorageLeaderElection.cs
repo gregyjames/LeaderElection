@@ -1,76 +1,83 @@
+using System.Diagnostics;
+using System.Net;
 using Azure.Storage.Blobs;
+using Azure.Storage.Blobs.Models;
 using Azure.Storage.Blobs.Specialized;
 using Microsoft.Extensions.Logging;
-using Microsoft.Extensions.Options;
 
 namespace LeaderElection.BlobStorage;
 
+/// <summary>
+/// Leader Election implementation that uses blob leases for leader election.
+/// Each contender will attempt to acquire a lease on the same blob, and the one
+/// that holds the lease is the leader. The lease will be automatically released
+/// if the contender fails to renew it within the lease duration, allowing other
+/// contenders to acquire leadership.
+///
+/// This implementation relies on Azure Blob Storage's strong consistency and lease
+/// mechanism to ensure that only one contender can be the leader at any given time.
+/// </summary>
 public partial class BlobStorageLeaderElection : LeaderElectionBase<BlobStorageSettings>
 {
-    private readonly BlobContainerClient _containerClient;
-    private readonly BlobClient _blobClient;
+    private BlobClient? _blobClient;
     private string? _currentLeaseId;
 
     public BlobStorageLeaderElection(
-        BlobServiceClient blobServiceClient,
-        IOptions<BlobStorageSettings> options,
-        ILogger<BlobStorageLeaderElection> logger
-    )
-        : base(options?.Value ?? throw new ArgumentNullException(nameof(options)), logger)
-    {
-        _ = blobServiceClient ?? throw new ArgumentNullException(nameof(blobServiceClient));
-        _containerClient = blobServiceClient.GetBlobContainerClient(_settings.ContainerName);
-
-        _blobClient = _containerClient.GetBlobClient(_settings.BlobName);
-    }
-
-    public BlobStorageLeaderElection(
-        BlobContainerClient client,
         BlobStorageSettings settings,
-        ILogger<BlobStorageLeaderElection> logger
+        ILogger<BlobStorageLeaderElection>? logger = null,
+        TimeProvider? timeProvider = null
     )
-        : base(settings ?? throw new ArgumentNullException(nameof(settings)), logger)
-    {
-        _containerClient = client ?? throw new ArgumentNullException(nameof(client));
-
-        _blobClient = _containerClient.GetBlobClient(_settings.BlobName);
-    }
+        : base(settings ?? throw new ArgumentNullException(nameof(settings)), logger, timeProvider)
+    { }
 
     protected override async Task<bool> TryAcquireLeadershipInternalAsync(
         CancellationToken cancellationToken
     )
     {
+        if (!string.IsNullOrEmpty(_currentLeaseId))
+        {
+            LogLeaseAlreadyAcquired(_blobClient!.Uri.GetLeftPart(UriPartial.Path));
+            return false;
+        }
+
+        var blobClient = await CreateBlobClientAsync(cancellationToken).ConfigureAwait(false);
+
+        await EnsureBlobExistsAsync(blobClient, cancellationToken).ConfigureAwait(false);
+
+        var success = false;
         try
         {
-            if (_settings.CreateContainerIfNotExists)
-            {
-                await EnsureBlobExistsAsync(cancellationToken).ConfigureAwait(false);
-            }
-
-            var leaseClient = _blobClient.GetBlobLeaseClient();
+            var leaseClient = blobClient.GetBlobLeaseClient();
             var leaseResponse = await leaseClient
                 .AcquireAsync(_settings.LeaseDuration, cancellationToken: cancellationToken)
                 .ConfigureAwait(false);
 
-            if (leaseResponse?.Value?.LeaseId != null)
-            {
-                _currentLeaseId = leaseResponse.Value.LeaseId;
-                LogAcquiredLeaseWithIdLeaseId(_logger, _currentLeaseId);
-                return true;
-            }
+            success = true;
+            _currentLeaseId = leaseResponse.Value.LeaseId;
+            _blobClient = blobClient;
+            LogAcquiredLeaseWithIdLeaseId(
+                _blobClient.Uri.GetLeftPart(UriPartial.Path),
+                _currentLeaseId
+            );
+        }
+        catch (Azure.RequestFailedException ex)
+        {
+            var logLevel =
+                ex.ErrorCode == BlobErrorCode.LeaseAlreadyPresent // another instance holds the lease - very common
+                    ? LogLevel.Debug
+                    : LogLevel.Error;
 
-            return false;
+#pragma warning disable CA1873 // Avoid potentially expensive logging
+            LogFailureAcquiringLease(
+                logLevel,
+                blobClient.Uri.GetLeftPart(UriPartial.Path),
+                ex.Status,
+                ex.ErrorCode
+            );
+#pragma warning restore CA1873 // Avoid potentially expensive logging
         }
-        catch (Azure.RequestFailedException ex) when (ex.Status == 409) // Conflict - lease already exists
-        {
-            LogLeaseAlreadyExistsCannotAcquireLeadership(_logger);
-            return false;
-        }
-        catch (Exception ex)
-        {
-            LogErrorAcquiringLeadership(_logger, ex);
-            return false;
-        }
+
+        return success;
     }
 
     protected override async Task<bool> RenewLeadershipInternalAsync(
@@ -79,10 +86,13 @@ public partial class BlobStorageLeaderElection : LeaderElectionBase<BlobStorageS
     {
         if (string.IsNullOrEmpty(_currentLeaseId))
         {
-            LogNoCurrentLeaseIdCannotRenewLeadership(_logger);
+            LogNoCurrentLeaseToRenew();
             return false;
         }
 
+        Debug.Assert(_blobClient != null);
+
+        var success = false;
         try
         {
             var leaseClient = _blobClient.GetBlobLeaseClient(_currentLeaseId);
@@ -90,149 +100,210 @@ public partial class BlobStorageLeaderElection : LeaderElectionBase<BlobStorageS
                 .RenewAsync(cancellationToken: cancellationToken)
                 .ConfigureAwait(false);
 
-            if (leaseResponse?.Value?.LeaseId != null)
+            success = true;
+            Debug.Assert(_currentLeaseId == leaseResponse.Value.LeaseId);
+            LogLeaseRenewed(_blobClient.Uri.GetLeftPart(UriPartial.Path), _currentLeaseId);
+        }
+        catch (Azure.RequestFailedException ex)
+        {
+            // this is unexpected since we should own the lease.
+            // Log as a warning and give up our leadership.
+            var logLevel = (HttpStatusCode)ex.Status switch
             {
-                LogRenewedLeaseSuccessfully(_logger);
-                return true;
-            }
+                HttpStatusCode.NotFound => LogLevel.Warning, // blob deleted?
+                HttpStatusCode.Conflict => LogLevel.Warning, // lease broke/breaking
+                HttpStatusCode.PreconditionFailed => LogLevel.Warning, // lease lost
+                _ => LogLevel.Error,
+            };
 
-            return false;
+#pragma warning disable CA1873 // Avoid potentially expensive logging
+            LogFailureRenewingLease(
+                logLevel,
+                _blobClient.Uri.GetLeftPart(UriPartial.Path),
+                ex.Status,
+                ex.ErrorCode,
+                ex
+            );
+#pragma warning restore CA1873 // Avoid potentially expensive logging
         }
-        catch (Azure.RequestFailedException ex) when (ex.Status == 404) // Not Found - blob doesn't exist
+        finally
         {
-            LogBlobNotFoundDuringLeaseRenewal(_logger);
-            return false;
+            if (!success)
+            {
+                // give up the lease in our state to avoid being stuck in a bad state
+                await ResetLeadershipAsync().ConfigureAwait(false);
+            }
         }
-        catch (Azure.RequestFailedException ex) when (ex.Status == 409) // Conflict - lease lost
-        {
-            LogLeaseConflictDuringRenewalLeadershipLost(_logger);
-            return false;
-        }
-        catch (Exception ex)
-        {
-            LogErrorRenewingLeadership(_logger, ex);
-            return false;
-        }
+
+        return success;
     }
 
     protected override async Task ReleaseLeadershipAsync()
     {
         if (string.IsNullOrEmpty(_currentLeaseId))
         {
-            LogNoLeaseIdToRelease(_logger);
+            LogNoLeaseToRelease();
             return;
         }
+
+        Debug.Assert(_blobClient != null);
 
         try
         {
             var leaseClient = _blobClient.GetBlobLeaseClient(_currentLeaseId);
             await leaseClient.ReleaseAsync().ConfigureAwait(false);
 
-            _currentLeaseId = null;
-            LogLeadershipReleasedForInstanceInstanceId(_logger, _settings.InstanceId);
+            LogLeaseReleased(_blobClient.Uri.GetLeftPart(UriPartial.Path));
         }
-        catch (Azure.RequestFailedException ex) when (ex.Status == 404) // Not Found - blob doesn't exist
+        catch (Azure.RequestFailedException ex)
         {
-            LogBlobNotFoundDuringLeaseRelease(_logger);
+            // this is unexpected since we should own the lease.
+            // Log as a warning and give up our leadership.
+            var logLevel = (HttpStatusCode)ex.Status switch
+            {
+                HttpStatusCode.NotFound => LogLevel.Warning, // blob deleted?
+                HttpStatusCode.Conflict => LogLevel.Warning, // lease broke/breaking
+                HttpStatusCode.PreconditionFailed => LogLevel.Warning, // lease lost
+                _ => LogLevel.Error,
+            };
+
+#pragma warning disable CA1873 // Avoid potentially expensive logging
+            LogFailureReleasingLease(
+                logLevel,
+                _blobClient.Uri.GetLeftPart(UriPartial.Path),
+                ex.Status,
+                ex.ErrorCode
+            );
+#pragma warning restore CA1873 // Avoid potentially expensive logging
         }
-        catch (Azure.RequestFailedException ex) when (ex.Status == 409) // Conflict - lease already expired
+        finally
         {
-            LogLeaseAlreadyExpiredDuringRelease(_logger);
-        }
-        catch (Exception ex)
-        {
-            LogErrorReleasingLeadership(_logger, ex);
+            // always give up local leadership state even if release failed, since we don't
+            // want to be stuck in a bad state where we think we are the leader but are not.
+            await ResetLeadershipAsync().ConfigureAwait(false);
         }
     }
 
-    private async Task EnsureBlobExistsAsync(CancellationToken cancellationToken)
+    protected override ValueTask ResetLeadershipAsync()
+    {
+        _currentLeaseId = null;
+        _blobClient = null;
+        return new ValueTask();
+    }
+
+    private async Task<BlobClient> CreateBlobClientAsync(CancellationToken cancellationToken)
+    {
+        if (_settings.BlobClientFactory != null)
+        {
+            if (!string.IsNullOrEmpty(_settings.ConnectionString))
+            {
+                LogIgnoringConnectionStringBecauseFactoryIsSet();
+            }
+
+            return await _settings
+                    .BlobClientFactory(_settings, cancellationToken)
+                    .ConfigureAwait(false)
+                ?? throw new InvalidOperationException("BlobClientFactory returned null.");
+        }
+
+        if (!string.IsNullOrEmpty(_settings.ConnectionString))
+        {
+            var bsc = new BlobServiceClient(_settings.ConnectionString);
+            return await BlobStorageServiceBuilderExtensions
+                    .CreateBlobClient(bsc, _settings, cancellationToken)
+                    .ConfigureAwait(false)
+                ?? throw new InvalidOperationException("CreateBlobClient returned null.");
+        }
+
+        throw new InvalidOperationException(
+            "Either BlobClientFactory or ConnectionString must be specified in settings."
+        );
+    }
+
+    private async Task EnsureBlobExistsAsync(
+        BlobClient blobClient,
+        CancellationToken cancellationToken
+    )
     {
         try
         {
-            if (_containerClient != null)
-            {
-                var containerExists = await _containerClient
-                    .ExistsAsync(cancellationToken)
-                    .ConfigureAwait(false);
-                if (!containerExists.Value && _settings.CreateContainerIfNotExists)
-                {
-                    LogCreatingLeaderElectionContainer(_logger);
-                    await _containerClient
-                        .CreateIfNotExistsAsync(cancellationToken: cancellationToken)
-                        .ConfigureAwait(false);
-                }
-            }
+            await blobClient
+                .UploadAsync(
+                    new BinaryData(_settings.InstanceId),
+                    overwrite: false,
+                    cancellationToken: cancellationToken
+                )
+                .ConfigureAwait(false);
 
-            if (_blobClient != null)
-            {
-                var exists = await _blobClient.ExistsAsync(cancellationToken).ConfigureAwait(false);
-                if (!exists.Value)
-                {
-                    LogCreatingLeaderElectionBlob(_logger);
-                    await _blobClient
-                        .UploadAsync(
-                            new BinaryData(_settings.InstanceId),
-                            overwrite: true,
-                            cancellationToken: cancellationToken
-                        )
-                        .ConfigureAwait(false);
-                }
-            }
+            LogCreatedBlob(blobClient.Uri.GetLeftPart(UriPartial.Path));
         }
-        catch (Exception ex)
+        catch (Azure.RequestFailedException ex)
+            when (ex.ErrorCode == BlobErrorCode.BlobAlreadyExists)
         {
-            LogErrorEnsuringBlobExists(_logger, ex);
+            // Okay.
+        }
+        catch (Azure.RequestFailedException ex)
+        {
+            LogFailureCreatingBlob(
+                blobClient.Uri.GetLeftPart(UriPartial.Path),
+                ex.Status,
+                ex.ErrorCode
+            );
         }
     }
 
-    [LoggerMessage(LogLevel.Debug, "Acquired lease with ID: {leaseId}")]
-    static partial void LogAcquiredLeaseWithIdLeaseId(ILogger logger, string leaseId);
+    [LoggerMessage(LogLevel.Information, "Lease already acquired on {BlobUrl}.")]
+    partial void LogLeaseAlreadyAcquired(string blobUrl);
 
-    [LoggerMessage(LogLevel.Debug, "Lease already exists, cannot acquire leadership")]
-    static partial void LogLeaseAlreadyExistsCannotAcquireLeadership(ILogger logger);
+    [LoggerMessage(LogLevel.Debug, "Lease acquired on {BlobUrl}: {LeaseId}.")]
+    partial void LogAcquiredLeaseWithIdLeaseId(string blobUrl, string leaseId);
 
-    [LoggerMessage(LogLevel.Error, "Error acquiring leadership")]
-    static partial void LogErrorAcquiringLeadership(ILogger logger, Exception exception);
-
-    [LoggerMessage(LogLevel.Warning, "No current lease ID, cannot renew leadership")]
-    static partial void LogNoCurrentLeaseIdCannotRenewLeadership(ILogger logger);
-
-    [LoggerMessage(LogLevel.Debug, "Renewed lease successfully")]
-    static partial void LogRenewedLeaseSuccessfully(ILogger logger);
-
-    [LoggerMessage(LogLevel.Warning, "Blob not found during lease renewal")]
-    static partial void LogBlobNotFoundDuringLeaseRenewal(ILogger logger);
-
-    [LoggerMessage(LogLevel.Warning, "Lease conflict during renewal - leadership lost")]
-    static partial void LogLeaseConflictDuringRenewalLeadershipLost(ILogger logger);
-
-    [LoggerMessage(LogLevel.Error, "Error renewing leadership")]
-    static partial void LogErrorRenewingLeadership(ILogger logger, Exception exception);
-
-    [LoggerMessage(LogLevel.Debug, "No lease ID to release")]
-    static partial void LogNoLeaseIdToRelease(ILogger logger);
-
-    [LoggerMessage(LogLevel.Information, "Leadership released for instance {instanceId}")]
-    static partial void LogLeadershipReleasedForInstanceInstanceId(
-        ILogger logger,
-        string instanceId
+    [LoggerMessage("Failure acquiring lease on {BlobUrl}: {Status} - {ErrorCode}.")]
+    partial void LogFailureAcquiringLease(
+        LogLevel level,
+        string blobUrl,
+        int status,
+        string? errorCode
     );
 
-    [LoggerMessage(LogLevel.Debug, "Blob not found during lease release")]
-    static partial void LogBlobNotFoundDuringLeaseRelease(ILogger logger);
+    [LoggerMessage(LogLevel.Information, "No lease to renew.")]
+    partial void LogNoCurrentLeaseToRenew();
 
-    [LoggerMessage(LogLevel.Debug, "Lease already expired during release")]
-    static partial void LogLeaseAlreadyExpiredDuringRelease(ILogger logger);
+    [LoggerMessage(LogLevel.Debug, "Lease renewed on {BlobUrl}: {LeaseId}.")]
+    partial void LogLeaseRenewed(string blobUrl, string leaseId);
 
-    [LoggerMessage(LogLevel.Error, "Error releasing leadership")]
-    static partial void LogErrorReleasingLeadership(ILogger logger, Exception exception);
+    [LoggerMessage("Failure renewing lease on {BlobUrl}: {Status} - {ErrorCode}.")]
+    partial void LogFailureRenewingLease(
+        LogLevel logLevel,
+        string blobUrl,
+        int status,
+        string? errorCode,
+        Exception exception
+    );
 
-    [LoggerMessage(LogLevel.Debug, "Creating leader election container")]
-    static partial void LogCreatingLeaderElectionContainer(ILogger logger);
+    [LoggerMessage(LogLevel.Information, "No lease to release.")]
+    partial void LogNoLeaseToRelease();
 
-    [LoggerMessage(LogLevel.Debug, "Creating leader election blob")]
-    static partial void LogCreatingLeaderElectionBlob(ILogger logger);
+    [LoggerMessage(LogLevel.Debug, "Lease released on {BlobUrl}.")]
+    partial void LogLeaseReleased(string blobUrl);
 
-    [LoggerMessage(LogLevel.Error, "Error ensuring blob exists")]
-    static partial void LogErrorEnsuringBlobExists(ILogger logger, Exception exception);
+    [LoggerMessage("Failure releasing lease on {BlobUrl}: {Status} - {ErrorCode}.")]
+    partial void LogFailureReleasingLease(
+        LogLevel logLevel,
+        string blobUrl,
+        int status,
+        string? errorCode
+    );
+
+    [LoggerMessage(
+        LogLevel.Warning,
+        "Ignoring ConnectionString, ContainerName, and BlobName because BlobClientFactory is set."
+    )]
+    partial void LogIgnoringConnectionStringBecauseFactoryIsSet();
+
+    [LoggerMessage(LogLevel.Information, "Created blob: {BlobUrl}.")]
+    partial void LogCreatedBlob(string blobUrl);
+
+    [LoggerMessage(LogLevel.Warning, "Failure creating blob: {BlobUrl}: {Status} - {ErrorCode}.")]
+    partial void LogFailureCreatingBlob(string blobUrl, int status, string? errorCode);
 }

@@ -5,6 +5,8 @@ using LeaderElection.Postgres;
 using LeaderElection.Redis;
 using LeaderElection.S3;
 using LeaderElectionTester;
+using Microsoft.Extensions.Azure;
+using Microsoft.Extensions.Caching.StackExchangeRedis;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
@@ -14,9 +16,9 @@ using ZiggyCreatures.Caching.Fusion;
 
 var builder = Host.CreateApplicationBuilder(args);
 
-var leaderElectionType = ConfigurationBinder
-    .GetValue(builder.Configuration, "LeaderElectionType", "Redis")
-    .ToUpperInvariant() switch
+var leaderElectionType = (
+    builder.Configuration["LeaderElectionType"] ?? "Redis"
+).ToUpperInvariant() switch
 {
     "REDIS" => "Redis",
     "DISTRIBUTEDCACHE" or "DC" => "DistributedCache",
@@ -54,6 +56,7 @@ if (leaderElectionType is "Redis")
 if (leaderElectionType is "DistributedCache")
 {
     builder.Services.AddRedisServices(redisConfiguration);
+    builder.Services.AddDistributedCache();
     builder.Services.AddDistributedCacheLeaderElection(options =>
     {
         options.LockKey = "leader_election_tester_dc";
@@ -64,6 +67,7 @@ if (leaderElectionType is "DistributedCache")
 if (leaderElectionType is "FusionCache")
 {
     builder.Services.AddRedisServices(redisConfiguration);
+    builder.Services.AddDistributedCache();
     builder
         .Services.AddFusionCache()
         .WithRegisteredDistributedCache()
@@ -77,9 +81,13 @@ if (leaderElectionType is "FusionCache")
 
 if (leaderElectionType is "BlobStorage")
 {
+    builder.Services.AddAzureClients(configure =>
+    {
+        // blob test using Azurite or Storage Emulator
+        configure.AddBlobServiceClient("UseDevelopmentStorage=true;");
+    });
     builder.Services.AddBlobStorageLeaderElection(options =>
     {
-        options.ConnectionString = "UseDevelopmentStorage=true";
         options.ContainerName = "leader-election";
         options.BlobName = "leader_election_tester";
         options.InstanceId = instanceId;
@@ -105,10 +113,12 @@ if (leaderElectionType is "S3")
 
 if (leaderElectionType is "Postgres")
 {
+    builder.Services.AddNpgsqlDataSource(
+        "Host=localhost;Database=mydb;Username=myuser;Password=mypassword"
+    );
+
     builder.Services.AddPostgresLeaderElection(options =>
     {
-        options.ConnectionString =
-            "Host=localhost;Database=mydb;Username=myuser;Password=mypassword";
         options.LockId = 1;
         options.InstanceId = instanceId;
     });
@@ -126,15 +136,20 @@ internal static class ProgramExtensions
         string redisConfiguration
     )
     {
-        var connectionMultiplexer = new Lazy<IConnectionMultiplexer>(() =>
+        return services.AddSingleton<IConnectionMultiplexer>(_ =>
             ConnectionMultiplexer.Connect(redisConfiguration)
         );
+    }
 
-        services.AddSingleton(_ => connectionMultiplexer.Value);
-        services.AddStackExchangeRedisCache(options =>
-            options.ConnectionMultiplexerFactory = () =>
-                Task.FromResult(connectionMultiplexer.Value)
-        );
+    public static IServiceCollection AddDistributedCache(this IServiceCollection services)
+    {
+        services.AddStackExchangeRedisCache(_ => { });
+        services
+            .AddOptions<RedisCacheOptions>()
+            .Configure<IConnectionMultiplexer>(
+                (options, connection) =>
+                    options.ConnectionMultiplexerFactory = () => Task.FromResult(connection)
+            );
         return services;
     }
 }
