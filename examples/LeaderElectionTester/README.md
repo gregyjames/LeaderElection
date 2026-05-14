@@ -5,9 +5,8 @@ this repository.
 
 When you run multiple instances of the app:
 
-- only one instance becomes leader
-- only the leader runs the leader-only work
-- leadership transfers automatically when the current leader stops
+- exactly one instance becomes leader and periodically runs "leader work"
+- leadership automatically transfers to another instance when the current leader stops
 
 ## What This Example Uses
 
@@ -35,23 +34,62 @@ See below for examples.
 ## Prerequisites
 
 - .NET SDK that supports `net10.0`, e.g. .NET 10 SDK
-- One backing store running locally (Redis, Azurite, MinIO, or Postgres)
+- A compatible container runtime, such as Docker.
 
-## Start A Backing Store
+## Running With Aspire (Recommended)
 
-### Redis (for Redis, DistributedCache, FusionCache)
+The `LeaderElectionTester.AppHost` project orchestrates the infrastructure automatically using .NET
+Aspire. This is the recommended way to run the example, as it provides a unified experience and
+dashboard for viewing logs of all the running instances.
+
+From the repository root:
+
+```bash
+./build.ps1 runExample
+```
+
+This builds the example project then creates a Redis container and two example application
+instances. To use a different LeaderElection type, pass it as a command-line argument. For example:
+
+```bash
+./build.ps1 runExample -- redis # same as above
+./build.ps1 runExample -- blob # or 'BlobStorage'
+./build.ps1 runExample -- s3
+./build.ps1 runExample -- postgres
+./build.ps1 runExample -- dc # or 'DistributedCache'
+./build.ps1 runExample -- fc # or 'FusionCache'
+```
+
+You can also adjust the number of example application instances using the `-count` parameter. For
+example, to start 5 instances using Postgres:
+
+```bash
+  ./build.ps1 runExample -- postgres -count 5
+```
+
+The Aspire dashboard (click the "dashboard" link in the console output) lets you view logs from all
+example application instances side-by-side. You can stop and start individual instances to see
+leadership transfer in action.
+
+## Running Standalone (Without Aspire)
+
+You can also run the tester directly against manually configured infrastructure.
+
+### Start A Backing Store
+
+#### Redis (for Redis, DistributedCache, FusionCache)
 
 ```bash
 docker run --name leader-election-redis -p 6379:6379 -d redis:7
 ```
 
-### Azurite (for BlobStorage)
+#### Azurite (for BlobStorage)
 
 ```bash
 docker run --name leader-election-azurite -p 10000:10000 -d mcr.microsoft.com/azure-storage/azurite:latest azurite --skipApiVersionCheck --loose --blobPort 10000 --blobHost 0.0.0.0
 ```
 
-### MinIO (for S3)
+#### MinIO (for S3)
 
 ```bash
 docker run --name leader-election-minio -p 9000:9000 -p 9001:9001 -e MINIO_ROOT_USER=accessKey -e MINIO_ROOT_PASSWORD=secretKey -d minio/minio server /data --console-address ":9001"
@@ -60,57 +98,33 @@ docker run --name leader-election-minio -p 9000:9000 -p 9001:9001 -e MINIO_ROOT_
 **Important:** Log into the MinIO console (<http://localhost:9001>) and create the `my-app-locks`
 bucket (or modify the example to use a existing bucket name).
 
-### PostgreSQL (for Postgres)
+#### PostgreSQL (for Postgres)
 
 ```bash
 docker run --name leader-election-postgres -p 5432:5432 -e POSTGRES_DB=mydb -e POSTGRES_USER=myuser -e POSTGRES_PASSWORD=mypassword -d postgres:17
 ```
 
-## Build
-
-From the `./examples/LeaderElectionTester` directory, build the app:
+### Run The Example (Standalone)
 
 ```bash
-cd ./examples/LeaderElectionTester
-dotnet build
+./build.ps1 runExample -- -NoAspire
 ```
 
-## Run The Example
-
-From the `./examples/LeaderElectionTester` directory, run one instance:
+This starts a single example application instance running Redis leader election. To use a different
+leader election type, pass it as a command-line argument. For example:
 
 ```bash
-cd ./examples/LeaderElectionTester
-dotnet run --no-build
+./build.ps1 runExample -- -NoAspire redis
+./build.ps1 runExample -- -NoAspire blob # or 'BlobStorage'
+./build.ps1 runExample -- -NoAspire s3
+./build.ps1 runExample -- -NoAspire postgres
+./build.ps1 runExample -- -NoAspire dc # or 'DistributedCache'
+./build.ps1 runExample -- -NoAspire fc # or 'FusionCache'
 ```
 
-This defaults to `LeaderElectionType=Redis`.
-
-Run a specific LeaderElection type:
-
-```bash
-dotnet run --no-build -- LeaderElectionType=Redis
-dotnet run --no-build -- LeaderElectionType=DistributedCache
-dotnet run --no-build -- LeaderElectionType=FusionCache
-dotnet run --no-build -- LeaderElectionType=BlobStorage
-dotnet run --no-build -- LeaderElectionType=S3
-dotnet run --no-build -- LeaderElectionType=Postgres
-```
-
-You can also set it via environment variable:
-
-```powershell
-$env:LeaderElectionType = "Redis"
-dotnet run
-```
-
-## Observe Leadership Transfer
-
-1. Open two terminals.
-2. Start the app in both terminals (same LeaderElection type).
-3. Watch logs: one instance should report it is leader and run leader work.
-4. Stop the leader instance.
-5. The other instance should become leader shortly after.
+Run the command in multiple terminals to start multiple instances. Each instance will log whether it
+is the leader or not. Stop the leader instance (Ctrl+C) to see leadership transfer in the remaining
+instances.
 
 ## Notes
 

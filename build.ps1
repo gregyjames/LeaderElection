@@ -17,22 +17,30 @@
 
     Lists all available tasks.
 .EXAMPLE
-    PS> ./build.ps1 test -noDeps
+    PS> ./build.ps1 clean -noDeps
 
-    Executes the 'test' task without executing its dependencies.
+    Executes the 'clean' task without executing its dependencies.
+.EXAMPLE
+    PS> ./build.ps1 help clean -full
+
+    Displays the help documentation for the 'clean' task.
+    Run `./build.ps1 help help -full` for more information on the help system.
 .NOTES
     SPDX-License-Identifier: Unlicense
     Source: http://github.com/mrfootoyou/pstaskframework
 #>
 #Requires -Version 7.4
-# spell:ignore winget,choco,opencover,reportgenerator,reportgenerator-globaltool
+# spell:ignore dont,winget,choco,opencover,reportgenerator,reportgenerator-globaltool
 
+[Diagnostics.CodeAnalysis.SuppressMessage('PSReviewUnusedParameter', '')]
+[Diagnostics.CodeAnalysis.SuppressMessage('PSAvoidGlobalVars', 'global:LastTaskContext')]
 [CmdletBinding(PositionalBinding = $false)]
 param (
     # The name of the task(s) to execute.
     [Parameter(Position = 0)]
     [ValidateSet(
         'list',
+        'help',
         'bootstrap',
         'version',
         'updateTools',
@@ -47,84 +55,58 @@ param (
         'test',
         'coverage',
         'package',
-        'push'
+        'push',
+        'runExample'
     )]
-    [string[]]
-    $TaskName = @('build'),
+    [string[]] $TaskName = @('build'),
 
     # The build configuration to use when executing tasks that support it (e.g. 'build', 'test').
     # Defaults to 'debug'.
     [ValidateSet('debug', 'release')]
-    [string]
-    $Configuration = 'debug',
+    [string] $Configuration = 'debug',
 
     # The version to use when executing tasks that support it (e.g. 'build', 'package').
-    [string]
-    $Version,
-
-    # Task-specific arguments for the task specified in -TaskName.
-    # Cannot be used when -TaskName contains multiple tasks.
-    # Arguments are _not_ passed to dependencies of the specified task.
-    #
-    # Tip: Use `-- ` to clearly separate build-script arguments from task arguments.
-    # Anything after the `-- ` will be passed verbatim to the invoked task.
-    # For example:
-    #   ./build.ps1 myTask -v -- -v
-    # In this example, the first '-v' is shorthand for PowerShell's -Verbose argument,
-    # while the second '-v' is passed to 'myTask' as a task-specific argument.
-    [Parameter(ValueFromRemainingArguments)]
-    [object[]] $TaskArgs,
+    [ValidateNotNullOrEmpty()]
+    [string] $Version,
 
     # When specified, dependencies of the task(s) will not be executed.
     # Default is execute all dependencies (and their dependencies).
     [Alias("noDeps")]
-    [switch] $SkipDependencies
-)
-$ErrorActionPreference = 'Stop'
+    [switch] $SkipDependencies,
 
-# Define the repository root and scripts directory. All tasks will be executed in the
-# context of the repository root ($RepoRoot).
-# Assume this script is located in the repository root.
-$RepoRoot = $PSScriptRoot
+    # Receives task-specific arguments for the _single task_ specified in -TaskName.
+    [Parameter(ValueFromRemainingArguments, DontShow)]
+    [ValidateNotNull()]
+    [object[]] $TaskArgs = @()
+)
+# Initialize some default PowerShell preferences...
+$ErrorActionPreference = 'Stop'     # throw exception on any unhandled error
+$InformationPreference = 'Continue' # display informational messages
+
+# Initialize some repository variables...
+$RepoRoot = $PSScriptRoot # assumes this script is located in the repo root
 $ScriptsDir = Convert-Path "$RepoRoot/scripts"
 
-####################################################################################
-# Define tasks variables
-####################################################################################
-# The properties of the $Variables dictionary will be imported as variables
-# into each task prior to execution. This allows you to define common variables that
-# are shared across all tasks, such as the repository root, scripts directory, or any
-# other values that tasks may need, such as input parameters like $Configuration.
-#
-# The following variables are always available:
-# - $Task: The currently executing task definition.
-# - $TaskName: The name of the currently executing task (same as $Task.Name).
-# - $TaskArgs: An array of the arguments passed to the currently executing task.
-# - $SkipDependencies: Indicates if the task's dependencies were executed.
-# - $TasksToExecute: The ordered list of all tasks to execute.
-# - $Variables: The dictionary of variables to import into each task's scope.
-$Variables = @{
-    RepoRoot      = $RepoRoot
-    ScriptsDir    = $ScriptsDir
-    Configuration = $Configuration
-    Version       = $Version
-    # Add more variables here as needed
-}
+# Import and initialize the PSTaskFramework...
+Import-Module "$ScriptsDir/PSTaskFramework" -Verbose:$false
+$TaskContext = Initialize-TaskFramework
 
-# These scripts will be imported into each task prior to execution.
-$ImportScripts = @(
-    # Add more scripts here as needed
-)
+####################################################################################
+# Define shared variables and functions...
+####################################################################################
+
 
 ####################################################################################
 # Define all tasks
+# - Tasks will execute in the order they are defined below, unless they have
+#   dependencies, in which case the dependencies will always be executed first.
+# - The task's working directory is the folder containing this script.
+# - Tasks can assign values to script-scope variables using the `$script:` modifier.
 ####################################################################################
-Import-Module "$ScriptsDir/PSTaskFramework" -Verbose:$false
-Reset-TaskFramework
+#region Task definitions
 
-Task list -desc 'List all tasks' {
-    Get-TaskFrameworkTasks | Format-Table Name, Description, DependsOn -AutoSize
-}
+# Add the default list and help tasks...
+Add-TaskFrameworkDefaultTasks list, help
 
 Task bootstrap -desc 'Installs required tools' {
     <#
@@ -132,7 +114,7 @@ Task bootstrap -desc 'Installs required tools' {
         Bootstraps the repository by installing required tools.
 
         Required tools include:
-        - Git (probably already installed, but we'll update if necessary).
+        - Git (probably already installed).
         - .NET SDK
         - Docker-API compatible container runtime for integration tests.
         - PowerShell 7.4 or later (assumed to be already be installed).
@@ -146,7 +128,7 @@ Task bootstrap -desc 'Installs required tools' {
         'docker'        = $null # well-known app
         'powershell'    = $null # well-known app
     }
-    Install-RequiredApp $appsToInstall -InstallPackageManagers -InformationAction Continue -Verbose:($VerbosePreference -eq 'Continue')
+    Install-RequiredApp $appsToInstall -InstallPackageManagers
 }
 
 Task version -desc 'Display tool versions' {
@@ -556,18 +538,87 @@ Task push -desc 'Push NuGet packages' -dependsOn version {
     }
 }
 
-##############################################################
-# Execute the specified task(s) with the Task Framework. See
-# the documentation for Invoke-TaskFramework for more details.
-##############################################################
+Task runExample -desc 'Run the example application' -dependsOn build {
+    <#
+    .DESCRIPTION
+        Runs the example application located in 'examples/LeaderElectionTester' folder.
 
+        By default it uses Aspire to orchestrate the infrastructure and the example
+        application instances. Click the "dashboard" link in the console output to view
+        the Aspire dashboard.
+
+        To run without Aspire, use the -NoAspire switch. In this mode, you are responsible
+        for ensuring that the necessary infrastructure (e.g. docker containers) is
+        properly configured and running *before* starting the example application.
+    .EXAMPLE
+        PS> ./build.ps1 runExample
+
+        Uses Aspire to orchestrate a Redis container and two instances of the example
+        application running Redis leader election.
+    .EXAMPLE
+        PS> ./build.ps1 runExample -- blob -count 5
+
+        Uses Aspire to orchestrate a Blob Storage container and five instances of the
+        example application running BlobStorage leader election.
+    .EXAMPLE
+        PS> ./build.ps1 runExample -- postgres -NoAspire
+
+        Starts one instance of the example application running Postgres leader election.
+        The caller is responsible for managing a compatible Postgres database.
+        Run the command again (in another terminal window) to create a second instance.
+    #>
+    [CmdletBinding(PositionalBinding = $false)]
+    param(
+        # The type of LeaderElection to run. Valid values are:
+        #  - redis
+        #  - blob or blobStorage
+        #  - s3
+        #  - postgres
+        #  - dc or distributedCache
+        #  - fc or fusionCache
+        # Default is redis.
+        [Parameter(Position = 0)]
+        [string] $Type = 'redis',
+
+        # The number of example application instances Aspire should create.
+        # Defaults to 2.
+        [ValidateRange(1, 100)]
+        [int] $Count = 2,
+
+        # When specified, a single instance of the example application will be started without
+        # using Aspire. It is the caller's responsibility to ensure that the necessary
+        # infrastructure (e.g. docker containers) is properly configured.
+        [switch] $NoAspire
+    )
+
+    $runArgs = @(
+        '--no-build'
+        '--launch-profile', 'https'
+        '--'
+        "LeaderElectionType=$Type"
+    )
+
+    if ($NoAspire) {
+        Set-Location './examples/LeaderElectionTester'
+    }
+    else {
+        Set-Location './examples/LeaderElectionTester.AppHost'
+        $runArgs += "TesterCount=$Count"
+    }
+
+    Invoke-Shell -- dotnet run @runArgs
+}
+
+#endregion Task definitions
+
+####################################################################################
+# Execute the specified task(s)...
+####################################################################################
 Invoke-TaskFramework `
     -TaskName $TaskName `
     -TaskArgs $TaskArgs `
     -SkipDependencies:$SkipDependencies `
-    -WorkingDirectory $RepoRoot `
-    -Variables $Variables `
-    -ImportScripts $ImportScripts `
-    -ExitOnError `
-    -InformationAction Continue `
-    -Verbose:($VerbosePreference -eq 'Continue')
+    -ExitOnError
+
+# Save TaskContext in a global variable so that it can be inspected
+$global:LastTaskContext = $TaskContext

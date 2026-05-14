@@ -1,0 +1,13 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "build LeaderElectionTester.AppHost",
+      "type": "dotnet",
+      "task": "build ${workspaceFolder}/examples/LeaderElectionTester.AppHost/LeaderElectionTester.AppHost.csproj",
+      "file": "${workspaceFolder}/examples/LeaderElectionTester.AppHost/LeaderElectionTester.AppHost.csproj",
+      "group": "build",
+      "problemMatcher": []
+    }
+  ]
+}

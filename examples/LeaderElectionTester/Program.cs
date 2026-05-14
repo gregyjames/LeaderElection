@@ -36,12 +36,11 @@ var leaderElectionType = (
 };
 
 // Get a unique ID for each running instance (e.g. in different terminals or machines).
-var instanceId = builder.Configuration.GetValue(
-    "InstanceId",
-    $"{AppDomain.CurrentDomain.FriendlyName}:{Environment.MachineName}:{Environment.ProcessId}"
-);
+var instanceId =
+    builder.Configuration["InstanceId"]
+    ?? $"{AppDomain.CurrentDomain.FriendlyName}:{Environment.MachineName}:{Environment.ProcessId}";
 
-var redisConfiguration = "localhost:6379";
+var redisConfiguration = builder.Configuration.GetConnectionString("redis") ?? "localhost:6379";
 
 if (leaderElectionType is "Redis")
 {
@@ -52,8 +51,7 @@ if (leaderElectionType is "Redis")
         options.InstanceId = instanceId;
     });
 }
-
-if (leaderElectionType is "DistributedCache")
+else if (leaderElectionType is "DistributedCache")
 {
     builder.Services.AddRedisServices(redisConfiguration);
     builder.Services.AddDistributedCache();
@@ -63,8 +61,7 @@ if (leaderElectionType is "DistributedCache")
         options.InstanceId = instanceId;
     });
 }
-
-if (leaderElectionType is "FusionCache")
+else if (leaderElectionType is "FusionCache")
 {
     builder.Services.AddRedisServices(redisConfiguration);
     builder.Services.AddDistributedCache();
@@ -78,13 +75,14 @@ if (leaderElectionType is "FusionCache")
         options.InstanceId = instanceId;
     });
 }
-
-if (leaderElectionType is "BlobStorage")
+else if (leaderElectionType is "BlobStorage")
 {
     builder.Services.AddAzureClients(configure =>
     {
         // blob test using Azurite or Storage Emulator
-        configure.AddBlobServiceClient("UseDevelopmentStorage=true;");
+        configure.AddBlobServiceClient(
+            builder.Configuration["BLOBS_CONNECTIONSTRING"] ?? "UseDevelopmentStorage=true;"
+        );
     });
     builder.Services.AddBlobStorageLeaderElection(options =>
     {
@@ -93,28 +91,33 @@ if (leaderElectionType is "BlobStorage")
         options.InstanceId = instanceId;
     });
 }
-
-if (leaderElectionType is "S3")
+else if (leaderElectionType is "S3")
 {
+    var minioUri = new Uri(builder.Configuration["Minio:Endpoint"] ?? "http://localhost:9000");
+    var minioEndpoint = $"{minioUri.Host}:{minioUri.Port}";
+    var minioAccessKey = builder.Configuration["Minio:AccessKey"] ?? "accessKey";
+    var minioSecretKey = builder.Configuration["Minio:SecretKey"] ?? "secretKey";
+    var minioBucketName = builder.Configuration["Minio:BucketName"] ?? "my-app-locks";
+
     builder.Services.AddMinio(client =>
         client
-            .WithEndpoint("localhost:9000")
-            .WithCredentials("accessKey", "secretKey")
+            .WithEndpoint(minioEndpoint)
+            .WithCredentials(minioAccessKey, minioSecretKey)
             .WithSSL(false)
             .Build()
     );
     builder.Services.AddS3LeaderElection(options =>
     {
-        options.BucketName = "my-app-locks";
+        options.BucketName = minioBucketName;
         options.ObjectKey = "leader-lock.json";
         options.InstanceId = instanceId;
     });
 }
-
-if (leaderElectionType is "Postgres")
+else if (leaderElectionType is "Postgres")
 {
     builder.Services.AddNpgsqlDataSource(
-        "Host=localhost;Database=mydb;Username=myuser;Password=mypassword"
+        builder.Configuration.GetConnectionString("mydb")
+            ?? "Host=localhost;Database=mydb;Username=myuser;Password=mypassword"
     );
 
     builder.Services.AddPostgresLeaderElection(options =>
@@ -146,9 +149,12 @@ internal static class ProgramExtensions
         services.AddStackExchangeRedisCache(_ => { });
         services
             .AddOptions<RedisCacheOptions>()
-            .Configure<IConnectionMultiplexer>(
-                (options, connection) =>
-                    options.ConnectionMultiplexerFactory = () => Task.FromResult(connection)
+            .Configure<IServiceProvider>(
+                (options, serviceProvider) =>
+                    options.ConnectionMultiplexerFactory = () =>
+                        Task.FromResult(
+                            serviceProvider.GetRequiredService<IConnectionMultiplexer>()
+                        )
             );
         return services;
     }
