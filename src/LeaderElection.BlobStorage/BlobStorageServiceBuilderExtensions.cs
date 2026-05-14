@@ -216,13 +216,13 @@ public static class BlobStorageServiceBuilderExtensions
     /// </remarks>
     public static ServiceBuilder WithSettings(
         this ServiceBuilder builder,
-        Action<IServiceProvider, string?, BlobStorageSettings> configAction
+        Action<BlobStorageSettings, IServiceProvider, string?> configAction
     )
     {
         ArgumentNullException.ThrowIfNull(builder);
         ArgumentNullException.ThrowIfNull(configAction);
         builder.OptionsBuilder.Configure<IServiceProvider>(
-            (settings, sp) => configAction(sp, builder.ServiceKey, settings)
+            (settings, sp) => configAction(settings, sp, builder.ServiceKey)
         );
         return builder;
     }
@@ -258,7 +258,7 @@ public static class BlobStorageServiceBuilderExtensions
     {
         ArgumentNullException.ThrowIfNull(factoryFunc);
         return builder.WithSettings(
-            (sp, _, settings) =>
+            (settings, sp, _) =>
                 settings.BlobClientFactory = (settings, ct) => factoryFunc(sp, settings, ct)
         );
     }
