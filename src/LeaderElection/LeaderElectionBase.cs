@@ -38,7 +38,7 @@ public abstract partial class LeaderElectionBase<TSettings> : ILeaderElection
     public event EventHandler<LeadershipChangedEventArgs>? LeadershipChanged;
     public event EventHandler<LeadershipExceptionEventArgs>? ErrorOccurred;
 
-    public bool LeaderLoopRunning => Volatile.Read(ref _leadershipLoopTask) != null;
+    public bool LeaderLoopRunning => Volatile.Read(ref _leadershipLoopTask)?.IsCompleted is false;
 
     private bool IsDisposed => Volatile.Read(ref _disposedValue) == 1;
     public bool IsLeader => _isLeader && !IsDisposed;
