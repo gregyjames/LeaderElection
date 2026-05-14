@@ -99,7 +99,7 @@ public partial class DistributedCacheLeaderElection : LeaderElectionBase<Distrib
         }
 
         // We can't perform atomic read-modify-write operations with IDistributedCache,
-        // so we're relying on on the fact that the lock key will not be modified outside
+        // so we're relying on the fact that the lock key will not be modified outside
         // of this algorithm.
         var success = false;
         try
@@ -190,7 +190,7 @@ public partial class DistributedCacheLeaderElection : LeaderElectionBase<Distrib
             }
             else
             {
-                // this is unexpected since we should own the lock, but since we cant
+                // this is unexpected since we should own the lock, but since we can't
                 // verify ownership atomically, it's possible that another instance
                 // has legitimately already taken over the lock.
                 // Log as information and give up our leadership.

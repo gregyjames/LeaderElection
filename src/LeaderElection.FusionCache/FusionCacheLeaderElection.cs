@@ -103,8 +103,9 @@ public partial class FusionCacheLeaderElection : LeaderElectionBase<FusionCacheS
         }
 
         // We can't perform atomic read-modify-write operations with FusionCache,
-        // so we're relying on the fact that well-behaved ElectionLeaders will not
-        // expiry time.
+        // so renewal relies on the invariant that well-behaved ElectionLeaders
+        // will not modify the lock value (owner instance ID) or expiry time while
+        // another instance still owns the lock and is renewing it
         var success = false;
         try
         {
@@ -199,7 +200,7 @@ public partial class FusionCacheLeaderElection : LeaderElectionBase<FusionCacheS
             }
             else
             {
-                // this is unexpected since we should own the lock, but since we cant
+                // this is unexpected since we should own the lock, but since we can't
                 // verify ownership atomically, it's possible that another instance
                 // has legitimately already taken over the lock.
                 // Log as information and give up our leadership.

@@ -263,7 +263,8 @@ public sealed partial class S3LeaderElection : LeaderElectionBase<S3Settings>
     // - If the object exists but can't be deserialized, returns (etag, null) and logs a warning.
     // - If the object exists and is successfully deserialized, returns (etag, leaseRecord).
     // - Any exceptions thrown by the Minio client (e.g., due to permissions issues, network issues, etc.)
-    //   are caught and logged, and it returns (null, null) to indicate no valid lease record could be read.
+    //   are caught and treated as if no valid lease record could be read, so it returns (null, null).
+    //   Those exceptions are not logged here; if they also prevent acquiring the lease, that failure is logged later.
     private async Task<(string? currentEtag, LeaseRecord? currentLease)> TryReadLeaseAsync(
         CancellationToken cancellationToken
     )
