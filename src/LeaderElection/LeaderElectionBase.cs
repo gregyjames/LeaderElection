@@ -417,7 +417,11 @@ public abstract partial class LeaderElectionBase<TSettings> : ILeaderElection
         }
         else
         {
-            var backoffFactor = Math.Pow(_settings.RetryBackoffFactor, Math.Min(errorCount, 30));
+            const int maxExponent = 30; // to prevent overflow
+            var backoffFactor = Math.Pow(
+                _settings.RetryBackoffFactor,
+                Math.Min(errorCount, maxExponent)
+            );
             var jitter = _settings.RetryJitter - (_getRandomDouble() * _settings.RetryJitter * 2);
             return TimeSpan.FromTicks(
                 Math.Min(
