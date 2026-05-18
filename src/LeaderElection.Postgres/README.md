@@ -51,6 +51,8 @@ builder.Services.AddPostgresLeaderElection(builder =>
             // Use a short RenewInterval to quickly detect and recover from failed leaders.
             // Note that the actual detection time will be at least the sum of the CommandTimeout
             // and RenewInterval, so keep CommandTimeout low as well.
+            // Alternatively, you can specify a KeepAlive interval in the connection string
+            // (e.g., "KeepAlive=5") to have the Npgsql driver detect a broken connection.
             options.RenewInterval = TimeSpan.FromSeconds(5); // aggressive renew
         })
 );
@@ -92,15 +94,18 @@ public class Worker : BackgroundService
 
 ## Configuration (PostgresSettings)
 
-| Property                 | Default          | Description                                                                                                                     |
-| :----------------------- | :--------------- | :------------------------------------------------------------------------------------------------------------------------------ |
-| `DataSourceFactory`      | `null`           | A factory function used to create an `NpgsqlDataSource`. If not specified, the `ConnectionString` will be tried.                |
-| `ConnectionString`       | `null`           | The connection string for the PostgreSQL database. If not specified, the `NpgsqlDataSource` from the DI container will be used. |
-| `LockId`                 | `0`              | The unique 64-bit advisory lock id to use for leader election.                                                                  |
-| `InstanceId`             | `Guid.NewGuid()` | Unique ID for this node.                                                                                                        |
-| `RetryInterval`          | `5s`             | The interval to wait before retrying a failed leadership acquisition.                                                           |
-| `RenewInterval`          | `10s`            | The interval at which the leader will attempt to renew its leadership.                                                          |
-| `EnableGracefulShutdown` | `true`           | If true, explicitly unlocks via `pg_advisory_unlock` on stop. It is highly recommended to leave this enabled.                   |
+| Property                 | Default          | Description                                                                                                                              |
+| :----------------------- | :--------------- | :--------------------------------------------------------------------------------------------------------------------------------------- |
+| `DataSourceFactory`      | `null`           | A factory function used to create an `NpgsqlDataSource`. If not specified, the `ConnectionString` will be tried.                         |
+| `ConnectionString`       | `null`           | The connection string for the PostgreSQL database. If not specified, the `NpgsqlDataSource` from the DI container will be used.          |
+| `LockId`                 | `0`              | The unique 64-bit advisory lock id to use for leader election.                                                                           |
+| `InstanceId`             | `Guid.NewGuid()` | Unique ID for this node.                                                                                                                 |
+| `RenewInterval`          | `10s`            | The interval at which the leader will attempt to renew its leadership.                                                                   |
+| `RetryInterval`          | `5s`             | The interval at which non-leader instances will attempt to acquire leadership.                                                           |
+| `RetryBackoffFactor`     | `2.0`            | The exponential backoff factor applied to the `RetryInterval`.                                                                           |
+| `RetryJitter`            | `0.10`           | The jitter percentage to apply to the retry interval to avoid thundering herd when multiple contenders are trying to acquire leadership. |
+| `MaxRetryInterval`       | `40s`            | The maximum retry interval (after applying the backoff factor and jitter) when acquiring leadership.                                     |
+| `EnableGracefulShutdown` | `true`           | If true, explicitly unlocks via `pg_advisory_unlock` on stop. It is highly recommended to leave this enabled.                            |
 
 ## PostgreSQL Specifics
 
