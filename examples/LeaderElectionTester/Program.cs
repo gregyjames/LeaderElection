@@ -139,9 +139,14 @@ else if (leaderElectionType is "Postgres")
     // Register a NpgsqlDataSource specifically for Leader Election use...
     const string postgresLeaderElectionDataSource = "PostgresLeaderElectionDataSource";
     builder.Services.AddNpgsqlDataSource(
-        // Use short CommandTimeout to avoid long waits if the database becomes unresponsive.
-        connectionString + ";Timeout=5;CommandTimeout=3;",
-        serviceKey: postgresLeaderElectionDataSource
+        serviceKey: postgresLeaderElectionDataSource,
+        connectionString: "Host=localhost;Database=mydb;Username=myuser;Password=mypassword",
+        dataSourceBuilderAction: builder =>
+        {
+            // Use short timeouts to avoid long waits if the database becomes unresponsive.
+            builder.ConnectionStringBuilder.Timeout = 5; // connection timeout
+            builder.ConnectionStringBuilder.CommandTimeout = 3;
+        }
     );
 
     builder.Services.AddPostgresLeaderElection(builder =>
@@ -154,6 +159,8 @@ else if (leaderElectionType is "Postgres")
                 // Use a short RenewInterval to quickly detect and recover from failed leaders.
                 // Note that the actual detection time will be at least the sum of the CommandTimeout
                 // and RenewInterval, so keep CommandTimeout low as well.
+                // Alternatively, you can specify a KeepAlive interval in the connection string
+                // (e.g., "KeepAlive=5") to have the Npgsql driver detect a broken connection.
                 options.RenewInterval = TimeSpan.FromSeconds(5); // aggressive renew
             })
     );
