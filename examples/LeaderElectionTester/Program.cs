@@ -11,6 +11,7 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Minio;
+using Npgsql;
 using StackExchange.Redis;
 using ZiggyCreatures.Caching.Fusion;
 
@@ -46,22 +47,28 @@ var redisConfiguration = "localhost:6379";
 if (leaderElectionType is "Redis")
 {
     builder.Services.AddRedisServices(redisConfiguration);
-    builder.Services.AddRedisLeaderElection(options =>
-    {
-        options.LockKey = "leader_election_tester_redis";
-        options.InstanceId = instanceId;
-    });
+    builder.Services.AddRedisLeaderElection(builder =>
+        builder
+            .WithInstanceId(instanceId)
+            .WithSettings(options =>
+            {
+                options.LockKey = "leader_election_tester_redis";
+            })
+    );
 }
 
 if (leaderElectionType is "DistributedCache")
 {
     builder.Services.AddRedisServices(redisConfiguration);
     builder.Services.AddDistributedCache();
-    builder.Services.AddDistributedCacheLeaderElection(options =>
-    {
-        options.LockKey = "leader_election_tester_dc";
-        options.InstanceId = instanceId;
-    });
+    builder.Services.AddDistributedCacheLeaderElection(builder =>
+        builder
+            .WithInstanceId(instanceId)
+            .WithSettings(options =>
+            {
+                options.LockKey = "leader_election_tester_dc";
+            })
+    );
 }
 
 if (leaderElectionType is "FusionCache")
@@ -72,11 +79,14 @@ if (leaderElectionType is "FusionCache")
         .Services.AddFusionCache()
         .WithRegisteredDistributedCache()
         .WithSystemTextJsonSerializer();
-    builder.Services.AddFusionCacheLeaderElection(options =>
-    {
-        options.LockKey = "leader_election_tester_fc";
-        options.InstanceId = instanceId;
-    });
+    builder.Services.AddFusionCacheLeaderElection(builder =>
+        builder
+            .WithInstanceId(instanceId)
+            .WithSettings(options =>
+            {
+                options.LockKey = "leader_election_tester_fc";
+            })
+    );
 }
 
 if (leaderElectionType is "BlobStorage")
@@ -86,12 +96,15 @@ if (leaderElectionType is "BlobStorage")
         // blob test using Azurite or Storage Emulator
         configure.AddBlobServiceClient("UseDevelopmentStorage=true;");
     });
-    builder.Services.AddBlobStorageLeaderElection(options =>
-    {
-        options.ContainerName = "leader-election";
-        options.BlobName = "leader_election_tester";
-        options.InstanceId = instanceId;
-    });
+    builder.Services.AddBlobStorageLeaderElection(builder =>
+        builder
+            .WithInstanceId(instanceId)
+            .WithSettings(options =>
+            {
+                options.ContainerName = "leader-election";
+                options.BlobName = "leader_election_tester";
+            })
+    );
 }
 
 if (leaderElectionType is "S3")
@@ -103,25 +116,41 @@ if (leaderElectionType is "S3")
             .WithSSL(false)
             .Build()
     );
-    builder.Services.AddS3LeaderElection(options =>
-    {
-        options.BucketName = "my-app-locks";
-        options.ObjectKey = "leader-lock.json";
-        options.InstanceId = instanceId;
-    });
+
+    builder.Services.AddS3LeaderElection(builder =>
+        builder
+            .WithInstanceId(instanceId)
+            .WithSettings(options =>
+            {
+                options.BucketName = "my-app-locks";
+                options.ObjectKey = "leader-lock.json";
+            })
+    );
 }
 
 if (leaderElectionType is "Postgres")
 {
+    // Register a NpgsqlDataSource specifically for Leader Election use...
+    const string postgresLeaderElectionDataSource = "PostgresLeaderElectionDataSource";
     builder.Services.AddNpgsqlDataSource(
-        "Host=localhost;Database=mydb;Username=myuser;Password=mypassword"
+        // Use short CommandTimeout to avoid long waits if the database becomes unresponsive.
+        "Host=localhost;Database=mydb;Username=myuser;Password=mypassword;Timeout=5;CommandTimeout=3;",
+        serviceKey: postgresLeaderElectionDataSource
     );
 
-    builder.Services.AddPostgresLeaderElection(options =>
-    {
-        options.LockId = 1;
-        options.InstanceId = instanceId;
-    });
+    builder.Services.AddPostgresLeaderElection(builder =>
+        builder
+            .WithRegisteredDataSource(postgresLeaderElectionDataSource)
+            .WithInstanceId(instanceId)
+            .WithSettings(options =>
+            {
+                options.LockId = 1;
+                // Use a short RenewInterval to quickly detect and recover from failed leaders.
+                // Note that the actual detection time will be at least the sum of the CommandTimeout
+                // and RenewInterval, so keep CommandTimeout low as well.
+                options.RenewInterval = TimeSpan.FromSeconds(5); // aggressive renew
+            })
+    );
 }
 
 builder.Services.AddHostedService<Service>();
