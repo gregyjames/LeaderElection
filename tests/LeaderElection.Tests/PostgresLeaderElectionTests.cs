@@ -1,7 +1,6 @@
 using LeaderElection.Postgres;
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Logging;
-using Microsoft.Extensions.Logging.Abstractions;
+using Npgsql;
 
 namespace LeaderElection.Tests;
 
@@ -157,5 +156,33 @@ public sealed class PostgresLeaderElectionTests(PostgresContainerFixture postgre
 
         // Act & Assert
         await TestShouldRetainLeadershipAfterAtLeastOneRenewalCycle(leaderElection, options);
+    }
+
+    [Fact]
+    public async Task ShouldThrowWhenUsingMultiHostConnectionStringWithInvalidTargetSessionAttributes()
+    {
+        // Arrange
+        var options = CreateSettings();
+        options.ConnectionString = "host=host1,host2;TargetSessionAttributes=any;";
+
+        // Act & Assert - Should throw due to invalid connection string for leader election usage
+        await Assert.ThrowsAsync<InvalidOperationException>(async () =>
+        {
+            await using var leaderElection = CreateSut(options);
+        });
+    }
+
+    [Fact]
+    public async Task ShouldThrowWhenUsingConnectionStringWithMultiplexingEnabled()
+    {
+        // Arrange
+        var options = CreateSettings();
+        options.ConnectionString += ";Multiplexing=true;";
+
+        // Act & Assert
+        await Assert.ThrowsAsync<InvalidOperationException>(async () =>
+        {
+            await using var leaderElection = CreateSut(options);
+        });
     }
 }

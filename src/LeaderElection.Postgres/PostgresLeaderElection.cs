@@ -6,46 +6,96 @@ using Npgsql;
 
 public sealed partial class PostgresLeaderElection : LeaderElectionBase<PostgresSettings>
 {
-    private readonly NpgsqlConnection _connection;
-    private bool _ownsLock;
+    private readonly NpgsqlDataSource _dataSource;
+    private NpgsqlConnection? _connection;
 
     public PostgresLeaderElection(
         PostgresSettings options,
-        NpgsqlConnection connection,
+        NpgsqlDataSource dataSource,
         ILogger<PostgresLeaderElection>? logger = null,
         TimeProvider? timeProvider = null
     )
         : base(options ?? throw new ArgumentNullException(nameof(options)), logger, timeProvider)
     {
-        ArgumentNullException.ThrowIfNull(connection);
-        _connection = connection;
+        ArgumentNullException.ThrowIfNull(dataSource);
+        ValidateDataSource(dataSource);
+        _dataSource = dataSource;
+    }
+
+    // Validate that the provided DataSource is configured in a way that is compatible with
+    // advisory locks and won't lead to unexpected behavior.
+    private void ValidateDataSource(NpgsqlDataSource dataSource)
+    {
+        // Multiplexing is not allowed since each instance requires a dedicated connection
+        // (required for advisory locks)
+        var b = new NpgsqlConnectionStringBuilder(dataSource.ConnectionString);
+        if (b.Multiplexing)
+        {
+            throw new InvalidOperationException(
+                "Multiplexing must be disabled for leader election. Remove 'Multiplexing=true' from your connection string or provide a DataSource with multiplexing disabled."
+            );
+        }
+
+        // In multi-host configurations, Npgsql will automatically route to a standby if the primary
+        // is unavailable, resulting in unpredictable/orphaned locks. To avoid this, require an
+        // explicit TargetSessionAttributes in multi-host scenarios.
+        // Note that this assumes a Single-Primary topology, which is the only topology where
+        // advisory locks can be reliably used.
+        if (
+            b.Host?.Contains(',', StringComparison.OrdinalIgnoreCase) == true
+            && !"read-write".Equals(b.TargetSessionAttributes, StringComparison.OrdinalIgnoreCase)
+            && !"primary".Equals(b.TargetSessionAttributes, StringComparison.OrdinalIgnoreCase)
+        )
+        {
+            throw new InvalidOperationException(
+                "TargetSessionAttributes must be 'read-write' or 'primary' for multi-host leader election. Add 'TargetSessionAttributes=read-write' or 'TargetSessionAttributes=primary' to your connection string or provide a DataSource with the correct settings."
+            );
+        }
+
+        // Warn if CommandTimeout is not set to a reasonable value, as a long CommandTimeout can
+        // lead to long waits if the database becomes unresponsive.
+        if (
+            b.CommandTimeout <= 0 /*infinity*/
+            || b.CommandTimeout > 5 /*seconds*/
+        )
+        {
+            LogUseRecommendedCommandTimeout(b.CommandTimeout);
+        }
     }
 
     protected override async Task<bool> TryAcquireLeadershipInternalAsync(
         CancellationToken cancellationToken
     )
     {
-        if (_ownsLock)
+        if (_connection != null)
         {
             LogLockAlreadyAcquired(_settings.LockId);
             return false;
         }
 
+        NpgsqlConnection? connection = null;
         var success = false;
         try
         {
-            await _connection.OpenAsync(cancellationToken).ConfigureAwait(false);
+            connection = await _dataSource
+                .OpenConnectionAsync(cancellationToken)
+                .ConfigureAwait(false);
 
-            using var cmd = new NpgsqlCommand("SELECT pg_try_advisory_lock(@LockId);", _connection);
-            cmd.Parameters.AddWithValue("LockId", _settings.LockId);
+            using var cmd = CreateCommand(
+                connection,
+                "SELECT pg_try_advisory_lock(@LockId);",
+                "LockId",
+                _settings.LockId
+            );
 
             success =
-                (bool?)await cmd.ExecuteScalarAsync(cancellationToken).ConfigureAwait(false)
+                (await cmd.ExecuteScalarAsync(cancellationToken).ConfigureAwait(false) as bool?)
                 ?? false;
 
             if (success)
             {
-                _ownsLock = true;
+                _connection = connection;
+                connection = null; // ownership transferred, don't dispose in finally
                 LogAcquiredLock(_settings.LockId);
             }
             else
@@ -71,6 +121,13 @@ public sealed partial class PostgresLeaderElection : LeaderElectionBase<Postgres
         {
             LogFailureAcquiringLock(LogLevel.Warning, ex, _settings.LockId, ex.Message);
         }
+        finally
+        {
+            if (connection != null)
+            {
+                await connection.DisposeAsync().ConfigureAwait(false);
+            }
+        }
 
         return success;
     }
@@ -79,7 +136,7 @@ public sealed partial class PostgresLeaderElection : LeaderElectionBase<Postgres
         CancellationToken cancellationToken
     )
     {
-        if (!_ownsLock)
+        if (_connection == null)
         {
             LogNoActiveLockToRenew();
             return false;
@@ -89,8 +146,8 @@ public sealed partial class PostgresLeaderElection : LeaderElectionBase<Postgres
         try
         {
             // The advisory lock is held as long as the connection is open; this is just a heartbeat.
-            using var cmd = new NpgsqlCommand("SELECT 1;", _connection);
-            await cmd.ExecuteScalarAsync(cancellationToken).ConfigureAwait(false);
+            using var cmd = CreateCommand(_connection, "SELECT 1;");
+            await cmd.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
 
             success = true;
             LogRenewedLock(_settings.LockId);
@@ -124,7 +181,7 @@ public sealed partial class PostgresLeaderElection : LeaderElectionBase<Postgres
 
     protected override async Task ReleaseLeadershipAsync()
     {
-        if (!_ownsLock)
+        if (_connection == null)
         {
             LogNoActiveLockToRelease();
             return;
@@ -134,12 +191,13 @@ public sealed partial class PostgresLeaderElection : LeaderElectionBase<Postgres
         {
             if (_connection.State == ConnectionState.Open)
             {
-                using var cmd = new NpgsqlCommand(
+                using var cmd = CreateCommand(
+                    _connection,
                     "SELECT pg_advisory_unlock(@LockId);",
-                    _connection
+                    "LockId",
+                    _settings.LockId
                 );
-                cmd.Parameters.AddWithValue("LockId", _settings.LockId);
-                await cmd.ExecuteScalarAsync(default).ConfigureAwait(false);
+                await cmd.ExecuteNonQueryAsync(default).ConfigureAwait(false);
             }
 
             LogReleasedLock(_settings.LockId);
@@ -169,8 +227,37 @@ public sealed partial class PostgresLeaderElection : LeaderElectionBase<Postgres
 
     protected override async ValueTask ResetLeadershipAsync()
     {
-        _ownsLock = false;
-        await _connection.CloseAsync().ConfigureAwait(false);
+        var connection = Interlocked.Exchange(ref _connection, null);
+        if (connection != null)
+        {
+            await connection.DisposeAsync().ConfigureAwait(false);
+        }
+    }
+
+    protected override async ValueTask DisposeAsyncCore()
+    {
+        await ResetLeadershipAsync().ConfigureAwait(false);
+        await base.DisposeAsyncCore().ConfigureAwait(false);
+    }
+
+    private static NpgsqlCommand CreateCommand(
+        NpgsqlConnection connection,
+        /* language=sql */string query,
+        string? argName = null,
+        object? argValue = null
+    )
+    {
+#pragma warning disable CA2100 // Review SQL queries for security vulnerabilities
+        var cmd = new NpgsqlCommand(query, connection)
+        {
+            // CommandTimeout = 3, // force a short timeout to avoid hanging
+        };
+#pragma warning restore CA2100
+        if (argName != null)
+        {
+            cmd.Parameters.AddWithValue(argName, argValue ?? DBNull.Value);
+        }
+        return cmd;
     }
 
     [LoggerMessage(LogLevel.Information, "Lock already acquired: {lockId}.")]
@@ -214,4 +301,10 @@ public sealed partial class PostgresLeaderElection : LeaderElectionBase<Postgres
         long lockId,
         string reason
     );
+
+    [LoggerMessage(
+        LogLevel.Warning,
+        "CommandTimeout of {commandTimeout} seconds may be too high for reliable leader election. Consider setting 'CommandTimeout' to 3-5 seconds."
+    )]
+    partial void LogUseRecommendedCommandTimeout(int commandTimeout);
 }

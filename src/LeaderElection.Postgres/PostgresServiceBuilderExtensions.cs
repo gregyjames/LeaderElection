@@ -58,7 +58,7 @@ public static class PostgresServiceBuilderExtensions
             PostgresSettingsValidator
         >(serviceKey);
 
-        services.AddTransient<ConnectionCreator>();
+        services.AddTransient<DataSourceCreator>();
 
         services.AddKeyedSingleton<PostgresLeaderElection>(
             serviceKey,
@@ -68,23 +68,23 @@ public static class PostgresServiceBuilderExtensions
                 var settings = sp.GetRequiredService<IOptionsMonitor<PostgresSettings>>()
                     .Get(key as string);
 
-                // Note: We must resolve the connection here. If we don't do it now
-                // and the factory resolves it from DI, then the connection (or its dependencies)
+                // Note: We must resolve the DataSource here. If we don't do it now
+                // and the factory resolves it from DI later, then the DataSource
                 // may be disposed before the LeaderElection resulting in a crash.
-                var connection =
+                var datasource =
                     (
-                        settings.ConnectionFactory
+                        settings.DataSourceFactory
                         ?? throw new InvalidOperationException(
-                            "ConnectionFactory must be specified in settings."
+                            "DataSourceFactory must be specified in settings."
                         )
                     ).Invoke(settings)
-                    ?? throw new InvalidOperationException("ConnectionFactory returned null.");
+                    ?? throw new InvalidOperationException("DataSourceFactory returned null.");
 
                 // create instance
                 return ActivatorUtilities.CreateInstance<PostgresLeaderElection>(
                     sp,
                     settings,
-                    connection
+                    datasource
                 );
             }
         );
@@ -96,21 +96,18 @@ public static class PostgresServiceBuilderExtensions
 
         builder.Invoke(new ServiceBuilder(serviceKey, configBuilder));
 
-        // resolve the connection from DI if a ConnectionFactory or ConnectionString is not set
+        // resolve the datasource from DI if a DataSourceFactory or ConnectionString is not set
         configBuilder.PostConfigure<IServiceProvider>(
             (opts, sp) =>
-                opts.ConnectionFactory ??= settings =>
+            {
+                opts.DataSourceFactory ??= settings =>
                 {
-                    // If a ConnectionString is provided, use the default factory which creates
-                    // and disposes the connection for each instance.
-                    if (!string.IsNullOrEmpty(settings.ConnectionString))
-                    {
-                        return sp.GetRequiredService<ConnectionCreator>()
-                            .CreateConnection(settings);
-                    }
-
-                    return GetRegisteredConnection(sp, serviceKey);
-                }
+                    // If a ConnectionString is provided, use a DataSourceCreator else use the registered DataSource
+                    return !string.IsNullOrEmpty(settings.ConnectionString)
+                        ? sp.GetRequiredService<DataSourceCreator>().CreateDataSource(settings)
+                        : GetRegisteredDataSource(sp, serviceKey);
+                };
+            }
         );
 
         return services;
@@ -175,9 +172,9 @@ public static class PostgresServiceBuilderExtensions
     /// <summary>
     /// Specifies the instance ID to use for the Leader Election.
     /// </summary>
-    /// <param name="builder"></param>
-    /// <param name="instanceId"></param>
-    /// <returns></returns>
+    /// <param name="builder">The service builder.</param>
+    /// <param name="instanceId">The instance ID to use.</param>
+    /// <returns>The service builder.</returns>
     public static ServiceBuilder WithInstanceId(this ServiceBuilder builder, string instanceId)
     {
         ArgumentNullException.ThrowIfNullOrEmpty(instanceId);
@@ -185,13 +182,26 @@ public static class PostgresServiceBuilderExtensions
     }
 
     /// <summary>
-    /// Configures the leader election to use the NpgsqlConnection registered
+    /// Configures the leader election to use the <see cref="NpgsqlDataSource"/> registered
     /// in the DI container.
     /// </summary>
-    public static ServiceBuilder WithRegisteredConnection(this ServiceBuilder builder)
+    /// <param name="builder">The service builder.</param>
+    /// <param name="datasourceServiceKey">Optional service key to resolve a specific <see cref="NpgsqlDataSource"/>
+    /// instance if multiple are registered. Defaults to the service key of the registered
+    /// <see cref="PostgresLeaderElection"/>. Use an empty string ("") to resolve the default
+    /// <see cref="NpgsqlDataSource"/> instance.</param>
+    /// <returns>The service builder.</returns>
+    public static ServiceBuilder WithRegisteredDataSource(
+        this ServiceBuilder builder,
+        object? datasourceServiceKey = null
+    )
     {
         return builder.WithSettings(
-            (opts, sp, key) => opts.ConnectionFactory = _ => GetRegisteredConnection(sp, key)
+            (opts, sp, key) =>
+                opts.DataSourceFactory = _ =>
+                    datasourceServiceKey != null
+                        ? sp.GetRequiredKeyedService<NpgsqlDataSource>(datasourceServiceKey)
+                        : GetRegisteredDataSource(sp, key)
         );
     }
 
@@ -218,35 +228,72 @@ public static class PostgresServiceBuilderExtensions
         return builder;
     }
 
-    private static NpgsqlConnection GetRegisteredConnection(
+    private static NpgsqlDataSource GetRegisteredDataSource(
         IServiceProvider sp,
-        string? serviceKey = null
-    )
-    {
-        return sp.GetKeyedService<NpgsqlConnection>(serviceKey)
-            ?? sp.GetRequiredService<NpgsqlConnection>();
-    }
+        object? serviceKey = null
+    ) =>
+        (serviceKey != null ? sp.GetKeyedService<NpgsqlDataSource>(serviceKey) : null)
+        ?? sp.GetRequiredService<NpgsqlDataSource>();
 
-    // A private class used to create and dispose a connection when the
-    // connection string settings are used.
-    private class ConnectionCreator : IAsyncDisposable
+    // A private class used to create and dispose a DataSource when the
+    // connection string settings are used. This class is registered with a transient
+    // lifetime, so a new instance will be created each time it's needed, and it will
+    // be disposed after use. In our use case (creating a singleton LeaderElection),
+    // the DataSourceCreator's lifetime will be extended to match the LeaderElection.
+    private class DataSourceCreator : IAsyncDisposable
     {
-        public NpgsqlConnection? _connection;
+        private NpgsqlDataSource? _dataSource;
 
-        public NpgsqlConnection CreateConnection(PostgresSettings settings)
+        public NpgsqlDataSource CreateDataSource(PostgresSettings settings)
         {
-            ArgumentNullException.ThrowIfNull(settings);
-            if (string.IsNullOrWhiteSpace(settings.ConnectionString))
+            ArgumentNullException.ThrowIfNullOrEmpty(settings.ConnectionString);
+            var builder = new NpgsqlDataSourceBuilder(settings.ConnectionString);
+
+            // Let's configure the DataSource with some sane defaults for LeaderElection
+            // use cases (e.g. advisory locks). The user can always override these settings
+            // by including them in the connection string or by providing their own
+            // DataSourceFactory.
+
+            void SetDefault<T>(string key, T value)
             {
-                throw new InvalidOperationException(
-                    "ConnectionString must be specified in settings to use the default Connection factory."
+                if (!builder.ConnectionStringBuilder.ContainsKey(key))
+                {
+                    builder.ConnectionStringBuilder[key] = value;
+                }
+            }
+
+            // In multi-host configurations, Npgsql will automatically route to a backup if the primary
+            // is unavailable, resulting in unpredictable/orphaned locks. To avoid this, always specify
+            // a TargetSessionAttributes value...
+            if (
+                builder.ConnectionStringBuilder.Host?.Contains(
+                    ',',
+                    StringComparison.OrdinalIgnoreCase
+                ) == true
+            )
+            {
+                // Connect to the primary (read-write) server (advisory locks do not replicate)
+                // "primary" also works, although the primary is not always writable, so
+                // "read-write" is safer when the connection might be used for more than locking.
+                SetDefault(
+                    nameof(builder.ConnectionStringBuilder.TargetSessionAttributes),
+                    "read-write"
                 );
             }
 
-            _connection = new NpgsqlConnection(settings.ConnectionString);
-            return _connection;
+            // Use a short keep-alive to detect connection issues faster (e.g. if the database goes away or there's a network partition).
+            SetDefault(nameof(builder.ConnectionStringBuilder.KeepAlive), 20); // max idle connection (in seconds)
+            SetDefault(nameof(builder.ConnectionStringBuilder.TcpKeepAlive), true); // enable aggressive TCP keep-alive
+            SetDefault(nameof(builder.ConnectionStringBuilder.TcpKeepAliveTime), 5); // may be ignored by OS
+
+            // Use short timeouts to avoid long waits if the database becomes unresponsive.
+            SetDefault(nameof(builder.ConnectionStringBuilder.Timeout), 5); // connection timeout
+            SetDefault(nameof(builder.ConnectionStringBuilder.CommandTimeout), 3); // command timeout
+
+            _dataSource = builder.Build();
+            return _dataSource;
         }
 
-        public ValueTask DisposeAsync() => _connection?.DisposeAsync() ?? new ValueTask();
+        public ValueTask DisposeAsync() => _dataSource?.DisposeAsync() ?? new();
     }
 }

@@ -22,7 +22,7 @@ public class PostgresSettingsValidatorTests
         var settings = new PostgresSettings
         {
             ConnectionString = "Host=localhost;Database=test",
-            ConnectionFactory = null,
+            DataSourceFactory = null,
             InstanceId = "test-instance",
             LockId = 12345,
             RetryInterval = TimeSpan.FromSeconds(5),
@@ -40,7 +40,7 @@ public class PostgresSettingsValidatorTests
     [InlineData("bogus")]
     public void ShouldSucceedWhenConnectionStringIsAnything(string? connectionString)
     {
-        // This succeeds because a) the ConnectionFactory is an alternative to
+        // This succeeds because a) the DataSourceFactory is an alternative to
         // ConnectionString, and b) we do not validate connection string syntax.
         var settings = new PostgresSettings { ConnectionString = connectionString };
 
@@ -50,17 +50,17 @@ public class PostgresSettingsValidatorTests
     }
 
     [Fact]
-    public void ShouldSucceedWhenConnectionFactoryIsNull()
+    public void ShouldSucceedWhenDataSourceFactoryIsNull()
     {
-        var settings = new PostgresSettings { ConnectionFactory = null };
+        var settings = new PostgresSettings { DataSourceFactory = null };
         var result = _validator.Validate(null, settings);
         result.Failed.Should().BeFalse();
     }
 
     [Fact]
-    public void ShouldSucceedWhenConnectionFactoryIsNonNull()
+    public void ShouldSucceedWhenDataSourceFactoryIsNonNull()
     {
-        var settings = new PostgresSettings { ConnectionFactory = _ => null! };
+        var settings = new PostgresSettings { DataSourceFactory = _ => null! };
         var result = _validator.Validate(null, settings);
         result.Failed.Should().BeFalse();
     }

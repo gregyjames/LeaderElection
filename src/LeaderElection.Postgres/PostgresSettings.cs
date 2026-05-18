@@ -8,21 +8,21 @@ namespace LeaderElection.Postgres;
 public class PostgresSettings : LeaderElectionSettingsBase
 {
     /// <summary>
-    /// An optional factory function used to obtain an <see cref="NpgsqlConnection"/>.
+    /// An optional factory function used to obtain an <see cref="NpgsqlDataSource"/>.
     /// </summary>
     /// <remarks>
-    /// If not provided, a connection will be created using the
+    /// If not provided, a DataSource will be created using the
     /// <see cref="ConnectionString"/> property. If that is null or empty,
-    /// it will attempt to obtain a <see cref="NpgsqlConnection"/> from DI
+    /// it will attempt to obtain a <see cref="NpgsqlDataSource"/> from DI
     /// (assuming the leader election is created via DI).
     /// </remarks>
-    public Func<PostgresSettings, NpgsqlConnection>? ConnectionFactory { get; set; }
+    public Func<PostgresSettings, NpgsqlDataSource>? DataSourceFactory { get; set; }
 
     /// <summary>
-    /// Optional connection string for the <see cref="NpgsqlConnection"/>.
+    /// Optional connection string for the <see cref="NpgsqlDataSource"/>.
     /// </summary>
     /// <remarks>
-    /// Ignored if <see cref="ConnectionFactory"/> is set.
+    /// Ignored if <see cref="DataSourceFactory"/> is set.
     /// </remarks>
     public string? ConnectionString { get; set; }
 
@@ -39,7 +39,7 @@ public class PostgresSettings : LeaderElectionSettingsBase
         ArgumentNullException.ThrowIfNull(src);
         ArgumentNullException.ThrowIfNull(dst);
         LeaderElectionSettingsBase.Copy(src, dst);
-        dst.ConnectionFactory = src.ConnectionFactory;
+        dst.DataSourceFactory = src.DataSourceFactory;
         dst.ConnectionString = src.ConnectionString;
         dst.LockId = src.LockId;
     }
