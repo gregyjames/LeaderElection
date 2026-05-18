@@ -9,9 +9,18 @@ namespace LeaderElection.Tests;
 [Trait("Kind", "Integration")]
 [Trait("Category", "BlobStorage")]
 public sealed class BlobStorageLeaderElectionTests(AzuriteContainerFixture azuriteFixture)
-    : TestBase
+    : TestBase,
+        IAsyncDisposable
 {
     private readonly BlobServiceClient _blobServiceClient = azuriteFixture.BlobServiceClient;
+    private readonly List<ServiceProvider> _serviceProviders = [];
+
+    public async ValueTask DisposeAsync()
+    {
+        GC.SuppressFinalize(this);
+        foreach (var sp in _serviceProviders ?? [])
+            await sp.DisposeAsync();
+    }
 
     private BlobStorageSettings CreateSettings(
         string containerName, // should be unique per test to avoid conflicts
@@ -39,14 +48,18 @@ public sealed class BlobStorageLeaderElectionTests(AzuriteContainerFixture azuri
             CreateContainerIfNotExists = createContainerIfNotExists,
         };
 
-    private BlobStorageLeaderElection CreateSut(BlobStorageSettings settings) =>
-        new ServiceCollection()
+    private BlobStorageLeaderElection CreateSut(BlobStorageSettings settings)
+    {
+        var serviceProvider = new ServiceCollection()
             .AddLogging()
             .AddBlobStorageLeaderElection(builder =>
                 builder.WithSettings(settings).WithBlobServiceClient(_blobServiceClient)
             )
-            .BuildServiceProvider()
-            .GetRequiredService<BlobStorageLeaderElection>();
+            .BuildServiceProvider();
+
+        _serviceProviders.Add(serviceProvider);
+        return serviceProvider.GetRequiredService<BlobStorageLeaderElection>();
+    }
 
     [Fact]
     public async Task ShouldAcquireLeadershipWhenNoOtherInstanceExists()

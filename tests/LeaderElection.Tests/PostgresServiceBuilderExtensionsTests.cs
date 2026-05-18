@@ -139,7 +139,7 @@ public class PostgresServiceBuilderExtensionsTests
         // Arrange
         var defaultSettings = new PostgresSettings();
 
-        var dummyDS = new NpgsqlDataSourceBuilder(settings.ConnectionString).Build();
+        using var dummyDS = new NpgsqlDataSourceBuilder(settings.ConnectionString).Build();
 
         // Act
         await using var sp = new ServiceCollection()
@@ -162,7 +162,7 @@ public class PostgresServiceBuilderExtensionsTests
     public async Task ShouldUseDefaultRegisteredDataSource()
     {
         // Arrange
-        var dummyDS = new NpgsqlDataSourceBuilder(settings.ConnectionString).Build();
+        using var dummyDS = new NpgsqlDataSourceBuilder(settings.ConnectionString).Build();
 
         // Act
         await using var sp = new ServiceCollection()
@@ -184,7 +184,7 @@ public class PostgresServiceBuilderExtensionsTests
     public async Task ShouldUseRegisteredDataSource(string? dsServiceKey)
     {
         // Arrange
-        var dummyDS = new NpgsqlDataSourceBuilder(settings.ConnectionString).Build();
+        using var dummyDS = new NpgsqlDataSourceBuilder(settings.ConnectionString).Build();
 
         // Act
         await using var sp = new ServiceCollection()

@@ -7,9 +7,20 @@ namespace LeaderElection.Tests;
 [Collection("Minio Container")]
 [Trait("Kind", "Integration")]
 [Trait("Category", "S3")]
-public sealed class S3LeaderElectionTests(MinioContainerFixture minioFixture) : TestBase
+public sealed class S3LeaderElectionTests(MinioContainerFixture minioFixture)
+    : TestBase,
+        IAsyncDisposable
 {
+    private readonly List<ServiceProvider> _serviceProviders = [];
+
     private const string BUCKET_NAME = "leader-election";
+
+    public async ValueTask DisposeAsync()
+    {
+        GC.SuppressFinalize(this);
+        foreach (var sp in _serviceProviders ?? [])
+            await sp.DisposeAsync();
+    }
 
     private S3Settings CreateSettings(
         string objectKey,
@@ -29,12 +40,16 @@ public sealed class S3LeaderElectionTests(MinioContainerFixture minioFixture) : 
             RetryInterval = retryInterval ?? TimeSpan.FromSeconds(1),
         };
 
-    private static S3LeaderElection CreateSut(S3Settings options) =>
-        new ServiceCollection()
+    private S3LeaderElection CreateSut(S3Settings options)
+    {
+        var serviceProvider = new ServiceCollection()
             .AddLogging()
             .AddS3LeaderElection(options)
-            .BuildServiceProvider()
-            .GetRequiredService<S3LeaderElection>();
+            .BuildServiceProvider();
+
+        _serviceProviders.Add(serviceProvider);
+        return serviceProvider.GetRequiredService<S3LeaderElection>();
+    }
 
     private async Task EnsureBucketExistsAsync()
     {

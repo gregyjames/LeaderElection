@@ -6,8 +6,19 @@ namespace LeaderElection.Tests;
 [Collection("Redis Container")]
 [Trait("Kind", "Integration")]
 [Trait("Category", "Redis")]
-public sealed class RedisLeaderElectionTests(RedisContainerFixture redisFixture) : TestBase
+public sealed class RedisLeaderElectionTests(RedisContainerFixture redisFixture)
+    : TestBase,
+        IAsyncDisposable
 {
+    private readonly List<ServiceProvider> _serviceProviders = [];
+
+    public async ValueTask DisposeAsync()
+    {
+        GC.SuppressFinalize(this);
+        foreach (var sp in _serviceProviders ?? [])
+            await sp.DisposeAsync();
+    }
+
     private static RedisSettings CreateSettings(
         string lockKey, // should be unique per test to avoid conflicts
         string instanceId = "test-instance-1",
@@ -28,16 +39,20 @@ public sealed class RedisLeaderElectionTests(RedisContainerFixture redisFixture)
             EnableGracefulShutdown = enableGracefulShutdown,
         };
 
-    private RedisLeaderElection CreateSut(RedisSettings settings) =>
-        new ServiceCollection()
+    private RedisLeaderElection CreateSut(RedisSettings settings)
+    {
+        var serviceProvider = new ServiceCollection()
             .AddLogging()
             .AddRedisLeaderElection(builder =>
                 builder
                     .WithSettings(settings)
                     .WithConnectionMultiplexer(redisFixture.ConnectionMultiplexer)
             )
-            .BuildServiceProvider()
-            .GetRequiredService<RedisLeaderElection>();
+            .BuildServiceProvider();
+
+        _serviceProviders.Add(serviceProvider);
+        return serviceProvider.GetRequiredService<RedisLeaderElection>();
+    }
 
     [Fact]
     public async Task ShouldAcquireLeadershipWhenNoOtherInstanceExists()

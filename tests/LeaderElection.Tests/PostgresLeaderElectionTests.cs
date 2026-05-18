@@ -7,11 +7,22 @@ namespace LeaderElection.Tests;
 [Collection("PostgreSQL Container")]
 [Trait("Kind", "Integration")]
 [Trait("Category", "PostgreSQL")]
-public sealed class PostgresLeaderElectionTests(PostgresContainerFixture postgresFixture) : TestBase
+public sealed class PostgresLeaderElectionTests(PostgresContainerFixture postgresFixture)
+    : TestBase,
+        IAsyncDisposable
 {
+    private readonly List<ServiceProvider> _serviceProviders = [];
+
     private static long _lockIdCounter = 1000;
 
     private static long GetNextLockId() => Interlocked.Increment(ref _lockIdCounter);
+
+    public async ValueTask DisposeAsync()
+    {
+        GC.SuppressFinalize(this);
+        foreach (var sp in _serviceProviders ?? [])
+            await sp.DisposeAsync();
+    }
 
     private PostgresSettings CreateSettings(
         string? instanceId = null,
@@ -31,12 +42,16 @@ public sealed class PostgresLeaderElectionTests(PostgresContainerFixture postgre
             EnableGracefulShutdown = enableGracefulShutdown,
         };
 
-    private static PostgresLeaderElection CreateSut(PostgresSettings options) =>
-        new ServiceCollection()
+    private PostgresLeaderElection CreateSut(PostgresSettings options)
+    {
+        var serviceProvider = new ServiceCollection()
             .AddLogging()
             .AddPostgresLeaderElection(builder => builder.WithSettings(options))
-            .BuildServiceProvider()
-            .GetRequiredService<PostgresLeaderElection>();
+            .BuildServiceProvider();
+
+        _serviceProviders.Add(serviceProvider);
+        return serviceProvider.GetRequiredService<PostgresLeaderElection>();
+    }
 
     [Fact]
     public async Task ShouldAcquireLeadershipWhenNoOtherInstanceExists()
