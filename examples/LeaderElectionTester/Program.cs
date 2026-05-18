@@ -11,7 +11,6 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Minio;
-using Npgsql;
 using StackExchange.Redis;
 using ZiggyCreatures.Caching.Fusion;
 
@@ -139,14 +138,9 @@ else if (leaderElectionType is "Postgres")
     // Register a NpgsqlDataSource specifically for Leader Election use...
     const string postgresLeaderElectionDataSource = "PostgresLeaderElectionDataSource";
     builder.Services.AddNpgsqlDataSource(
-        serviceKey: postgresLeaderElectionDataSource,
-        connectionString: "Host=localhost;Database=mydb;Username=myuser;Password=mypassword",
-        dataSourceBuilderAction: builder =>
-        {
-            // Use short timeouts to avoid long waits if the database becomes unresponsive.
-            builder.ConnectionStringBuilder.Timeout = 5; // connection timeout
-            builder.ConnectionStringBuilder.CommandTimeout = 3;
-        }
+        // Use short CommandTimeout to avoid long waits if the database becomes unresponsive.
+        connectionString + ";Timeout=5;CommandTimeout=3;",
+        serviceKey: postgresLeaderElectionDataSource
     );
 
     builder.Services.AddPostgresLeaderElection(builder =>
