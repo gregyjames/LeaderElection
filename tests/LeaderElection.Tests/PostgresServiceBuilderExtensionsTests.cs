@@ -15,8 +15,9 @@ public class PostgresServiceBuilderExtensionsTests
         LockId = 12345,
         InstanceId = "foo",
         RenewInterval = TimeSpan.FromSeconds(2),
-        RetryInterval = TimeSpan.FromSeconds(1),
-        MaxRetryAttempts = 300,
+        RetryBackoffFactor = 1.5,
+        RetryJitter = 0.15,
+        MaxRetryInterval = TimeSpan.FromSeconds(100),
         EnableGracefulShutdown = false,
     };
 
@@ -95,7 +96,10 @@ public class PostgresServiceBuilderExtensionsTests
                     // ["LeaderElection:Base:InstanceId"] = settings.InstanceId,
                     ["LeaderElection:Base:RenewInterval"] = settings.RenewInterval.ToString(),
                     ["LeaderElection:Base:RetryInterval"] = settings.RetryInterval.ToString(),
-                    ["LeaderElection:Base:MaxRetryAttempts"] = settings.MaxRetryAttempts.ToString(),
+                    ["LeaderElection:Base:RetryBackoffFactor"] =
+                        settings.RetryBackoffFactor.ToString(),
+                    ["LeaderElection:Base:RetryJitter"] = settings.RetryJitter.ToString(),
+                    ["LeaderElection:Base:MaxRetryInterval"] = settings.MaxRetryInterval.ToString(),
                     // ["LeaderElection:Base:EnableGracefulShutdown"] = settings.EnableGracefulShutdown.ToString(),
                 }
             )
@@ -125,8 +129,9 @@ public class PostgresServiceBuilderExtensionsTests
         actualSettings.LockId.Should().Be(settings.LockId);
         actualSettings.InstanceId.Should().Be(settings.InstanceId);
         actualSettings.RenewInterval.Should().Be(settings.RenewInterval);
-        actualSettings.RetryInterval.Should().Be(settings.RetryInterval);
-        actualSettings.MaxRetryAttempts.Should().Be(settings.MaxRetryAttempts);
+        actualSettings.RetryBackoffFactor.Should().Be(settings.RetryBackoffFactor);
+        actualSettings.RetryJitter.Should().Be(settings.RetryJitter);
+        actualSettings.MaxRetryInterval.Should().Be(settings.MaxRetryInterval);
         actualSettings.EnableGracefulShutdown.Should().Be(settings.EnableGracefulShutdown);
     }
 

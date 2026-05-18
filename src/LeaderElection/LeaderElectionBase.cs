@@ -294,6 +294,49 @@ public abstract partial class LeaderElectionBase<TSettings> : ILeaderElection
     /// </summary>
     protected abstract ValueTask ResetLeadershipAsync();
 
+    /// <summary>
+    /// Thread-safe function to allow implementations to trigger a leadership loss from within
+    /// their internal logic. This will abandon leadership internally by calling <see cref="ResetLeadershipAsync"/>.
+    /// It will also fire the <see cref="LeadershipChanged"/> event if appropriate.
+    /// <para/>
+    /// Implementations should call this function when they detect that leadership has been
+    /// lost unexpectedly (e.g. connectivity issue with the underlying store).
+    /// </summary>
+    protected async Task OnLeadershipLostAsync()
+    {
+        // just return if we're already disposed
+        if (Volatile.Read(ref _disposedValue) != 0)
+        {
+            return;
+        }
+
+        var isLeader = await AcquireLeaderLoopSemaphoreAsync(CancellationToken.None)
+            .ConfigureAwait(false);
+        var wasLeader = isLeader;
+        try
+        {
+            if (isLeader)
+            {
+                isLeader = false;
+                LogLeadershipLost(_settings.InstanceId);
+            }
+
+            await ResetLeadershipAsync().ConfigureAwait(false);
+        }
+        catch (Exception ex)
+        {
+            // Log any exceptions but swallow them to avoid throwing from an unexpected leadership loss
+            LogUnexpectedErrorInLeaderElection(ex, _settings.InstanceId);
+        }
+        finally
+        {
+            SetLeaderStatus(isLeader);
+            ReleaseLeaderLoopSemaphore();
+        }
+
+        NotifyLeadershipStatus(wasLeader, isLeader, null);
+    }
+
     private void ThrowIfDisposed() =>
         ObjectDisposedException.ThrowIf(Volatile.Read(ref _disposedValue) != 0, this);
 
@@ -544,15 +587,34 @@ public abstract partial class LeaderElectionBase<TSettings> : ILeaderElection
     // LeadershipChanged).
     // This *must* be called outside of the lock to avoid potential deadlocks if event handlers
     // interact with the leader election instance.
+    // Does not throw.
     private void NotifyLeadershipStatus(bool wasLeader, bool isLeader, Exception? exceptionInfo)
     {
         if (exceptionInfo != null)
         {
-            ErrorOccurred?.Invoke(this, new(exceptionInfo));
+            SafeInvokeEventHandlers(ErrorOccurred, new LeadershipExceptionEventArgs(exceptionInfo));
         }
         if (wasLeader != isLeader)
         {
-            LeadershipChanged?.Invoke(this, new(isLeader));
+            SafeInvokeEventHandlers(LeadershipChanged, new LeadershipChangedEventArgs(isLeader));
+        }
+    }
+
+    // Helper method to safely invoke event handlers. This ensures that all handlers are invoked
+    // even if one throws an exception, and that exceptions from handlers are logged but do not
+    // affect the leader election process.
+    private void SafeInvokeEventHandlers<T>(MulticastDelegate? handler, T args)
+    {
+        foreach (var subscriber in handler?.GetInvocationList().Cast<EventHandler<T>>() ?? [])
+        {
+            try
+            {
+                subscriber(this, args);
+            }
+            catch (Exception ex)
+            {
+                LogEventHandlerException(ex);
+            }
         }
     }
 
@@ -644,6 +706,9 @@ public abstract partial class LeaderElectionBase<TSettings> : ILeaderElection
     [LoggerMessage(LogLevel.Information, "Abandoned leadership for instance {InstanceId}.")]
     partial void LogLeadershipAbandoned(string instanceId);
 
+    [LoggerMessage(LogLevel.Warning, "Lost leadership for instance {InstanceId}.")]
+    partial void LogLeadershipLost(string instanceId);
+
     // ReleaseLeadershipAsync threw an exception. This is unexpected since implementations
     // should handle expected exceptions. Log at Error level since this likely indicates an
     // issue with the underlying store or infrastructure.
@@ -655,4 +720,9 @@ public abstract partial class LeaderElectionBase<TSettings> : ILeaderElection
     // it could indicate a potential issue that needs attention.
     [LoggerMessage(LogLevel.Error, "Error during async disposal.")]
     partial void LogErrorDuringAsyncDisposal(Exception errorMessage);
+
+    // An exception occurred in the leader election process. Log at Error level since this
+    // likely indicates an issue with the underlying store or infrastructure.
+    [LoggerMessage(LogLevel.Warning, "Event handler threw an exception.")]
+    partial void LogEventHandlerException(Exception errorMessage);
 }
