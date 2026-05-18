@@ -158,6 +158,26 @@ public class PostgresServiceBuilderExtensionsTests
         sp.GetRequiredKeyedService<ILeaderElection>(serviceKey).Should().BeSameAs(leaderElection);
     }
 
+    [Fact]
+    public async Task ShouldUseDefaultRegisteredDataSource()
+    {
+        // Arrange
+        var dummyDS = new NpgsqlDataSourceBuilder(settings.ConnectionString).Build();
+
+        // Act
+        await using var sp = new ServiceCollection()
+            .AddLogging()
+            .AddKeyedSingleton<NpgsqlDataSource>(null, dummyDS)
+            .AddPostgresLeaderElection(builder => builder.WithRegisteredDataSource())
+            .BuildServiceProvider();
+
+        // Assert
+        var options = sp.GetRequiredService<IOptions<PostgresSettings>>().Value;
+        options.DataSourceFactory.Should().NotBeNull();
+        var actualDS = options.DataSourceFactory(new());
+        actualDS.Should().BeSameAs(dummyDS);
+    }
+
     [Theory]
     [InlineData("foo")]
     [InlineData(null)]

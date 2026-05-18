@@ -186,22 +186,31 @@ public static class PostgresServiceBuilderExtensions
     /// in the DI container.
     /// </summary>
     /// <param name="builder">The service builder.</param>
-    /// <param name="datasourceServiceKey">Optional service key to resolve a specific <see cref="NpgsqlDataSource"/>
-    /// instance if multiple are registered. Defaults to the service key of the registered
-    /// <see cref="PostgresLeaderElection"/>. Use an empty string ("") to resolve the default
-    /// <see cref="NpgsqlDataSource"/> instance.</param>
+    /// <returns>The service builder.</returns>
+    public static ServiceBuilder WithRegisteredDataSource(this ServiceBuilder builder)
+    {
+        return builder.WithSettings(
+            (opts, sp, key) => opts.DataSourceFactory = _ => GetRegisteredDataSource(sp, key)
+        );
+    }
+
+    /// <summary>
+    /// Configures the leader election to use the <see cref="NpgsqlDataSource"/> registered
+    /// in the DI container with the specified service key.
+    /// </summary>
+    /// <param name="builder">The service builder.</param>
+    /// <param name="datasourceServiceKey">The service key of the specific <see cref="NpgsqlDataSource"/>
+    /// instance to resolve. Use <c>null</c> to resolve the default instance.</param>
     /// <returns>The service builder.</returns>
     public static ServiceBuilder WithRegisteredDataSource(
         this ServiceBuilder builder,
-        object? datasourceServiceKey = null
+        object? datasourceServiceKey
     )
     {
         return builder.WithSettings(
             (opts, sp, key) =>
                 opts.DataSourceFactory = _ =>
-                    datasourceServiceKey != null
-                        ? sp.GetRequiredKeyedService<NpgsqlDataSource>(datasourceServiceKey)
-                        : GetRegisteredDataSource(sp, key)
+                    sp.GetRequiredKeyedService<NpgsqlDataSource>(datasourceServiceKey)
         );
     }
 
