@@ -11,7 +11,6 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Minio;
-using Npgsql;
 using StackExchange.Redis;
 using ZiggyCreatures.Caching.Fusion;
 
@@ -37,12 +36,11 @@ var leaderElectionType = (
 };
 
 // Get a unique ID for each running instance (e.g. in different terminals or machines).
-var instanceId = builder.Configuration.GetValue(
-    "InstanceId",
-    $"{AppDomain.CurrentDomain.FriendlyName}:{Environment.MachineName}:{Environment.ProcessId}"
-);
+var instanceId =
+    builder.Configuration["InstanceId"]
+    ?? $"{AppDomain.CurrentDomain.FriendlyName}:{Environment.MachineName}:{Environment.ProcessId}";
 
-var redisConfiguration = "localhost:6379";
+var redisConfiguration = builder.Configuration.GetConnectionString("redis") ?? "localhost:6379";
 
 if (leaderElectionType is "Redis")
 {
@@ -56,8 +54,7 @@ if (leaderElectionType is "Redis")
             })
     );
 }
-
-if (leaderElectionType is "DistributedCache")
+else if (leaderElectionType is "DistributedCache")
 {
     builder.Services.AddRedisServices(redisConfiguration);
     builder.Services.AddDistributedCache();
@@ -70,8 +67,7 @@ if (leaderElectionType is "DistributedCache")
             })
     );
 }
-
-if (leaderElectionType is "FusionCache")
+else if (leaderElectionType is "FusionCache")
 {
     builder.Services.AddRedisServices(redisConfiguration);
     builder.Services.AddDistributedCache();
@@ -88,13 +84,14 @@ if (leaderElectionType is "FusionCache")
             })
     );
 }
-
-if (leaderElectionType is "BlobStorage")
+else if (leaderElectionType is "BlobStorage")
 {
     builder.Services.AddAzureClients(configure =>
     {
         // blob test using Azurite or Storage Emulator
-        configure.AddBlobServiceClient("UseDevelopmentStorage=true;");
+        configure.AddBlobServiceClient(
+            builder.Configuration["BLOBS_CONNECTIONSTRING"] ?? "UseDevelopmentStorage=true;"
+        );
     });
     builder.Services.AddBlobStorageLeaderElection(builder =>
         builder
@@ -106,13 +103,18 @@ if (leaderElectionType is "BlobStorage")
             })
     );
 }
-
-if (leaderElectionType is "S3")
+else if (leaderElectionType is "S3")
 {
+    var minioUri = new Uri(builder.Configuration["Minio:Endpoint"] ?? "http://localhost:9000");
+    var minioEndpoint = $"{minioUri.Host}:{minioUri.Port}";
+    var minioAccessKey = builder.Configuration["Minio:AccessKey"] ?? "accessKey";
+    var minioSecretKey = builder.Configuration["Minio:SecretKey"] ?? "secretKey";
+    var minioBucketName = builder.Configuration["Minio:BucketName"] ?? "my-app-locks";
+
     builder.Services.AddMinio(client =>
         client
-            .WithEndpoint("localhost:9000")
-            .WithCredentials("accessKey", "secretKey")
+            .WithEndpoint(minioEndpoint)
+            .WithCredentials(minioAccessKey, minioSecretKey)
             .WithSSL(false)
             .Build()
     );
@@ -122,25 +124,23 @@ if (leaderElectionType is "S3")
             .WithInstanceId(instanceId)
             .WithSettings(options =>
             {
-                options.BucketName = "my-app-locks";
+                options.BucketName = minioBucketName;
                 options.ObjectKey = "leader-lock.json";
             })
     );
 }
-
-if (leaderElectionType is "Postgres")
+else if (leaderElectionType is "Postgres")
 {
+    var connectionString =
+        builder.Configuration.GetConnectionString("mydb")
+        ?? "Host=localhost;Database=mydb;Username=myuser;Password=mypassword;";
+
     // Register a NpgsqlDataSource specifically for Leader Election use...
     const string postgresLeaderElectionDataSource = "PostgresLeaderElectionDataSource";
     builder.Services.AddNpgsqlDataSource(
-        serviceKey: postgresLeaderElectionDataSource,
-        connectionString: "Host=localhost;Database=mydb;Username=myuser;Password=mypassword",
-        dataSourceBuilderAction: builder =>
-        {
-            // Use short timeouts to avoid long waits if the database becomes unresponsive.
-            builder.ConnectionStringBuilder.Timeout = 5; // connection timeout
-            builder.ConnectionStringBuilder.CommandTimeout = 3;
-        }
+        // Use short CommandTimeout to avoid long waits if the database becomes unresponsive.
+        connectionString + ";Timeout=5;CommandTimeout=3;",
+        serviceKey: postgresLeaderElectionDataSource
     );
 
     builder.Services.AddPostgresLeaderElection(builder =>
@@ -182,9 +182,12 @@ internal static class ProgramExtensions
         services.AddStackExchangeRedisCache(_ => { });
         services
             .AddOptions<RedisCacheOptions>()
-            .Configure<IConnectionMultiplexer>(
-                (options, connection) =>
-                    options.ConnectionMultiplexerFactory = () => Task.FromResult(connection)
+            .Configure<IServiceProvider>(
+                (options, serviceProvider) =>
+                    options.ConnectionMultiplexerFactory = () =>
+                        Task.FromResult(
+                            serviceProvider.GetRequiredService<IConnectionMultiplexer>()
+                        )
             );
         return services;
     }
