@@ -1,3 +1,4 @@
+using System.Data.Common;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
@@ -262,14 +263,13 @@ public static class PostgresServiceBuilderExtensions
             // use cases (e.g. advisory locks). The user can always override these settings
             // by including them in the connection string or by providing their own
             // DataSourceFactory.
-
-            void SetDefault<T>(string key, T value)
+            // NpgsqlConnectionStringBuilder pre-populates some keys making it impossible
+            // to check if they were set by the user or not, so use DbConnectionStringBuilder
+            // to check for the presence of keys.
+            var rawCheck = new DbConnectionStringBuilder
             {
-                if (!builder.ConnectionStringBuilder.ContainsKey(key))
-                {
-                    builder.ConnectionStringBuilder[key] = value;
-                }
-            }
+                ConnectionString = settings.ConnectionString,
+            };
 
             // In multi-host configurations, Npgsql will automatically route to a backup if the primary
             // is unavailable, resulting in unpredictable/orphaned locks. To avoid this, always specify
@@ -284,22 +284,28 @@ public static class PostgresServiceBuilderExtensions
                 // Connect to the primary (read-write) server (advisory locks do not replicate)
                 // "primary" also works, although the primary is not always writable, so
                 // "read-write" is safer when the connection might be used for more than locking.
-                SetDefault(
-                    nameof(builder.ConnectionStringBuilder.TargetSessionAttributes),
-                    "read-write"
-                );
+                if (
+                    !rawCheck.ContainsKey("TargetSessionAttributes")
+                    && !rawCheck.ContainsKey("Target Session Attributes")
+                    //spell:ignore PGTARGETSESSIONATTRS
+                    && Environment.GetEnvironmentVariable("PGTARGETSESSIONATTRS") == null
+                )
+                {
+                    builder.ConnectionStringBuilder.TargetSessionAttributes = "read-write";
+                }
             }
 
-            // Use a short keep-alive to detect connection issues faster (e.g. if the database goes away or there's a network partition).
-            SetDefault(nameof(builder.ConnectionStringBuilder.KeepAlive), 20); // max idle connection (in seconds)
-            SetDefault(nameof(builder.ConnectionStringBuilder.TcpKeepAlive), true); // enable aggressive TCP keep-alive
-            SetDefault(nameof(builder.ConnectionStringBuilder.TcpKeepAliveTime), 5); // may be ignored by OS
-
             // Use short timeouts to avoid long waits if the database becomes unresponsive.
-            SetDefault(nameof(builder.ConnectionStringBuilder.Timeout), 5); // connection timeout
-            SetDefault(nameof(builder.ConnectionStringBuilder.CommandTimeout), 3); // command timeout
+            if (!rawCheck.ContainsKey("Timeout"))
+                builder.ConnectionStringBuilder.Timeout = 5; // Connection timeout
+            if (!rawCheck.ContainsKey("CommandTimeout") && !rawCheck.ContainsKey("Command Timeout"))
+                builder.ConnectionStringBuilder.CommandTimeout = 3;
 
             _dataSource = builder.Build();
+
+            // Update settings with the final connection string (including any defaults we applied)
+            settings.ConnectionString = _dataSource.ConnectionString;
+
             return _dataSource;
         }
 
