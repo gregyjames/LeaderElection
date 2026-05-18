@@ -257,8 +257,8 @@ public static class RedisServiceBuilderExtensions
 
     private static IConnectionMultiplexer GetRegisteredConnectionMultiplexer(
         IServiceProvider sp,
-        string? serviceKey
+        object? serviceKey
     ) =>
-        sp.GetKeyedService<IConnectionMultiplexer>(serviceKey)
+        (serviceKey != null ? sp.GetKeyedService<IConnectionMultiplexer>(serviceKey) : null)
         ?? sp.GetRequiredService<IConnectionMultiplexer>();
 }

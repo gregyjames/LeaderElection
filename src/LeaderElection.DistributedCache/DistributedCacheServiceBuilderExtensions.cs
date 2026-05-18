@@ -95,7 +95,7 @@ public static class DistributedCacheServiceBuilderExtensions
 
         // Ensure CacheFactory is set after all configurations
         configBuilder.PostConfigure<IServiceProvider>(
-            (opts, sp) => opts.CacheFactory ??= _ => GetRegisteredCache(serviceKey, sp)
+            (opts, sp) => opts.CacheFactory ??= _ => GetRegisteredCache(sp, serviceKey)
         );
 
         return services;
@@ -184,7 +184,7 @@ public static class DistributedCacheServiceBuilderExtensions
     {
         ArgumentNullException.ThrowIfNull(builder);
         return builder.WithSettings(
-            (opts, sp, key) => opts.CacheFactory = _ => GetRegisteredCache(key, sp)
+            (opts, sp, key) => opts.CacheFactory = _ => GetRegisteredCache(sp, key)
         );
     }
 
@@ -220,7 +220,7 @@ public static class DistributedCacheServiceBuilderExtensions
         return builder;
     }
 
-    private static IDistributedCache GetRegisteredCache(object? serviceKey, IServiceProvider sp) =>
-        sp.GetKeyedService<IDistributedCache>(serviceKey)
+    private static IDistributedCache GetRegisteredCache(IServiceProvider sp, object? serviceKey) =>
+        (serviceKey != null ? sp.GetKeyedService<IDistributedCache>(serviceKey) : null)
         ?? sp.GetRequiredService<IDistributedCache>();
 }

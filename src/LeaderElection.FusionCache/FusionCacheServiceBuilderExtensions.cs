@@ -97,7 +97,7 @@ public static class FusionCacheServiceBuilderExtensions
         optionsBuilder.PostConfigure<IServiceProvider>(
             (opts, sp) =>
             {
-                opts.CacheFactory ??= _ => GetRegisteredCache(serviceKey, sp);
+                opts.CacheFactory ??= _ => GetRegisteredCache(sp, serviceKey);
             }
         );
 
@@ -181,7 +181,7 @@ public static class FusionCacheServiceBuilderExtensions
     /// </summary>
     public static ServiceBuilder WithRegisteredCache(this ServiceBuilder builder) =>
         builder.WithSettings(
-            (opts, sp, key) => opts.CacheFactory = _ => GetRegisteredCache(key, sp)
+            (opts, sp, key) => opts.CacheFactory = _ => GetRegisteredCache(sp, key)
         );
 
     /// <summary>
@@ -216,6 +216,7 @@ public static class FusionCacheServiceBuilderExtensions
         return builder;
     }
 
-    private static IFusionCache GetRegisteredCache(object? serviceKey, IServiceProvider sp) =>
-        sp.GetKeyedService<IFusionCache>(serviceKey) ?? sp.GetRequiredService<IFusionCache>();
+    private static IFusionCache GetRegisteredCache(IServiceProvider sp, object? serviceKey) =>
+        (serviceKey != null ? sp.GetKeyedService<IFusionCache>(serviceKey) : null)
+        ?? sp.GetRequiredService<IFusionCache>();
 }

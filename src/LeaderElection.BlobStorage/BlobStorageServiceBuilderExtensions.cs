@@ -131,7 +131,7 @@ public static class BlobStorageServiceBuilderExtensions
                 if (string.IsNullOrEmpty(opts.ConnectionString))
                 {
                     opts.BlobClientFactory ??= (settings, ct) =>
-                        CreateBlobClient(sp, serviceKey, settings, ct);
+                        UseRegisteredBlobServiceClient(sp, serviceKey, settings, ct);
                 }
             }
         );
@@ -283,7 +283,8 @@ public static class BlobStorageServiceBuilderExtensions
     public static ServiceBuilder WithRegisteredBlobServiceClient(this ServiceBuilder builder)
     {
         return builder.WithBlobClientFactory(
-            (sp, settings, ct) => CreateBlobClient(sp, builder.ServiceKey, settings, ct)
+            (sp, settings, ct) =>
+                UseRegisteredBlobServiceClient(sp, builder.ServiceKey, settings, ct)
         );
     }
 
@@ -317,15 +318,15 @@ public static class BlobStorageServiceBuilderExtensions
         );
     }
 
-    private static Task<BlobClient> CreateBlobClient(
+    private static Task<BlobClient> UseRegisteredBlobServiceClient(
         IServiceProvider sp,
-        string? serviceKey,
+        object? serviceKey,
         BlobStorageSettings settings,
         CancellationToken ct
     )
     {
         var bsc =
-            sp.GetKeyedService<BlobServiceClient>(serviceKey)
+            (serviceKey != null ? sp.GetKeyedService<BlobServiceClient>(serviceKey) : null)
             ?? sp.GetRequiredService<BlobServiceClient>();
         return CreateBlobClient(bsc, settings, ct);
     }

@@ -248,9 +248,7 @@ public static class S3ServiceBuilderExtensions
         );
     }
 
-    private static IMinioClient GetRegisteredMinioClient(IServiceProvider sp, string? serviceKey)
-    {
-        return sp.GetKeyedService<IMinioClient>(serviceKey)
-            ?? sp.GetRequiredService<IMinioClient>();
-    }
+    private static IMinioClient GetRegisteredMinioClient(IServiceProvider sp, object? serviceKey) =>
+        (serviceKey != null ? sp.GetKeyedService<IMinioClient>(serviceKey) : null)
+        ?? sp.GetRequiredService<IMinioClient>();
 }
