@@ -96,7 +96,7 @@ public class Worker : BackgroundService
 | :----------------------- | :--------------- | :------------------------------------------------------------------------------------------------------------------------------ |
 | `DataSourceFactory`      | `null`           | A factory function used to create an `NpgsqlDataSource`. If not specified, the `ConnectionString` will be tried.                |
 | `ConnectionString`       | `null`           | The connection string for the PostgreSQL database. If not specified, the `NpgsqlDataSource` from the DI container will be used. |
-| `LockId`                 | (required)       | The unique 64-bit advisory lock id to use for leader election.                                                                  |
+| `LockId`                 | `0`              | The unique 64-bit advisory lock id to use for leader election.                                                                  |
 | `InstanceId`             | `Guid.NewGuid()` | Unique ID for this node.                                                                                                        |
 | `RetryInterval`          | `5s`             | The interval to wait before retrying a failed leadership acquisition.                                                           |
 | `RenewInterval`          | `10s`            | The interval at which the leader will attempt to renew its leadership.                                                          |
