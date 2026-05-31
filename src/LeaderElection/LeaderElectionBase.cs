@@ -210,28 +210,69 @@ public abstract partial class LeaderElectionBase<TSettings> : ILeaderElection
     }
 
     /// <inheritdoc />
-    public async Task RunTaskIfLeaderAsync(
-        Func<Task> task,
+    public async Task<bool> RunTaskIfLeaderAsync(
+        Func<CancellationToken, Task> leaderTask,
         CancellationToken cancellationToken = default
     )
     {
-        ArgumentNullException.ThrowIfNull(task);
+        ArgumentNullException.ThrowIfNull(leaderTask);
         ThrowIfDisposed();
 
-        if (IsLeader)
+        if (!IsLeader)
         {
-            await task().WaitAsync(cancellationToken).ConfigureAwait(false);
+            return false;
+        }
+
+        var cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+
+        void onLeadershipChange(object? _, LeadershipChangedEventArgs e)
+        {
+            if (!e.IsLeader)
+            {
+                cts.Cancel();
+            }
+        }
+
+        LeadershipChanged += onLeadershipChange;
+
+        // check again now that we have subscribed to the event...
+        if (!IsLeader)
+        {
+            LeadershipChanged -= onLeadershipChange;
+            cts.Dispose();
+            return false;
+        }
+
+        await ExecTaskAndCleanupAsync().WaitAsync(cancellationToken).ConfigureAwait(false);
+        return true;
+
+        // Helper task to guarantee cleanup happens when the leader task completes,
+        // not necessarily when the function ends.
+        async Task ExecTaskAndCleanupAsync()
+        {
+            try
+            {
+                await leaderTask(cts.Token).ConfigureAwait(false);
+            }
+            finally
+            {
+                LeadershipChanged -= onLeadershipChange;
+                cts.Dispose();
+            }
         }
     }
 
     /// <inheritdoc />
-    public Task RunTaskIfLeaderAsync(Action task, CancellationToken cancellationToken = default)
+    public Task<bool> RunTaskIfLeaderAsync(
+        Action<CancellationToken> leaderAction,
+        CancellationToken cancellationToken = default
+    )
     {
-        ArgumentNullException.ThrowIfNull(task);
+        ArgumentNullException.ThrowIfNull(leaderAction);
         return RunTaskIfLeaderAsync(
-            () =>
+            ct =>
             {
-                task();
+                leaderAction(ct);
                 return Task.CompletedTask;
             },
             cancellationToken

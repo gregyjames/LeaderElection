@@ -418,13 +418,14 @@ public class LeaderElectionBaseTests
 
         // Act
         var taskExecuted = false;
-        await sut.RunTaskIfLeaderAsync(
-            () => taskExecuted = true,
+        var result = await sut.RunTaskIfLeaderAsync(
+            _ => taskExecuted = true,
             TestContext.Current.CancellationToken
         );
 
         // Assert
         taskExecuted.Should().BeFalse();
+        result.Should().BeFalse();
     }
 
     [Fact]
@@ -440,13 +441,14 @@ public class LeaderElectionBaseTests
 
         // Act
         var taskExecuted = false;
-        await sut.RunTaskIfLeaderAsync(
-            () => taskExecuted = true,
+        var result = await sut.RunTaskIfLeaderAsync(
+            _ => taskExecuted = true,
             TestContext.Current.CancellationToken
         );
 
         // Assert
         taskExecuted.Should().BeFalse();
+        result.Should().BeFalse();
     }
 
     [Fact]
@@ -461,13 +463,14 @@ public class LeaderElectionBaseTests
 
         // Act
         var taskExecuted = false;
-        await sut.RunTaskIfLeaderAsync(
-            () => taskExecuted = true,
+        var result = await sut.RunTaskIfLeaderAsync(
+            _ => taskExecuted = true,
             TestContext.Current.CancellationToken
         );
 
         // Assert
         taskExecuted.Should().BeTrue();
+        result.Should().BeTrue();
     }
 
     [Fact]
@@ -485,13 +488,55 @@ public class LeaderElectionBaseTests
         // Act
         await Assert.ThrowsAsync<InvalidOperationException>(() =>
             sut.RunTaskIfLeaderAsync(
-                () => throw new InvalidOperationException("Test exception"),
+                _ => throw new InvalidOperationException("Test exception"),
                 TestContext.Current.CancellationToken
             )
         );
 
         // Assert
         sut.Settings.ErrorCount.Should().Be(0);
+    }
+
+    [Fact]
+    public async Task RunTaskIfLeaderAsyncShouldCancelWhenTokenIsCancelled()
+    {
+        // Arrange
+        await using var sut = CreateSut();
+
+        // start with leadership
+        await StartAsync(sut);
+        sut.IsLeader.Should().BeTrue();
+
+        using var cts = new CancellationTokenSource();
+        var task = sut.RunTaskIfLeaderAsync(ct => Task.Delay(Timeout.Infinite, ct), cts.Token);
+
+        // Act
+        await cts.CancelAsync();
+
+        // Assert
+        await Assert.ThrowsAsync<TaskCanceledException>(async () => await task);
+    }
+
+    [Fact]
+    public async Task RunTaskIfLeaderAsyncShouldCancelWhenLeadershipIsLost()
+    {
+        // Arrange
+        await using var sut = CreateSut();
+
+        // start with leadership
+        await StartAsync(sut);
+        sut.IsLeader.Should().BeTrue();
+
+        var task = sut.RunTaskIfLeaderAsync(
+            ct => Task.Delay(Timeout.Infinite, ct),
+            CancellationToken.None
+        );
+
+        // Act
+        await sut.StopAsync(TestContext.Current.CancellationToken);
+
+        // Assert
+        await Assert.ThrowsAsync<TaskCanceledException>(async () => await task);
     }
 
     [Theory]
@@ -594,13 +639,10 @@ public class LeaderElectionBaseTests
             sut.StopAsync(TestContext.Current.CancellationToken)
         );
         await Assert.ThrowsAsync<ObjectDisposedException>(() =>
-            sut.RunTaskIfLeaderAsync(
-                () => Task.CompletedTask,
-                TestContext.Current.CancellationToken
-            )
+            sut.RunTaskIfLeaderAsync(_ => Task.CompletedTask, TestContext.Current.CancellationToken)
         );
         await Assert.ThrowsAsync<ObjectDisposedException>(() =>
-            sut.RunTaskIfLeaderAsync(() => { }, TestContext.Current.CancellationToken)
+            sut.RunTaskIfLeaderAsync(_ => { }, TestContext.Current.CancellationToken)
         );
 
         // Properties are okay

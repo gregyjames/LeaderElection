@@ -170,10 +170,14 @@ public sealed class BlobStorageLeaderElectionTests(AzuriteContainerFixture azuri
         await leaderElection.StartAsync(CancellationToken);
         await WaitForLeadershipChange(leaderElection, true, options.LeaseDuration);
 
-        await leaderElection.RunTaskIfLeaderAsync(() => taskExecuted = true, CancellationToken);
+        var result = await leaderElection.RunTaskIfLeaderAsync(
+            _ => taskExecuted = true,
+            CancellationToken
+        );
 
         // Assert
         taskExecuted.Should().BeTrue();
+        result.Should().BeTrue();
 
         await leaderElection.StopAsync(CancellationToken);
     }
@@ -189,10 +193,14 @@ public sealed class BlobStorageLeaderElectionTests(AzuriteContainerFixture azuri
         var taskExecuted = false;
 
         // Act - Don't start the leader election, so it won't be leader
-        await leaderElection.RunTaskIfLeaderAsync(() => taskExecuted = true, CancellationToken);
+        var result = await leaderElection.RunTaskIfLeaderAsync(
+            _ => taskExecuted = true,
+            CancellationToken
+        );
 
         // Assert
         taskExecuted.Should().BeFalse();
+        result.Should().BeFalse();
     }
 
     [Fact]

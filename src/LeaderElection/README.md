@@ -75,10 +75,10 @@ public class MyService : BackgroundService
             // Run leader tasks
             while (!stoppingToken.IsCancellationRequested)
             {
-                await _leaderElection.RunTaskIfLeaderAsync(async () =>
+                await _leaderElection.RunTaskIfLeaderAsync(async ct =>
                 {
                     _logger.LogInformation("Executing leader task");
-                    await DoLeaderWorkAsync();
+                    await DoLeaderWorkAsync(ct);
                 }, stoppingToken);
 
                 await Task.Delay(TimeSpan.FromSeconds(5), stoppingToken);
@@ -112,10 +112,10 @@ public class MyService : BackgroundService
 - `StartAsync(CancellationToken)` - Start the leader election process
 - `StopAsync(CancellationToken)` - Stop the leader election process
 - `TryAcquireLeadershipAsync(CancellationToken)` - Manually attempt to acquire leadership
-- `RunTaskIfLeaderAsync(Func<Task>, CancellationToken)` - Execute a task only if this instance is
-  the leader
-- `RunTaskIfLeaderAsync(Action, CancellationToken)` - Execute a synchronous task only if this
-  instance is the leader
+- `RunTaskIfLeaderAsync(Func<CancellationToken, Task>, CancellationToken)` - Execute a task only if
+  this instance is the leader
+- `RunTaskIfLeaderAsync(Action<CancellationToken>, CancellationToken)` - Execute a synchronous task
+  only if this instance is the leader
 
 ### Properties
 
