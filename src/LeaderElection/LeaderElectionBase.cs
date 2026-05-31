@@ -482,6 +482,15 @@ public abstract partial class LeaderElectionBase<TSettings> : ILeaderElection
             return; // already stopped
         }
 
+        // Cancel the leader loop task prior to acquiring the semaphore. This helps to
+        // prevent potential race conditions where the leader loop could be trying to
+        // acquire or renew leadership while we are trying to stop and release leadership.
+        var leaderLoopTaskCTS = Volatile.Read(ref _leaderLoopTaskCTS);
+        if (leaderLoopTaskCTS != null)
+        {
+            await leaderLoopTaskCTS.CancelAsync().ConfigureAwait(false);
+        }
+
         var isLeader = await AcquireLeaderLoopSemaphoreAsync(cancellationToken)
             .ConfigureAwait(false);
         var wasLeader = isLeader;
@@ -490,7 +499,7 @@ public abstract partial class LeaderElectionBase<TSettings> : ILeaderElection
         {
             // First stop the leader loop to prevent any further leadership
             // changes while we are trying to stop
-            if (LeaderLoopRunning)
+            if (_leaderLoopTask != null)
             {
                 await StopLeaderLoopAsync().ConfigureAwait(false);
             }
