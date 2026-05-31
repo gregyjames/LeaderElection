@@ -32,9 +32,12 @@ function Get-WellKnownAppInfo {
         # Defaults to '*'.
         [Parameter(Position = 0, ValueFromPipeline, ValueFromPipelineByPropertyName)]
         [SupportsWildcards()]
+        [ValidateNotNullOrEmpty()]
         [string[]] $Name = @('*')
     )
     process {
+        & $PSScriptRoot/../syncCallerPreferences.ps1 $MyInvocation -PreferencesToSync ErrorAction
+
         switch ($Name) {
             { $_.IndexOfAny([char[]]'*?[') -ge 0 } {
                 $n = $_
@@ -622,6 +625,8 @@ function Install-PackageManager {
         [string[]] $PackageManager
     )
 
+    & $PSScriptRoot/../syncCallerPreferences.ps1 $MyInvocation
+
     $PackageManager = @(
         $PackageManager |
         ForEach-Object {
@@ -808,6 +813,8 @@ function Install-RequiredApp {
         [switch] $InstallPackageManagers
     )
 
+    & $PSScriptRoot/../syncCallerPreferences.ps1 $MyInvocation
+
     # Validate that all apps have installation information, either provided
     # directly or via the well-known apps list...
     $copiedAppsToInstall = [ordered]@{}
@@ -965,6 +972,8 @@ function Install-PowerShellModule {
         [string]$Scope = 'CurrentUser'
     )
 
+    & $PSScriptRoot/../syncCallerPreferences.ps1 $MyInvocation
+
     function tryGetModule([string]$Name, [version]$MinimumVersion) {
         Get-Module -Name $Name -ListAvailable -ea Ignore |
         Where-Object Version -ge $MinimumVersion
@@ -993,14 +1002,9 @@ function Install-PowerShellModule {
     }
 }
 
-$exportModuleMemberParams = @{
-    Function = @(
-        'Install-PowerShellModule'
-        'Get-WellKnownAppInfo'
-        'Install-PackageManager'
-        'Get-PackageManager'
-        'Install-RequiredApp'
-    )
-}
-
-Export-ModuleMember @exportModuleMemberParams
+Export-ModuleMember -Function `
+    Install-PowerShellModule, `
+    Get-WellKnownAppInfo, `
+    Install-PackageManager, `
+    Get-PackageManager, `
+    Install-RequiredApp
