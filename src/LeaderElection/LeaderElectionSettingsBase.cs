@@ -17,7 +17,7 @@ public class LeaderElectionSettingsBase
     /// <summary>
     /// The interval at which non-leader instances will attempt to acquire leadership.
     /// <para/>
-    /// Must be greater than or equal to zero.
+    /// Must be greater than zero.
     /// Default is 5 seconds.
     /// </summary>
     /// <remarks>
