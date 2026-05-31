@@ -593,9 +593,10 @@ Task runExample -desc 'Run the example application' -dependsOn build {
 
     $runArgs = @(
         '--no-build'
-        '--launch-profile', 'https'
+        if (!$NoAspire) { '--launch-profile', 'https' }
         '--'
         "LeaderElectionType=$Type"
+        if (!$NoAspire) { "TesterCount=$Count" }
     )
 
     if ($NoAspire) {
@@ -603,7 +604,6 @@ Task runExample -desc 'Run the example application' -dependsOn build {
     }
     else {
         Set-Location './examples/LeaderElectionTester.AppHost'
-        $runArgs += "TesterCount=$Count"
     }
 
     Invoke-Shell -- dotnet run @runArgs
