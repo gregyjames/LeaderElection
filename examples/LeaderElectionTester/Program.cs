@@ -91,7 +91,7 @@ else if (leaderElectionType is "BlobStorage")
     {
         // blob test using Azurite or Storage Emulator
         configure.AddBlobServiceClient(
-            builder.Configuration["BLOBS_CONNECTIONSTRING"] ?? "UseDevelopmentStorage=true;"
+            builder.Configuration.GetConnectionString("blobs") ?? "UseDevelopmentStorage=true;"
         );
     });
     builder.Services.AddBlobStorageLeaderElection(builder =>
