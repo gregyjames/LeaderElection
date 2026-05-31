@@ -169,10 +169,14 @@ public sealed class S3LeaderElectionTests(MinioContainerFixture minioFixture)
         await leaderElection.StartAsync(CancellationToken);
         await WaitForLeadershipChange(leaderElection, true, TimeSpan.FromSeconds(15));
 
-        await leaderElection.RunTaskIfLeaderAsync(() => taskExecuted = true, CancellationToken);
+        var result = await leaderElection.RunTaskIfLeaderAsync(
+            _ => taskExecuted = true,
+            CancellationToken
+        );
 
         // Assert
         taskExecuted.Should().BeTrue();
+        result.Should().BeTrue();
 
         await leaderElection.StopAsync(CancellationToken);
     }

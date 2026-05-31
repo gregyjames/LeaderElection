@@ -71,20 +71,30 @@ public interface ILeaderElection : IAsyncDisposable
     /// <summary>
     /// Executes a task only if this instance is the leader.
     /// </summary>
-    /// <param name="task">The task to execute</param>
+    /// <param name="leaderTask">The task to execute. The function receives a <see cref="CancellationToken"/>
+    /// that is canceled if a) leadership is lost (including when the leader loop is stopped) or b) the provided
+    /// <paramref name="cancellationToken"/> is canceled.</param>
     /// <param name="cancellationToken">Cancellation token</param>
-    /// <returns>Task representing the async operation</returns>
-    /// <exception cref="ArgumentNullException">Thrown if the task is null.</exception>
+    /// <returns>A task that resolves to <c>true</c> if the leader task was executed; otherwise, <c>false</c>.</returns>
+    /// <exception cref="ArgumentNullException">Thrown if the leader task is null.</exception>
     /// <exception cref="ObjectDisposedException">Thrown if the leader election instance has been disposed.</exception>
-    Task RunTaskIfLeaderAsync(Func<Task> task, CancellationToken cancellationToken = default);
+    Task<bool> RunTaskIfLeaderAsync(
+        Func<CancellationToken, Task> leaderTask,
+        CancellationToken cancellationToken = default
+    );
 
     /// <summary>
     /// Executes a synchronous task only if this instance is the leader.
     /// </summary>
-    /// <param name="task">The task to execute</param>
+    /// <param name="leaderAction">The action to execute. The action receives a <see cref="CancellationToken"/>
+    /// that is canceled if a) leadership is lost (including when the leader loop is stopped) or b) the provided
+    /// <paramref name="cancellationToken"/> is canceled.</param>
     /// <param name="cancellationToken">Cancellation token</param>
-    /// <returns>Task representing the async operation</returns>
-    /// <exception cref="ArgumentNullException">Thrown if the task is null.</exception>
+    /// <returns>A task that resolves to <c>true</c> if the leader action was executed; otherwise, <c>false</c>.</returns>
+    /// <exception cref="ArgumentNullException">Thrown if the leader action is null.</exception>
     /// <exception cref="ObjectDisposedException">Thrown if the leader election instance has been disposed.</exception>
-    Task RunTaskIfLeaderAsync(Action task, CancellationToken cancellationToken = default);
+    Task<bool> RunTaskIfLeaderAsync(
+        Action<CancellationToken> leaderAction,
+        CancellationToken cancellationToken = default
+    );
 }

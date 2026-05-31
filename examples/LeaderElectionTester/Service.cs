@@ -35,7 +35,7 @@ internal sealed class Service : BackgroundService
             {
                 await _election
                     .RunTaskIfLeaderAsync(
-                        () =>
+                        _ =>
                         {
                             _logger.LogInformation(
                                 "Executing leader task at {Time}",

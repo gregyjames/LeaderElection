@@ -125,9 +125,13 @@ public sealed class PostgresLeaderElectionTests(PostgresContainerFixture postgre
         await leaderElection.StartAsync(CancellationToken);
         await WaitForLeadershipChange(leaderElection, true, TimeSpan.FromSeconds(10));
 
-        await leaderElection.RunTaskIfLeaderAsync(() => taskExecuted = true, CancellationToken);
+        var result = await leaderElection.RunTaskIfLeaderAsync(
+            _ => taskExecuted = true,
+            CancellationToken
+        );
 
         taskExecuted.Should().BeTrue();
+        result.Should().BeTrue();
 
         await leaderElection.StopAsync(CancellationToken);
     }
@@ -141,9 +145,13 @@ public sealed class PostgresLeaderElectionTests(PostgresContainerFixture postgre
 
         var taskExecuted = false;
 
-        await leaderElection.RunTaskIfLeaderAsync(() => taskExecuted = true, CancellationToken);
+        var result = await leaderElection.RunTaskIfLeaderAsync(
+            _ => taskExecuted = true,
+            CancellationToken
+        );
 
         taskExecuted.Should().BeFalse();
+        result.Should().BeFalse();
     }
 
     [Fact]

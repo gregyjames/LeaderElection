@@ -210,28 +210,59 @@ public abstract partial class LeaderElectionBase<TSettings> : ILeaderElection
     }
 
     /// <inheritdoc />
-    public async Task RunTaskIfLeaderAsync(
-        Func<Task> task,
+    public async Task<bool> RunTaskIfLeaderAsync(
+        Func<CancellationToken, Task> leaderTask,
         CancellationToken cancellationToken = default
     )
     {
-        ArgumentNullException.ThrowIfNull(task);
+        ArgumentNullException.ThrowIfNull(leaderTask);
         ThrowIfDisposed();
 
-        if (IsLeader)
+        if (!IsLeader)
         {
-            await task().WaitAsync(cancellationToken).ConfigureAwait(false);
+            return false;
+        }
+
+        using var cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+
+        void OnLeadershipChange(object? _, LeadershipChangedEventArgs e)
+        {
+            if (!e.IsLeader)
+            {
+                cts.Cancel();
+            }
+        }
+
+        LeadershipChanged += OnLeadershipChange;
+        try
+        {
+            // one last check to avoid starting the task if we lost leadership while subscribing to the event
+            if (!IsLeader)
+            {
+                return false;
+            }
+
+            // Pass the combined token to the work, and the caller's token to the wait...
+            await leaderTask(cts.Token).WaitAsync(cancellationToken).ConfigureAwait(false);
+            return true;
+        }
+        finally
+        {
+            LeadershipChanged -= OnLeadershipChange;
         }
     }
 
     /// <inheritdoc />
-    public Task RunTaskIfLeaderAsync(Action task, CancellationToken cancellationToken = default)
+    public Task<bool> RunTaskIfLeaderAsync(
+        Action<CancellationToken> leaderAction,
+        CancellationToken cancellationToken = default
+    )
     {
-        ArgumentNullException.ThrowIfNull(task);
+        ArgumentNullException.ThrowIfNull(leaderAction);
         return RunTaskIfLeaderAsync(
-            () =>
+            ct =>
             {
-                task();
+                leaderAction(ct);
                 return Task.CompletedTask;
             },
             cancellationToken

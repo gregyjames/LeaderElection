@@ -72,10 +72,10 @@ public class Worker : BackgroundService
         while (!stoppingToken.IsCancellationRequested)
         {
             // Only runs if this instance currently holds the S3 lease
-            await _leaderElection.RunTaskIfLeaderAsync(async () =>
+            await _leaderElection.RunTaskIfLeaderAsync(async ct =>
             {
                 _logger.LogInformation("Instance is leader. Doing work...");
-                await Task.Delay(1000, stoppingToken);
+                await Task.Delay(1000, ct);
             }, stoppingToken);
 
             await Task.Delay(5000, stoppingToken);

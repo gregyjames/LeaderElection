@@ -159,10 +159,14 @@ public sealed class RedisLeaderElectionTests(RedisContainerFixture redisFixture)
         await leaderElection.StartAsync(CancellationToken);
         await WaitForLeadershipChange(leaderElection, true, TimeSpan.FromSeconds(10));
 
-        await leaderElection.RunTaskIfLeaderAsync(() => taskExecuted = true, CancellationToken);
+        var result = await leaderElection.RunTaskIfLeaderAsync(
+            _ => taskExecuted = true,
+            CancellationToken
+        );
 
         // Assert
         taskExecuted.Should().BeTrue();
+        result.Should().BeTrue();
 
         await leaderElection.StopAsync(CancellationToken);
     }
@@ -178,10 +182,14 @@ public sealed class RedisLeaderElectionTests(RedisContainerFixture redisFixture)
         var taskExecuted = false;
 
         // Act - Don't start the leader election, so it won't be leader
-        await leaderElection.RunTaskIfLeaderAsync(() => taskExecuted = true, CancellationToken);
+        var result = await leaderElection.RunTaskIfLeaderAsync(
+            _ => taskExecuted = true,
+            CancellationToken
+        );
 
         // Assert
         taskExecuted.Should().BeFalse();
+        result.Should().BeFalse();
     }
 
     [Fact]
