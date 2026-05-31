@@ -234,12 +234,6 @@ public sealed partial class PostgresLeaderElection : LeaderElectionBase<Postgres
         }
     }
 
-    protected override async ValueTask DisposeAsyncCore()
-    {
-        await ResetLeadershipAsync().ConfigureAwait(false);
-        await base.DisposeAsyncCore().ConfigureAwait(false);
-    }
-
     private static NpgsqlCommand CreateCommand(
         NpgsqlConnection connection,
         /* language=sql */string query,
