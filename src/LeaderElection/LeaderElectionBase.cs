@@ -466,12 +466,8 @@ public abstract partial class LeaderElectionBase<TSettings> : ILeaderElection
                 Math.Min(errorCount, maxExponent)
             );
             var jitter = _settings.RetryJitter - (_getRandomDouble() * _settings.RetryJitter * 2);
-            return TimeSpan.FromTicks(
-                Math.Min(
-                    (long)(_settings.RetryInterval.Ticks * backoffFactor * (1.0 - jitter)),
-                    _settings.MaxRetryInterval.Ticks
-                )
-            );
+            var rawTicks = _settings.RetryInterval.Ticks * backoffFactor * (1.0 - jitter);
+            return TimeSpan.FromTicks((long)Math.Min(rawTicks, _settings.MaxRetryInterval.Ticks));
         }
     }
 
