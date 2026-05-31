@@ -223,9 +223,9 @@ public abstract partial class LeaderElectionBase<TSettings> : ILeaderElection
             return false;
         }
 
-        using var cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        var cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
 
-        void OnLeadershipChange(object? _, LeadershipChangedEventArgs e)
+        void onLeadershipChange(object? _, LeadershipChangedEventArgs e)
         {
             if (!e.IsLeader)
             {
@@ -233,22 +233,32 @@ public abstract partial class LeaderElectionBase<TSettings> : ILeaderElection
             }
         }
 
-        LeadershipChanged += OnLeadershipChange;
-        try
-        {
-            // one last check to avoid starting the task if we lost leadership while subscribing to the event
-            if (!IsLeader)
-            {
-                return false;
-            }
+        LeadershipChanged += onLeadershipChange;
 
-            // Pass the combined token to the work, and the caller's token to the wait...
-            await leaderTask(cts.Token).WaitAsync(cancellationToken).ConfigureAwait(false);
-            return true;
-        }
-        finally
+        // check again now that we have subscribed to the event...
+        if (!IsLeader)
         {
-            LeadershipChanged -= OnLeadershipChange;
+            LeadershipChanged -= onLeadershipChange;
+            cts.Dispose();
+            return false;
+        }
+
+        await ExecTaskAndCleanupAsync().WaitAsync(cancellationToken).ConfigureAwait(false);
+        return true;
+
+        // Helper task to guarantee cleanup happens when the leader task completes,
+        // not necessarily when the function ends.
+        async Task ExecTaskAndCleanupAsync()
+        {
+            try
+            {
+                await leaderTask(cts.Token).ConfigureAwait(false);
+            }
+            finally
+            {
+                LeadershipChanged -= onLeadershipChange;
+                cts.Dispose();
+            }
         }
     }
 
