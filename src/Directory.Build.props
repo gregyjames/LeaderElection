@@ -49,10 +49,18 @@
       </ItemGroup>
       <PropertyGroup>
         <PolySharpIncludeGeneratedTypes>System.Runtime.CompilerServices.IsExternalInit;$(PolySharpIncludeGeneratedTypes)</PolySharpIncludeGeneratedTypes>
+        <PolySharpIncludeGeneratedTypes>System.Diagnostics.CodeAnalysis.NotNullAttribute;$(PolySharpIncludeGeneratedTypes)</PolySharpIncludeGeneratedTypes>
+        <PolySharpIncludeGeneratedTypes>System.Runtime.CompilerServices.CallerArgumentExpressionAttribute;$(PolySharpIncludeGeneratedTypes)</PolySharpIncludeGeneratedTypes>
+        <PolySharpIncludeGeneratedTypes>System.Runtime.CompilerServices.RequiredMemberAttribute;System.Runtime.CompilerServices.CompilerFeatureRequiredAttribute;$(PolySharpIncludeGeneratedTypes)</PolySharpIncludeGeneratedTypes>
+        <PolySharpIncludeGeneratedTypes>System.Diagnostics.CodeAnalysis.MemberNotNullWhenAttribute;$(PolySharpIncludeGeneratedTypes)</PolySharpIncludeGeneratedTypes>
       </PropertyGroup>
       <ItemGroup>
         <Compile Include="$(SrcDir)Polyfill.cs" />
       </ItemGroup>
     </When>
   </Choose>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="LeaderElection.Tests" />
+  </ItemGroup>
 </Project>

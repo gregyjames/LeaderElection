@@ -5,8 +5,8 @@ namespace LeaderElection;
 public class LeaderElectionSettingsBase
 {
     /// <summary>
-    /// A unique identifier for the group of instances participating in the
-    /// leader election.
+    /// A unique identifier for the instance participating in the
+    /// leader election. It must be unique across all contenders.
     /// <para/>
     /// Must be non-empty.
     /// Default is a new GUID.
@@ -53,4 +53,18 @@ public class LeaderElectionSettingsBase
     /// Default is true.
     /// </summary>
     public bool EnableGracefulShutdown { get; set; } = true;
+
+    /// <summary>
+    /// Copies the common settings from the source to the destination.
+    /// </summary>
+    protected static void Copy(LeaderElectionSettingsBase src, LeaderElectionSettingsBase dst)
+    {
+        ArgumentNullException.ThrowIfNull(src);
+        ArgumentNullException.ThrowIfNull(dst);
+        dst.InstanceId = src.InstanceId;
+        dst.RetryInterval = src.RetryInterval;
+        dst.RenewInterval = src.RenewInterval;
+        dst.EnableGracefulShutdown = src.EnableGracefulShutdown;
+        dst.MaxRetryAttempts = src.MaxRetryAttempts;
+    }
 }

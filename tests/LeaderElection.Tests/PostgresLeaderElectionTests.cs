@@ -1,18 +1,28 @@
 using LeaderElection.Postgres;
-using Microsoft.Extensions.Logging;
-using Microsoft.Extensions.Logging.Abstractions;
-using Microsoft.Extensions.Options;
+using Microsoft.Extensions.DependencyInjection;
+using Npgsql;
 
 namespace LeaderElection.Tests;
 
 [Collection("PostgreSQL Container")]
 [Trait("Kind", "Integration")]
 [Trait("Category", "PostgreSQL")]
-public sealed class PostgresLeaderElectionTests(PostgresContainerFixture postgresFixture) : TestBase
+public sealed class PostgresLeaderElectionTests(PostgresContainerFixture postgresFixture)
+    : TestBase,
+        IAsyncDisposable
 {
+    private readonly List<ServiceProvider> _serviceProviders = [];
+
     private static long _lockIdCounter = 1000;
 
     private static long GetNextLockId() => Interlocked.Increment(ref _lockIdCounter);
+
+    public async ValueTask DisposeAsync()
+    {
+        GC.SuppressFinalize(this);
+        foreach (var sp in _serviceProviders ?? [])
+            await sp.DisposeAsync();
+    }
 
     private PostgresSettings CreateSettings(
         string? instanceId = null,
@@ -32,11 +42,16 @@ public sealed class PostgresLeaderElectionTests(PostgresContainerFixture postgre
             EnableGracefulShutdown = enableGracefulShutdown,
         };
 
-    private static PostgresLeaderElection CreateSut(PostgresSettings options) =>
-        new(
-            Options.Create(options),
-            NullLoggerFactory.Instance.CreateLogger<PostgresLeaderElection>()
-        );
+    private PostgresLeaderElection CreateSut(PostgresSettings options)
+    {
+        var serviceProvider = new ServiceCollection()
+            .AddLogging()
+            .AddPostgresLeaderElection(builder => builder.WithSettings(options))
+            .BuildServiceProvider();
+
+        _serviceProviders.Add(serviceProvider);
+        return serviceProvider.GetRequiredService<PostgresLeaderElection>();
+    }
 
     [Fact]
     public async Task ShouldAcquireLeadershipWhenNoOtherInstanceExists()
@@ -66,7 +81,7 @@ public sealed class PostgresLeaderElectionTests(PostgresContainerFixture postgre
         await WaitForLeadershipChange(leaderElection1, true, TimeSpan.FromSeconds(10));
 
         await leaderElection2.StartAsync(CancellationToken);
-        await Task.Delay(TimeSpan.FromSeconds(5), CancellationToken);
+        await TimeProvider.Delay(TimeSpan.FromSeconds(5), CancellationToken);
 
         leaderElection1.IsLeader.Should().BeTrue();
         leaderElection2.IsLeader.Should().BeFalse();
@@ -156,5 +171,33 @@ public sealed class PostgresLeaderElectionTests(PostgresContainerFixture postgre
 
         // Act & Assert
         await TestShouldRetainLeadershipAfterAtLeastOneRenewalCycle(leaderElection, options);
+    }
+
+    [Fact]
+    public async Task ShouldThrowWhenUsingMultiHostConnectionStringWithInvalidTargetSessionAttributes()
+    {
+        // Arrange
+        var options = CreateSettings();
+        options.ConnectionString = "host=host1,host2;TargetSessionAttributes=any;";
+
+        // Act & Assert - Should throw due to invalid connection string for leader election usage
+        await Assert.ThrowsAsync<InvalidOperationException>(async () =>
+        {
+            await using var leaderElection = CreateSut(options);
+        });
+    }
+
+    [Fact]
+    public async Task ShouldThrowWhenUsingConnectionStringWithMultiplexingEnabled()
+    {
+        // Arrange
+        var options = CreateSettings();
+        options.ConnectionString += ";Multiplexing=true;";
+
+        // Act & Assert
+        await Assert.ThrowsAsync<InvalidOperationException>(async () =>
+        {
+            await using var leaderElection = CreateSut(options);
+        });
     }
 }

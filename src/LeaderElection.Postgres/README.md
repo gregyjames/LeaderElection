@@ -28,16 +28,32 @@ dotnet add package LeaderElection.Postgres
 
 ```csharp
 using LeaderElection.Postgres;
+using Npgsql;
 
 var builder = WebApplication.CreateBuilder(args);
 
-// Add Postgres leader election
-builder.Services.AddPostgresLeaderElection(options =>
-{
-    options.ConnectionString = "Host=localhost;Database=mydb;Username=myuser;Password=mypass";
-    options.LockId = 1337; // A unique 64-bit integer representing this specific lock
-    options.RetryInterval = TimeSpan.FromSeconds(5);
-});
+// Register a NpgsqlDataSource (from Npgsql.DependencyInjection) specifically for
+// Leader Election use...
+const string postgresLeaderElectionDataSource = "PostgresLeaderElectionDataSource";
+builder.Services.AddNpgsqlDataSource(
+    // Use short CommandTimeout to avoid long waits if the database becomes unresponsive.
+    "Host=localhost;Database=mydb;Username=myuser;Password=mypass;Timeout=5;CommandTimeout=3;",
+    serviceKey: postgresLeaderElectionDataSource,
+);
+
+builder.Services.AddPostgresLeaderElection(builder =>
+    builder
+        .WithRegisteredDataSource(postgresLeaderElectionDataSource)
+        .WithSettings(options =>
+        {
+            options.LockId = 1337; // A unique 64-bit integer representing this specific lock
+
+            // Use a short RenewInterval to quickly detect and recover from failed leaders.
+            // Note that the actual detection time will be at least the sum of the CommandTimeout
+            // and RenewInterval, so keep CommandTimeout low as well.
+            options.RenewInterval = TimeSpan.FromSeconds(5); // aggressive renew
+        })
+);
 ```
 
 ### 3. Use in Your Service
@@ -76,13 +92,15 @@ public class Worker : BackgroundService
 
 ## Configuration (PostgresSettings)
 
-| Property                 | Default                   | Description                                                           |
-| :----------------------- | :------------------------ | :-------------------------------------------------------------------- |
-| `ConnectionString`       | `(required)`              | The connection string for the PostgreSQL database.                    |
-| `LockId`                 | `(required)`              | The unique 64-bit advisory lock key to use for leader election.       |
-| `InstanceId`             | `Environment.MachineName` | Unique ID for this node.                                              |
-| `RetryInterval`          | `5s`                      | The interval to wait before retrying a failed leadership acquisition. |
-| `EnableGracefulShutdown` | `true`                    | If true, explicitly unlocks via `pg_advisory_unlock` on stop.         |
+| Property                 | Default          | Description                                                                                                                     |
+| :----------------------- | :--------------- | :------------------------------------------------------------------------------------------------------------------------------ |
+| `DataSourceFactory`      | `null`           | A factory function used to create an `NpgsqlDataSource`. If not specified, the `ConnectionString` will be tried.                |
+| `ConnectionString`       | `null`           | The connection string for the PostgreSQL database. If not specified, the `NpgsqlDataSource` from the DI container will be used. |
+| `LockId`                 | `0`              | The unique 64-bit advisory lock id to use for leader election.                                                                  |
+| `InstanceId`             | `Guid.NewGuid()` | Unique ID for this node.                                                                                                        |
+| `RetryInterval`          | `5s`             | The interval to wait before retrying a failed leadership acquisition.                                                           |
+| `RenewInterval`          | `10s`            | The interval at which the leader will attempt to renew its leadership.                                                          |
+| `EnableGracefulShutdown` | `true`           | If true, explicitly unlocks via `pg_advisory_unlock` on stop. It is highly recommended to leave this enabled.                   |
 
 ## PostgreSQL Specifics
 
@@ -97,6 +115,22 @@ for traditional polling or lease-expiration timers.
 Additionally, to prevent silent network partitions from locking up the system, the leader election
 class periodically executes a lightweight `SELECT 1;` to verify the physical connection is still
 healthy and the lock holds true.
+
+## PostgreSQL Requirements
+
+- The database is required to implement a **Single-Primary** topology since this Leader Election
+  algorithm relies on **advisory locks**, which are not replicated in multi-host configurations.
+
+- In multi-host configurations (e.g., `host=host1,host2,etc`), an explicit
+  `TargetSessionAttributes=read-write` (or `primary`) is required in order to ensure all
+  leader-election candidates are connected to the same instance. An error will be thrown if the
+  connection string contains multiple hosts without the required `TargetSessionAttributes`.
+
+- Multiplexing is not supported. An error will be thrown if the connection string contains
+  `Multiplexing=true`.
+
+- The PostgreSQL user must have permissions to execute `pg_try_advisory_lock` and
+  `pg_advisory_unlock` functions, which are typically granted by default to all users.
 
 ## Contributing
 

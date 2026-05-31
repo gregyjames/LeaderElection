@@ -1,5 +1,6 @@
 using System.Diagnostics.CodeAnalysis;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 
 namespace LeaderElection;
 
@@ -12,10 +13,19 @@ public abstract partial class LeaderElectionBase<TSettings> : ILeaderElection
     [SuppressMessage("Design", "CA1051", Justification = "Field readonly to derived types")]
     protected readonly ILogger _logger;
 
-    protected LeaderElectionBase(TSettings settings, ILogger logger)
+    [SuppressMessage("Design", "CA1051", Justification = "Field readonly to derived types")]
+    protected readonly TimeProvider _timeProvider;
+
+    protected LeaderElectionBase(
+        TSettings settings,
+        ILogger? logger = null,
+        TimeProvider? timeProvider = null
+    )
     {
-        _settings = settings ?? throw new ArgumentNullException(nameof(settings));
-        _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+        ArgumentNullException.ThrowIfNull(settings);
+        _settings = settings;
+        _logger = logger ?? NullLogger.Instance;
+        _timeProvider = timeProvider ?? TimeProvider.System;
     }
 
     private readonly SemaphoreSlim _leadershipSemaphore = new(1, 1);
@@ -24,25 +34,20 @@ public abstract partial class LeaderElectionBase<TSettings> : ILeaderElection
     private volatile bool _isLeader;
     private int _disposedValue;
     private Task? _leadershipLoopTask;
-    private DateTime _lastLeadershipRenewalTime = DateTime.MinValue;
-
+    private DateTimeOffset _lastLeadershipRenewalTime = DateTimeOffset.MinValue;
     public event EventHandler<LeadershipChangedEventArgs>? LeadershipChanged;
     public event EventHandler<LeadershipExceptionEventArgs>? ErrorOccurred;
 
+    public bool LeaderLoopRunning => Volatile.Read(ref _leadershipLoopTask)?.IsCompleted is false;
+
     private bool IsDisposed => Volatile.Read(ref _disposedValue) == 1;
     public bool IsLeader => _isLeader && !IsDisposed;
-    public DateTime LastLeadershipRenewal => _lastLeadershipRenewalTime;
+    public DateTime LastLeadershipRenewal => _lastLeadershipRenewalTime.UtcDateTime;
 
     public async Task StartAsync(CancellationToken cancellationToken = default)
     {
-#if NET6_0_OR_GREATER
-        ObjectDisposedException.ThrowIf(IsDisposed, this);
-#else
-        if (IsDisposed)
-        {
-            throw new ObjectDisposedException(GetType().Name);
-        }
-#endif
+        ThrowIfDisposed();
+
         if (_leadershipLoopTask is { IsCompleted: false })
         {
             LogLeaderElectionIsAlreadyRunning();
@@ -61,6 +66,8 @@ public abstract partial class LeaderElectionBase<TSettings> : ILeaderElection
 
     private async Task RunLeaderLoopAsync(CancellationToken token)
     {
+        ThrowIfDisposed();
+
         var retryCount = 0;
 
         while (!token.IsCancellationRequested)
@@ -76,6 +83,7 @@ public abstract partial class LeaderElectionBase<TSettings> : ILeaderElection
                     }
                     else
                     {
+                        // Very common that leadership acquisition fails because another instance holds the leadership - log at debug level in that case and avoid log noise
                         LogFailedToAcquireLeadershipWillRetry();
                         retryCount++;
                     }
@@ -91,13 +99,13 @@ public abstract partial class LeaderElectionBase<TSettings> : ILeaderElection
                     else
                     {
                         LogLeadershipRenewedSuccessfully();
-                        _lastLeadershipRenewalTime = DateTime.UtcNow;
+                        _lastLeadershipRenewalTime = _timeProvider.GetUtcNow();
                         retryCount = 0;
                     }
                 }
 
                 var delay = GetNextDelay(retryCount);
-                await Task.Delay(delay, token).ConfigureAwait(false);
+                await _timeProvider.Delay(delay, token).ConfigureAwait(false);
             }
             catch (OperationCanceledException)
             {
@@ -111,7 +119,7 @@ public abstract partial class LeaderElectionBase<TSettings> : ILeaderElection
 
                 try
                 {
-                    await Task.Delay(_settings.RetryInterval, token).ConfigureAwait(false);
+                    await _timeProvider.Delay(_settings.RetryInterval, token).ConfigureAwait(false);
                 }
                 catch (OperationCanceledException)
                 {
@@ -133,15 +141,18 @@ public abstract partial class LeaderElectionBase<TSettings> : ILeaderElection
         );
     }
 
-    public virtual Task StopAsync(CancellationToken cancellationToken = default) =>
-        IsDisposed ? Task.CompletedTask : InternalStopAsync(cancellationToken);
+    public virtual Task StopAsync(CancellationToken cancellationToken = default)
+    {
+        ThrowIfDisposed();
+        return InternalStopAsync(cancellationToken);
+    }
 
     private async Task InternalStopAsync(CancellationToken cancellationToken = default)
     {
-        LogStoppingLeaderElectionForInstanceInstanceid(_settings.InstanceId);
-
         if (_leadershipLoopCancellationTokenSource != null)
         {
+            LogStoppingLeaderElectionForInstanceInstanceid(_settings.InstanceId);
+
             await _leadershipLoopCancellationTokenSource.CancelAsync().ConfigureAwait(false);
         }
 
@@ -151,10 +162,6 @@ public abstract partial class LeaderElectionBase<TSettings> : ILeaderElection
             {
                 await _leadershipLoopTask.WaitAsync(cancellationToken).ConfigureAwait(false);
             }
-            catch (OperationCanceledException)
-            {
-                LogLeaderLoopCancellationWasExpected();
-            }
             finally
             {
                 _leadershipLoopTask = null;
@@ -163,13 +170,17 @@ public abstract partial class LeaderElectionBase<TSettings> : ILeaderElection
             }
         }
 
-        if (_settings.EnableGracefulShutdown && _isLeader)
-        {
-            await ReleaseLeadershipAsync().ConfigureAwait(false);
-        }
-
         if (_isLeader)
         {
+            if (_settings.EnableGracefulShutdown)
+            {
+                await ReleaseLeadershipAsync().ConfigureAwait(false);
+            }
+            else
+            {
+                await ResetLeadershipAsync().ConfigureAwait(false);
+            }
+
             SetLeadership(false);
         }
     }
@@ -180,21 +191,23 @@ public abstract partial class LeaderElectionBase<TSettings> : ILeaderElection
 
     protected abstract Task<bool> RenewLeadershipInternalAsync(CancellationToken cancellationToken);
     protected abstract Task ReleaseLeadershipAsync();
+    protected abstract ValueTask ResetLeadershipAsync();
 
     protected void SetLeadership(bool isLeader)
     {
         if (_isLeader != isLeader)
         {
             _isLeader = isLeader;
-            _lastLeadershipRenewalTime = isLeader ? DateTime.UtcNow : DateTime.MinValue;
+            _lastLeadershipRenewalTime = isLeader
+                ? _timeProvider.GetUtcNow()
+                : DateTimeOffset.MinValue;
             LeadershipChanged?.Invoke(this, new(isLeader));
         }
     }
 
     public async Task<bool> TryAcquireLeadershipAsync(CancellationToken cancellationToken = default)
     {
-        if (IsDisposed)
-            return false;
+        ThrowIfDisposed();
 
         await _leadershipSemaphore.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
@@ -211,10 +224,12 @@ public abstract partial class LeaderElectionBase<TSettings> : ILeaderElection
     }
 
     public async Task RunTaskIfLeaderAsync(
-        Func<Task>? task,
+        Func<Task> task,
         CancellationToken cancellationToken = default
     )
     {
+        ThrowIfDisposed();
+
         if (!IsLeader)
         {
             LogNotTheLeaderSkippingTaskExecution();
@@ -268,6 +283,18 @@ public abstract partial class LeaderElectionBase<TSettings> : ILeaderElection
 
         _leadershipLoopCancellationTokenSource?.Dispose();
         _leadershipSemaphore.Dispose();
+    }
+
+    private void ThrowIfDisposed()
+    {
+#if NET6_0_OR_GREATER
+        ObjectDisposedException.ThrowIf(IsDisposed, this);
+#else
+        if (IsDisposed)
+        {
+            throw new ObjectDisposedException(GetType().Name);
+        }
+#endif
     }
 
     [LoggerMessage(LogLevel.Warning, "Leader election is already running")]

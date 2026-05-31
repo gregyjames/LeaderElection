@@ -41,6 +41,17 @@ public sealed class RedisContainerFixture : IAsyncLifetime
             "ConnectionMultiplexer is not initialized. Ensure InitializeAsync has been called."
         );
 
+    /// <summary>
+    /// Gets the host and port for the Redis service.
+    /// </summary>
+    public (string host, int port) HostPort =>
+        _redisContainer == null
+            ? throw new InvalidOperationException(
+                "Redis container is not initialized. Ensure InitializeAsync has been called."
+            )
+            : ((string host, int port))
+                (_redisContainer.Hostname, _redisContainer.GetMappedPublicPort(6379));
+
     public async ValueTask InitializeAsync()
     {
         _redisContainer = new RedisBuilder(image: "redis:7-alpine").Build();

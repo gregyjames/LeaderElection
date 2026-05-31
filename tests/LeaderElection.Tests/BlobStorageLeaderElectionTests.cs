@@ -1,9 +1,7 @@
 using Azure.Storage.Blobs;
 using Azure.Storage.Blobs.Specialized;
 using LeaderElection.BlobStorage;
-using Microsoft.Extensions.Logging;
-using Microsoft.Extensions.Logging.Abstractions;
-using Microsoft.Extensions.Options;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace LeaderElection.Tests;
 
@@ -11,9 +9,18 @@ namespace LeaderElection.Tests;
 [Trait("Kind", "Integration")]
 [Trait("Category", "BlobStorage")]
 public sealed class BlobStorageLeaderElectionTests(AzuriteContainerFixture azuriteFixture)
-    : TestBase
+    : TestBase,
+        IAsyncDisposable
 {
     private readonly BlobServiceClient _blobServiceClient = azuriteFixture.BlobServiceClient;
+    private readonly List<ServiceProvider> _serviceProviders = [];
+
+    public async ValueTask DisposeAsync()
+    {
+        GC.SuppressFinalize(this);
+        foreach (var sp in _serviceProviders ?? [])
+            await sp.DisposeAsync();
+    }
 
     private BlobStorageSettings CreateSettings(
         string containerName, // should be unique per test to avoid conflicts
@@ -41,12 +48,18 @@ public sealed class BlobStorageLeaderElectionTests(AzuriteContainerFixture azuri
             CreateContainerIfNotExists = createContainerIfNotExists,
         };
 
-    private BlobStorageLeaderElection CreateSut(BlobStorageSettings options) =>
-        new(
-            _blobServiceClient,
-            Options.Create(options),
-            NullLoggerFactory.Instance.CreateLogger<BlobStorageLeaderElection>()
-        );
+    private BlobStorageLeaderElection CreateSut(BlobStorageSettings settings)
+    {
+        var serviceProvider = new ServiceCollection()
+            .AddLogging()
+            .AddBlobStorageLeaderElection(builder =>
+                builder.WithSettings(settings).WithBlobServiceClient(_blobServiceClient)
+            )
+            .BuildServiceProvider();
+
+        _serviceProviders.Add(serviceProvider);
+        return serviceProvider.GetRequiredService<BlobStorageLeaderElection>();
+    }
 
     [Fact]
     public async Task ShouldAcquireLeadershipWhenNoOtherInstanceExists()
@@ -92,7 +105,7 @@ public sealed class BlobStorageLeaderElectionTests(AzuriteContainerFixture azuri
         await WaitForLeadershipChange(leaderElection1, true, TimeSpan.FromSeconds(15));
 
         await leaderElection2.StartAsync(CancellationToken);
-        await Task.Delay(TimeSpan.FromSeconds(5), CancellationToken); // Give time for second instance to try
+        await TimeProvider.Delay(TimeSpan.FromSeconds(5), CancellationToken); // Give time for second instance to try
 
         // Assert
         leaderElection1.IsLeader.Should().BeTrue();
@@ -227,27 +240,6 @@ public sealed class BlobStorageLeaderElectionTests(AzuriteContainerFixture azuri
         var blobExists = await blobClient.ExistsAsync(CancellationToken);
         blobExists.Value.Should().BeTrue();
 
-        await leaderElection.StopAsync(CancellationToken);
-    }
-
-    [Fact]
-    public async Task ShouldWorkWithSecondConstructor()
-    {
-        var containerName = "test-second-constructor";
-        var options = CreateSettings(containerName);
-        var containerClient = _blobServiceClient.GetBlobContainerClient(containerName);
-        await containerClient.CreateIfNotExistsAsync(cancellationToken: CancellationToken);
-
-        await using var leaderElection = new BlobStorageLeaderElection(
-            containerClient,
-            options,
-            NullLoggerFactory.Instance.CreateLogger<BlobStorageLeaderElection>()
-        );
-
-        await leaderElection.StartAsync(CancellationToken);
-        await WaitForLeadershipChange(leaderElection, true, options.LeaseDuration);
-
-        leaderElection.IsLeader.Should().BeTrue();
         await leaderElection.StopAsync(CancellationToken);
     }
 

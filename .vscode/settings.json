@@ -55,5 +55,6 @@
   },
   "coverage-gutters.coverageFileNames": ["coverage.info", "coverage.cobertura.xml"],
   "xmlTools.xmlFormatterImplementation": "v2",
-  "xmlTools.enforcePrettySelfClosingTagOnFormat": true
+  "xmlTools.enforcePrettySelfClosingTagOnFormat": true,
+  "cSpell.words": ["Npgsql"]
 }

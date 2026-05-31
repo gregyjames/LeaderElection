@@ -1,15 +1,24 @@
 using LeaderElection.Redis;
-using Microsoft.Extensions.Logging;
-using Microsoft.Extensions.Logging.Abstractions;
-using Microsoft.Extensions.Options;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace LeaderElection.Tests;
 
 [Collection("Redis Container")]
 [Trait("Kind", "Integration")]
 [Trait("Category", "Redis")]
-public sealed class RedisLeaderElectionTests(RedisContainerFixture redisFixture) : TestBase
+public sealed class RedisLeaderElectionTests(RedisContainerFixture redisFixture)
+    : TestBase,
+        IAsyncDisposable
 {
+    private readonly List<ServiceProvider> _serviceProviders = [];
+
+    public async ValueTask DisposeAsync()
+    {
+        GC.SuppressFinalize(this);
+        foreach (var sp in _serviceProviders ?? [])
+            await sp.DisposeAsync();
+    }
+
     private static RedisSettings CreateSettings(
         string lockKey, // should be unique per test to avoid conflicts
         string instanceId = "test-instance-1",
@@ -30,12 +39,20 @@ public sealed class RedisLeaderElectionTests(RedisContainerFixture redisFixture)
             EnableGracefulShutdown = enableGracefulShutdown,
         };
 
-    private RedisLeaderElection CreateSut(RedisSettings options) =>
-        new(
-            redisFixture.ConnectionMultiplexer,
-            Options.Create(options),
-            NullLoggerFactory.Instance.CreateLogger<RedisLeaderElection>()
-        );
+    private RedisLeaderElection CreateSut(RedisSettings settings)
+    {
+        var serviceProvider = new ServiceCollection()
+            .AddLogging()
+            .AddRedisLeaderElection(builder =>
+                builder
+                    .WithSettings(settings)
+                    .WithConnectionMultiplexer(redisFixture.ConnectionMultiplexer)
+            )
+            .BuildServiceProvider();
+
+        _serviceProviders.Add(serviceProvider);
+        return serviceProvider.GetRequiredService<RedisLeaderElection>();
+    }
 
     [Fact]
     public async Task ShouldAcquireLeadershipWhenNoOtherInstanceExists()
@@ -78,7 +95,7 @@ public sealed class RedisLeaderElectionTests(RedisContainerFixture redisFixture)
         await WaitForLeadershipChange(leaderElection1, true, TimeSpan.FromSeconds(10));
 
         await leaderElection2.StartAsync(CancellationToken);
-        await Task.Delay(TimeSpan.FromSeconds(5), CancellationToken); // Give time for second instance to try
+        await TimeProvider.Delay(TimeSpan.FromSeconds(5), CancellationToken); // Give time for second instance to try
 
         // Assert
         leaderElection1.IsLeader.Should().BeTrue();
