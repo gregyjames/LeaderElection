@@ -11,7 +11,6 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Minio;
-using Npgsql;
 using StackExchange.Redis;
 using ZiggyCreatures.Caching.Fusion;
 
@@ -154,6 +153,8 @@ else if (leaderElectionType is "Postgres")
                 // Use a short RenewInterval to quickly detect and recover from failed leaders.
                 // Note that the actual detection time will be at least the sum of the CommandTimeout
                 // and RenewInterval, so keep CommandTimeout low as well.
+                // Alternatively, you can specify a KeepAlive interval in the connection string
+                // (e.g., "KeepAlive=5") to have the Npgsql driver detect a broken connection.
                 options.RenewInterval = TimeSpan.FromSeconds(5); // aggressive renew
             })
     );

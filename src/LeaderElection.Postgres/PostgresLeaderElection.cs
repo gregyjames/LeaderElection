@@ -9,6 +9,9 @@ public sealed partial class PostgresLeaderElection : LeaderElectionBase<Postgres
     private readonly NpgsqlDataSource _dataSource;
     private NpgsqlConnection? _connection;
 
+    // for testing purposes, expose the process ID of the connection holding the lock (if any)
+    internal int? ConnectionProcessId => _connection?.ProcessID;
+
     public PostgresLeaderElection(
         PostgresSettings options,
         NpgsqlDataSource dataSource,
@@ -96,6 +99,21 @@ public sealed partial class PostgresLeaderElection : LeaderElectionBase<Postgres
             {
                 _connection = connection;
                 connection = null; // ownership transferred, don't dispose in finally
+
+                // monitor the connection for unexpected closures
+                _connection.StateChange += async (sender, e) =>
+                {
+                    if (
+                        e.OriginalState.HasFlag(ConnectionState.Open)
+                        && ((NpgsqlConnection)sender).FullState.HasFlag(ConnectionState.Broken)
+                    )
+                    {
+                        // connection was broken unexpectedly, assume we lost the lock
+                        LogConnectionBrokenUnexpectedly(_settings.LockId);
+                        await OnLeadershipLostAsync().ConfigureAwait(false);
+                    }
+                };
+
                 LogAcquiredLock(_settings.LockId);
             }
             else
@@ -301,4 +319,7 @@ public sealed partial class PostgresLeaderElection : LeaderElectionBase<Postgres
         "CommandTimeout of {commandTimeout} seconds may be too high for reliable leader election. Consider setting 'CommandTimeout' to 3-5 seconds."
     )]
     partial void LogUseRecommendedCommandTimeout(int commandTimeout);
+
+    [LoggerMessage(LogLevel.Warning, "Connection broken unexpectedly for lock {lockId}.")]
+    partial void LogConnectionBrokenUnexpectedly(long lockId);
 }

@@ -19,8 +19,12 @@ internal sealed class FakeLeaderElection : LeaderElectionBase<FakeLeaderElection
 {
     public FakeLeaderElectionSettings Settings => _settings;
 
-    public FakeLeaderElection(FakeLeaderElectionSettings settings, FakeTimeProvider timeProvider)
-        : base(settings, timeProvider: timeProvider)
+    public FakeLeaderElection(
+        FakeLeaderElectionSettings settings,
+        FakeTimeProvider timeProvider,
+        Func<double>? getRandomDouble = null
+    )
+        : base(settings, timeProvider: timeProvider, getRandomDouble: getRandomDouble)
     {
         LeadershipChanged += (s, e) =>
         {
@@ -37,9 +41,6 @@ internal sealed class FakeLeaderElection : LeaderElectionBase<FakeLeaderElection
             _settings.ErrorCount++;
         };
     }
-
-    // Use a fixed retry for easier testing
-    protected override TimeSpan GetNextDelay(int retryCount) => _settings.RetryInterval;
 
     protected override Task<bool> TryAcquireLeadershipInternalAsync(
         CancellationToken cancellationToken

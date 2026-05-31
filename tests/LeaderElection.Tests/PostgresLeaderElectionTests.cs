@@ -152,6 +152,8 @@ public sealed class PostgresLeaderElectionTests(PostgresContainerFixture postgre
         var options = CreateSettings();
 
         await using var leaderElection = CreateSut(options);
+        await leaderElection.StartAsync(CancellationToken);
+        await WaitForLeadershipChange(leaderElection, true);
 
         var result = await leaderElection.TryAcquireLeadershipAsync(CancellationToken);
 
@@ -171,6 +173,32 @@ public sealed class PostgresLeaderElectionTests(PostgresContainerFixture postgre
 
         // Act & Assert
         await TestShouldRetainLeadershipAfterAtLeastOneRenewalCycle(leaderElection, options);
+    }
+
+    [Fact]
+    public async Task ShouldTriggerLeadershipChangeEventWhenConnectionBroken()
+    {
+        // Arrange
+        var options = CreateSettings();
+        await using var leaderElection = CreateSut(options);
+        await leaderElection.StartAsync(CancellationToken);
+        await WaitForLeadershipChange(leaderElection, true);
+
+        leaderElection.ConnectionProcessId.Should().NotBeNull();
+
+        // Act - simulate unexpected connection loss by killing the backend connection holding the lock
+        await using (var killingConn = new NpgsqlConnection(postgresFixture.ConnectionString))
+        {
+            await killingConn.OpenAsync(CancellationToken);
+            using var cmd = new NpgsqlCommand($"SELECT pg_terminate_backend(@pid);", killingConn);
+            cmd.Parameters.AddWithValue("pid", leaderElection.ConnectionProcessId);
+            await cmd.ExecuteNonQueryAsync(CancellationToken);
+        }
+
+        // Assert - Should trigger leadership change event while actively trying to
+        // renew/acquire leadership again
+        await WaitForLeadershipChange(leaderElection, false);
+        leaderElection.LeaderLoopRunning.Should().BeTrue();
     }
 
     [Fact]

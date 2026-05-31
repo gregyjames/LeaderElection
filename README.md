@@ -66,7 +66,6 @@ builder.Services.AddRedisLeaderElection(settings =>
     settings.LockExpiry = TimeSpan.FromSeconds(30);
     settings.RenewInterval = TimeSpan.FromSeconds(10);
     settings.RetryInterval = TimeSpan.FromSeconds(5);
-    settings.MaxRetryAttempts = 3;
     settings.EnableGracefulShutdown = true;
 });
 ```
