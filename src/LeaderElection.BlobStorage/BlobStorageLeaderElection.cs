@@ -238,7 +238,10 @@ public partial class BlobStorageLeaderElection : LeaderElectionBase<BlobStorageS
             LogCreatedBlob(blobClient.Uri.GetLeftPart(UriPartial.Path));
         }
         catch (Azure.RequestFailedException ex)
-            when (ex.ErrorCode == BlobErrorCode.BlobAlreadyExists)
+            when (ex.ErrorCode == BlobErrorCode.BlobAlreadyExists
+                || ex.ErrorCode == BlobErrorCode.LeaseIdMissing
+                || ex.ErrorCode == BlobErrorCode.ConditionNotMet
+            )
         {
             // Okay.
         }
