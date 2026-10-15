@@ -1,24 +1,17 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <!-- Inherits settings from Directory.Build.props -->
+  <PropertyGroup>
+    <!-- Required by xunit.v3 / Microsoft.Testing.Platform (test projects are executables). -->
+    <OutputType>Exe</OutputType>
+  </PropertyGroup>
   <ItemGroup>
     <PackageReference Include="AwesomeAssertions" />
-    <!-- for Codecov test results -->
-    <PackageReference Include="JunitXml.TestLogger" />
     <PackageReference Include="Microsoft.Extensions.TimeProvider.Testing" />
-    <PackageReference Include="Microsoft.NET.Test.Sdk" />
     <PackageReference Include="Moq" />
     <PackageReference Include="xunit.v3" />
-    <PackageReference Include="xunit.runner.visualstudio">
-      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
-      <PrivateAssets>all</PrivateAssets>
-    </PackageReference>
-    <PackageReference Include="coverlet.msbuild">
-      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
-      <PrivateAssets>all</PrivateAssets>
-    </PackageReference>
+    <PackageReference Include="coverlet.MTP" />
     <PackageReference Include="Testcontainers.Redis" />
     <PackageReference Include="Testcontainers.Azurite" />
-    <PackageReference Include="Testcontainers.Minio" />
     <PackageReference Include="Testcontainers.PostgreSql" />
   </ItemGroup>
 

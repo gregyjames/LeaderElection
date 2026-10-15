@@ -30,10 +30,10 @@ public abstract class TestBase
         {
             // small delay to ensure OS has time to unblock any tasks waiting for
             // the Leader Loop semaphore before advancing time
-            await Task.Delay(5, CancellationToken);
+            await Task.Delay(20, CancellationToken);
             fakeTimeProvider.Advance(timeSpan);
             // allow any released tasks to update state before assertions.
-            await Task.Delay(1, CancellationToken);
+            await Task.Delay(10, CancellationToken);
         }
         else
         {
