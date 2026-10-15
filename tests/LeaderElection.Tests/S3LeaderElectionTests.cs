@@ -1,6 +1,7 @@
 using LeaderElection.S3;
 using Microsoft.Extensions.DependencyInjection;
 using Minio.DataModel.Args;
+using Minio.Exceptions;
 
 namespace LeaderElection.Tests;
 
@@ -56,9 +57,17 @@ public sealed class S3LeaderElectionTests(MinioContainerFixture minioFixture)
 #pragma warning disable CA2000 // dispose object
         var client = minioFixture.CreateClient();
 #pragma warning restore CA2000
-        if (!await client.BucketExistsAsync(new BucketExistsArgs().WithBucket(BUCKET_NAME)))
+        // Note: BucketExistsAsync isn't used because the MinIO SDK can't parse the
+        // body-less HEAD 404 response returned by RustFS. Creating the bucket and
+        // tolerating "already exists" is equivalent.
+        try
         {
             await client.MakeBucketAsync(new MakeBucketArgs().WithBucket(BUCKET_NAME));
+        }
+        catch (ErrorResponseException ex)
+            when (ex.Response?.Code is "BucketAlreadyOwnedByYou" or "BucketAlreadyExists")
+        {
+            // The bucket was already created by a previous test.
         }
     }
 

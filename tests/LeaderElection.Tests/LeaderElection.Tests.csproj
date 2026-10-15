@@ -12,7 +12,6 @@
     <PackageReference Include="coverlet.MTP" />
     <PackageReference Include="Testcontainers.Redis" />
     <PackageReference Include="Testcontainers.Azurite" />
-    <PackageReference Include="Testcontainers.Minio" />
     <PackageReference Include="Testcontainers.PostgreSql" />
   </ItemGroup>
 
