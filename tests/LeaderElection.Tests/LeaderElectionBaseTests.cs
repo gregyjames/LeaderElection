@@ -18,15 +18,20 @@ public class LeaderElectionBaseTests
     {
         // small delay to ensure OS has time to unblock any tasks waiting for
         // the Leader Loop semaphore before advancing time
-        await Task.Delay(5);
+        await Task.Delay(20);
         _fakeTimeProvider.Advance(timeSpan);
         // allow any released tasks to update state before assertions.
-        await Task.Delay(1);
+        await Task.Delay(10);
     }
 
     async Task StartAsync(FakeLeaderElection sut)
     {
         await sut.StartAsync(TestContext.Current.CancellationToken);
+        var deadline = DateTime.UtcNow.AddSeconds(5);
+        while (sut.Settings.TryAcquireCount == 0 && DateTime.UtcNow < deadline)
+        {
+            await Task.Delay(10);
+        }
         await FastForward(TimeSpan.Zero);
     }
 
