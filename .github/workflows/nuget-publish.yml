@@ -14,6 +14,7 @@ on:
 
 permissions:
   contents: read
+  id-token: write
 
 concurrency:
   group: "${{ github.workflow }}-${{ github.ref_name }}"
@@ -78,9 +79,15 @@ jobs:
         run: |
           ./build.ps1 package -config release -version $env:VERSION -targetProject $env:BUILD_TARGET -outputDir ./artifacts/package/release
 
+      - name: NuGet login (OIDC → temp API key)
+        uses: NuGet/login@v1
+        id: login
+        with:
+          user: gjames
+
       - name: Push Nuget packages
         shell: pwsh
         run: |
           ./build.ps1 push ./artifacts/package/release/*.nupkg
         env:
-          NUGET_API_KEY: ${{ secrets.NUGET_API_KEY }}
+          NUGET_API_KEY: ${{ steps.login.outputs.NUGET_API_KEY }}
