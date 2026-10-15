@@ -13,15 +13,12 @@
     <None Include="$(MSBuildThisFileDirectory)xunit.runner.json" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
-  <!-- Coverlet.MSBuild integration -->
+  <!-- Coverlet.MTP integration (Microsoft.Testing.Platform extension). Options are passed
+    to the test application as command-line arguments. -->
+  <!-- Generate an LCov report by default. LCov works well with the coverage-gutters VS Code extension.
+    Override with e.g. -p:CoverletOutputFormat=cobertura -->
   <PropertyGroup>
-    <Include>[LeaderElection*]*</Include>
-    <Exclude>[*.Tests]*</Exclude>
-    <ExcludeByFile>**/artifacts/**</ExcludeByFile>
-  </PropertyGroup>
-  <!-- Generate an LCov report by default. LCov works well with the coverage-gutters VS Code extension. -->
-  <PropertyGroup Condition="'$(CollectCoverage)' == ''">
-    <CollectCoverage>true</CollectCoverage>
-    <CoverletOutputFormat>lcov</CoverletOutputFormat>
+    <CoverletOutputFormat Condition="'$(CoverletOutputFormat)' == ''">lcov</CoverletOutputFormat>
+    <TestingPlatformCommandLineArguments>$(TestingPlatformCommandLineArguments) --coverlet --coverlet-output-format $(CoverletOutputFormat) --coverlet-include "[LeaderElection*]*" --coverlet-exclude "[*.Tests]*" --coverlet-exclude-by-file "**/artifacts/**"</TestingPlatformCommandLineArguments>
   </PropertyGroup>
 </Project>

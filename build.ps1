@@ -211,7 +211,7 @@ Task updatePackages -desc 'Update .NET packages' -DependsOn version {
         [string] $UpdateMode = 'Prompt',
         # A list of package IDs to ignore when updating. This is useful for packages
         # that should not be updated automatically.
-        [string[]] $IgnorePackages = @('JunitXml.TestLogger')
+        [string[]] $IgnorePackages = @()
     )
     if (!(dotnet tool list --global | Select-String 'dotnet-outdated-tool')) {
         Write-Host 'Installing dotnet-outdated-tool...'
@@ -305,13 +305,16 @@ Task test -desc 'Run tests' -dependsOn build {
     #>
     param(
         # An optional filter expression to select which tests to run. This is passed
-        # directly to 'dotnet test --filter'.
+        # to the test application's '--filter' option (VSTest filter syntax) after the
+        # '--' separator, because 'dotnet test' in Microsoft.Testing.Platform mode forwards
+        # unrecognized options to the test application.
         [string]$TestFilter
     )
     $testArgs = @(
+        '--solution', 'LeaderElection.slnx'
         '--configuration', $Configuration
         '--no-build'
-        if ($TestFilter) { '--filter', $TestFilter }
+        if ($TestFilter) { '--', '--filter', $TestFilter }
     )
     Invoke-Shell -- dotnet test @testArgs
 }
@@ -359,8 +362,9 @@ Task coverage -desc 'Run tests with code coverage' -dependsOn restore {
 
     # Remove existing coverage reports to ensure that the report only contains
     # data from the current test run...
-    $coverageReports = './tests/**/coverage.opencover.xml'
-    Remove-Item $coverageReports -ErrorAction Ignore
+    $rawCoverageDir = './artifacts/coverage-raw'
+    $coverageReports = "$rawCoverageDir/coverage.opencover*.xml"
+    Remove-Item $rawCoverageDir -Recurse -Force -ErrorAction Ignore
 
     # Ensure the output directory for the final report exists and is empty (unless
     # -DoNotCleanOutputDir is specified).
@@ -374,13 +378,17 @@ Task coverage -desc 'Run tests with code coverage' -dependsOn restore {
     # Run tests with to generate OpenCover data. We use OpenCover because
     # ReportGenerator tool can convert it into various quality reports.
     #
-    # Note: This implementation assumes the test projects are using
-    # `coverlet.msbuild` package for collecting coverage data.
+    # Note: This implementation assumes the test projects are using the
+    # `coverlet.MTP` package (Microsoft.Testing.Platform extension) for collecting
+    # coverage data. The `CoverletOutputFormat` MSBuild property selects the format
+    # and `--results-directory` (a test application argument) selects the output location.
     $coverageArgs = @(
+        '--solution', 'LeaderElection.slnx'
         '--configuration', $Configuration
         '--no-restore'
-        '-p:CollectCoverage=true'
         '-p:CoverletOutputFormat=opencover'
+        '--'
+        '--results-directory', (Join-Path $PWD $rawCoverageDir)
     )
     Invoke-Shell -- dotnet test @coverageArgs
 
@@ -389,7 +397,7 @@ Task coverage -desc 'Run tests with code coverage' -dependsOn restore {
         # The free version of ReportGenerator doesn't support merging multiple OpenCover
         # reports, so we'll just copy them to the output directory with unique names.
         foreach ($coverageReport in Get-Item $coverageReports) {
-            Copy-Item $coverageReport "$OutputDir/$($coverageReport.Directory.Name).opencover.xml"
+            Copy-Item $coverageReport "$OutputDir/$($coverageReport.Name)"
         }
         $ReportType = $ReportType.where{ $_ -ne 'opencover' }
     }
