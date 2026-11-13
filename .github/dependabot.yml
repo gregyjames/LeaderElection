@@ -8,22 +8,40 @@ updates:
   - package-ecosystem: "nuget"
     directory: "/" # The location of our solution file
     schedule:
-      interval: "monthly"
+      interval: "weekly"
     open-pull-requests-limit: 10
+    commit-message:
+      prefix: "build"
+      include: "scope"
+    labels:
+      - "dependencies"
+      - ".NET"
     groups:
       nuget-dependencies:
         patterns:
           - "*"
+        update-types:
+          - "minor"
+          - "patch"
     assignees:
       - gregyjames
 
   - package-ecosystem: "github-actions"
     directory: "/" # The location of our .github/workflows directory
     schedule:
-      interval: "monthly"
+      interval: "weekly"
+    commit-message:
+      prefix: "build"
+      include: "scope"
+    labels:
+      - "dependencies"
+      - "github_actions"
     groups:
       action-dependencies:
         patterns:
           - "*"
+        update-types:
+          - "minor"
+          - "patch"
     assignees:
       - gregyjames
